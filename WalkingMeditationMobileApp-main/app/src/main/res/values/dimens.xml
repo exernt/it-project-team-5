@@ -1,0 +1,25 @@
+<resources>
+    <dimen name="fab_margin">16dp</dimen>
+
+    <dimen name="screen_padding_horizontal">20dp</dimen>
+    <dimen name="screen_padding_top">100dp</dimen>
+
+    <dimen name="logo_size">120dp</dimen>
+
+    <dimen name="space_4">4dp</dimen>
+    <dimen name="space_6">6dp</dimen>
+    <dimen name="space_8">8dp</dimen>
+    <dimen name="space_10">10dp</dimen>
+    <dimen name="space_12">12dp</dimen>
+    <dimen name="space_24">24dp</dimen>
+    <dimen name="space_32">32dp</dimen>
+    <dimen name="space_36">36dp</dimen>
+
+    <dimen name="row_padding">14dp</dimen>
+
+    <dimen name="field_height">56dp</dimen>
+    <dimen name="field_padding">16dp</dimen>
+
+    <dimen name="corner_radius">14dp</dimen>
+
+</resources>

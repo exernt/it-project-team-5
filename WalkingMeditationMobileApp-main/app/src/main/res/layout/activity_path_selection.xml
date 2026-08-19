@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/white">
+
+    <LinearLayout
+        style="@style/App.ScreenContainer">
+
+        <ImageView
+            android:id="@+id/img_logo"
+            android:layout_width="@dimen/logo_size"
+            android:layout_height="@dimen/logo_size"
+            android:layout_marginBottom="@dimen/space_32"
+            android:src="@mipmap/ic_launcher"
+            android:contentDescription="App Logo"
+            android:scaleType="fitCenter" />
+
+        <TextView
+            style="@style/App.Label"
+            android:text="Source" />
+
+        <AutoCompleteTextView
+            android:id="@+id/et_source"
+            style="@style/App.RoundedInput"
+            android:hint="Enter source"
+            android:layout_marginBottom="@dimen/space_24" />
+
+        <TextView
+            style="@style/App.Label"
+            android:text="Destination" />
+
+        <AutoCompleteTextView
+            android:id="@+id/et_destination"
+            style="@style/App.RoundedInput"
+            android:hint="Enter destination"
+            android:layout_marginBottom="@dimen/space_36" />
+
+        <Button
+            android:id="@+id/btn_find_path"
+            style="@style/App.PrimaryButton"
+            android:text="Find Path" />
+
+    </LinearLayout>
+
+</ScrollView>
