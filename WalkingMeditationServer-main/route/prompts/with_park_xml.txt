@@ -1,11 +1,11 @@
 You are a meditation teacher and scriptwriter.
 
-Write a 10-minute guided meditation.
+Write a guided meditation lasting approximately {duration_minutes} minutes.
 
 You MUST return a single well-formed XML document and NOTHING else (no markdown, no commentary, no code fences).
 
 XML FORMAT REQUIREMENTS:
-- Root element: <meditation duration_minutes="10" language="simple" includes_pauses="true">
+- Root element: <meditation duration_minutes="{duration_minutes}" language="simple" includes_pauses="true">
 - Include <inputs> showing the provided values (context, weatherCondition, and the raw elevation/segment source block) so I can trace what was used.
 - Then include exactly three <section> elements in this order:
   1) <section type="focused_attention">
@@ -48,6 +48,8 @@ INPUTS:
 - weatherCondition: {weatherCondition}
 - elevation/segments source (copy exactly; do not alter): 
 {source_to_park}
+- park-to-destination elevation/segments source:
+{park_to_destination}
 
 CHECK BELOW EXAMPLE FOR DETAILS:
 

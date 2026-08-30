@@ -15,7 +15,6 @@ async def search_parks_along_route(
     *,
     route_polyline: str,
     max_results: int = 20,
-    route_offset_m: int = 250,
 ) -> List[ParkPlace]:
     headers = {
         "Content-Type": "application/json",
@@ -27,7 +26,6 @@ async def search_parks_along_route(
         "textQuery": "park",
         "searchAlongRouteParameters": {
             "polyline": {"encodedPolyline": route_polyline},
-            # "routeOffset": {"meters": route_offset_m},  # enable if you want
         },
         # "pageSize": max_results,  # depending on Places API version/behavior
     }

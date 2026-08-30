@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, Optional, Tuple
 import requests
 from route.config import google_maps_api_key 
+from route.errors import GoogleAPIError
 
 LatLon = Tuple[float, float]
 
@@ -27,7 +28,12 @@ def current_weather_lookup(
         "languageCode": language_code,
     }
 
-    sess = session or requests.Session()
-    r = sess.get(url, params=params, timeout=20)
-    r.raise_for_status()
+    request_get = session.get if session is not None else requests.get
+    r = request_get(url, params=params, timeout=20)
+    try:
+        r.raise_for_status()
+    except requests.HTTPError:
+        raise GoogleAPIError(
+            f"Weather API request failed with status {r.status_code}"
+        ) from None
     return r.json()

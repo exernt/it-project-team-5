@@ -22,7 +22,12 @@ async def fetch_elevation_samples_for_polyline(
         "samples": str(samples),
     }
     r = await client.get(ELEVATION_URL, params=params)
-    r.raise_for_status()
+    try:
+        r.raise_for_status()
+    except httpx.HTTPStatusError:
+        raise GoogleAPIError(
+            f"Elevation API request failed with status {r.status_code}"
+        ) from None
     data = r.json()
 
     if data.get("status") != "OK":
@@ -31,4 +36,3 @@ async def fetch_elevation_samples_for_polyline(
         )
 
     return data.get("results") or []
-

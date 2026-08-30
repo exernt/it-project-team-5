@@ -26,23 +26,13 @@ async def generate_tts_mp3(
     if model is None:
         raise TTSNotReadyError("Model not loaded")
 
-    async with semaphore:
-        # Offload heavy work so you don't block FastAPI's event loop
-        if offload_model_to_thread:
-            wavs, sr = await asyncio.to_thread(
-                model.generate_custom_voice,
-                text=text,
-                language=language,
-                speaker=speaker,
-                instruct=instruct,
-            )
-        else:
-            wavs, sr = model.generate_custom_voice(
-                text=text,
-                language=language,
-                speaker=speaker,
-                instruct=instruct,
-            )
+    def generate_and_convert() -> bytes:
+        wavs, sr = model.generate_custom_voice(
+            text=text,
+            language=language,
+            speaker=speaker,
+            instruct=instruct,
+        )
 
         if not wavs or wavs[0] is None:
             raise RuntimeError("TTS model returned no audio")
@@ -54,8 +44,14 @@ async def generate_tts_mp3(
 
             sf.write(wav_path, wavs[0], sr)
             convert_wav_to_mp3(wav_path, mp3_path, bitrate)
+            return mp3_path.read_bytes()
 
-            mp3_bytes = mp3_path.read_bytes()
+    async with semaphore:
+        # Model inference, filesystem I/O, and ffmpeg are all blocking work.
+        if offload_model_to_thread:
+            mp3_bytes = await asyncio.to_thread(generate_and_convert)
+        else:
+            mp3_bytes = generate_and_convert()
 
     return Response(
         content=mp3_bytes,

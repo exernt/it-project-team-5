@@ -1,156 +1,195 @@
 import warnings
 import os
 import uvicorn
-import torch
 import asyncio
-from fastapi import FastAPI, HTTPException
-from typing import Optional
+import logging
+import secrets
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from sqlalchemy.exc import SQLAlchemyError
+from typing import Any, Optional
 
-from qwen_tts import Qwen3TTSModel
 from contextlib import asynccontextmanager
 
+from route.auth import router as auth_router
 from route.services.generate_script import generate_script_with_park, generate_script_without_park
 from route.services.get_route import generate_walk_route
-from route.services.text_to_speech import generate_tts_mp3
-from route.errors import OpenaiAPIError
 from route.models import WalkRouteRequest, WalkRouteResponse, ScriptWithParkRequest, ScriptWithParkResponse
-from route.models import ScriptWithoutParkRequest, ScriptWithoutParkResponse, TTSRequest, TTSResponse
+from route.models import ScriptWithoutParkRequest, ScriptWithoutParkResponse, TTSRequest
+from route.persistence.database import create_configured_database
 from route.utils.utils import _ensure_ffmpeg
 
+logger = logging.getLogger(__name__)
 
-# Your global model handle
-MODEL: Optional["Qwen3TTSModel"] = None  # quotes avoid import-time issues if needed
-
+MODEL: Optional[Any] = None
+MODEL_LOAD_LOCK = asyncio.Lock()
 TTS_SEMAPHORE = asyncio.Semaphore(1)
+ROUTE_REQUEST_SEMAPHORE = asyncio.Semaphore(4)
+SCRIPT_REQUEST_SEMAPHORE = asyncio.Semaphore(2)
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """
-    FastAPI lifespan handler:
-    - code before 'yield' runs on startup
-    - code after 'yield' runs on shutdown
-    """
+
+def require_app_token(x_app_token: Optional[str] = Header(default=None)) -> None:
+    expected = os.getenv("APP_API_TOKEN", "").strip()
+    if not expected:
+        return
+    if x_app_token is None or not secrets.compare_digest(x_app_token, expected):
+        raise HTTPException(status_code=401, detail="Invalid application token")
+
+
+def _load_tts_model_sync():
+    # Keep TTS dependencies and ffmpeg out of the route-only startup path.
+    import torch
+    from qwen_tts import Qwen3TTSModel
+
     warnings.filterwarnings("ignore", message=".*flash-attn.*")
-
-    global MODEL
-
     _ensure_ffmpeg()
 
     use_cuda = torch.cuda.is_available()
-    device_map = "cuda:0" if use_cuda else "cpu"
-    dtype = torch.bfloat16 if use_cuda else torch.float32
-
-    MODEL = Qwen3TTSModel.from_pretrained(
+    return Qwen3TTSModel.from_pretrained(
         "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
-        device_map=device_map,
-        dtype=dtype,
-        # If on CUDA + flash-attn2 installed, you can enable:
-        # attn_implementation="flash_attention_2",
+        device_map="cuda:0" if use_cuda else "cpu",
+        dtype=torch.bfloat16 if use_cuda else torch.float32,
     )
 
-    try:
-        from joblib.externals.loky import get_reusable_executor
-        get_reusable_executor().shutdown(wait=True)
-        print("Joblib Turned off")
-    except Exception as e:
-        print("Joblib Not Turned off", str(e))
 
+async def get_tts_model():
+    global MODEL
+    if MODEL is not None:
+        return MODEL
 
+    async with MODEL_LOAD_LOCK:
+        if MODEL is None:
+            MODEL = await asyncio.to_thread(_load_tts_model_sync)
+    return MODEL
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global MODEL
+    database = create_configured_database()
+    app.state.database = database
     try:
-        yield  # ---- app runs here ----
+        yield
     finally:
-        # ---- shutdown ----
-        # If your model/library needs explicit cleanup, do it here.
-        # Example patterns:
+        if database is not None:
+            await database.close()
         MODEL = None
-        if use_cuda:
-            # optional: helps release cached GPU memory in some cases
-            torch.cuda.empty_cache()
 
 app = FastAPI(lifespan=lifespan)
+app.include_router(auth_router)
 
 @app.get("/")
 def read_root():
     return {"Heartbeat": "Hello World"}
 
-@app.post("/route/generate-path", response_model=WalkRouteResponse)
-async def generate_route(payload: WalkRouteRequest):
-    try:
-        result: WalkRouteResponse = await generate_walk_route(
-            payload.source,
-            payload.destination,
-            payload.total_travel_time
+
+@app.get("/health/database")
+async def database_health(request: Request):
+    database = getattr(request.app.state, "database", None)
+    if database is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database is not configured",
         )
+
+    try:
+        await database.ping()
+    except (SQLAlchemyError, OSError, TimeoutError) as exc:
+        logger.warning("Database readiness check failed", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database is unavailable",
+        ) from exc
+
+    return {"database": "ready"}
+
+@app.post("/route/generate-path", response_model=WalkRouteResponse)
+async def generate_route(
+    payload: WalkRouteRequest,
+    _auth: None = Depends(require_app_token),
+):
+    try:
+        async with ROUTE_REQUEST_SEMAPHORE:
+            result: WalkRouteResponse = await generate_walk_route(
+                payload.source,
+                payload.destination,
+                payload.total_travel_time
+            )
         return result 
     except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e)) from e
+        logger.exception("Route generation failed")
+        raise HTTPException(status_code=502, detail="Route generation failed") from e
 
 
 @app.post("/route/generate-script/park", response_model=ScriptWithParkResponse)
-async def generate_script_w_park(payload: ScriptWithParkRequest):
+async def generate_script_w_park(
+    payload: ScriptWithParkRequest,
+    _auth: None = Depends(require_app_token),
+):
     try:
-        result: str = await generate_script_with_park(
-            payload.source,
-            payload.destination,
-            payload.park,
-            payload.to_park_time,
-            payload.park_time,
-            payload.park_to_destination_time,
-            payload.context
-        )
+        async with SCRIPT_REQUEST_SEMAPHORE:
+            result: str = await generate_script_with_park(
+                payload.source,
+                payload.destination,
+                payload.park,
+                payload.to_park_time,
+                payload.park_time,
+                payload.park_to_destination_time,
+                payload.context
+            )
 
         return {
             "script": result
         }
 
-    except OpenaiAPIError as e:
-        raise HTTPException(status_code=502, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e)) from e
+        logger.exception("Park script generation failed")
+        raise HTTPException(status_code=502, detail="Script generation failed") from e
     
 @app.post("/route/generate-script/without-park", response_model=ScriptWithoutParkResponse)
-async def generate_script_wo_park(payload: ScriptWithoutParkRequest):
+async def generate_script_wo_park(
+    payload: ScriptWithoutParkRequest,
+    _auth: None = Depends(require_app_token),
+):
     try:
-        result: str = await generate_script_without_park(
-            payload.source,
-            payload.destination,
-            payload.total_walking_time,
-            payload.context
-        )
+        async with SCRIPT_REQUEST_SEMAPHORE:
+            result: str = await generate_script_without_park(
+                payload.source,
+                payload.destination,
+                payload.total_walking_time,
+                payload.context
+            )
 
         return {
             "script": result
         }
 
-    except OpenaiAPIError as e:
-        raise HTTPException(status_code=502, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e)) from e
+        logger.exception("Baseline script generation failed")
+        raise HTTPException(status_code=502, detail="Script generation failed") from e
 
 
 @app.post("/tts")#, response_model=Response)
-async def text_to_speech_endpoint(payload: TTSRequest):
-
-    global MODEL
-
-    if TTS_SEMAPHORE is None:
-        # If you forgot to set it, fail loudly rather than creating unbounded concurrency.
-        print("None Semaphore")
-        raise HTTPException(status_code=500, detail="TTS semaphore not initialized")
+async def text_to_speech_endpoint(
+    payload: TTSRequest,
+    _auth: None = Depends(require_app_token),
+):
 
     try:
+        from route.services.text_to_speech import generate_tts_mp3
+
+        model = await get_tts_model()
         result = await generate_tts_mp3(
-            model=MODEL,
+            model=model,
             semaphore=TTS_SEMAPHORE,
             text=payload.text,
             language=payload.language,
             speaker=payload.speaker,
             instruct=payload.instruct,
-            bitrate="192k",
-            offload_model_to_thread=False,
+            bitrate=payload.bitrate,
+            offload_model_to_thread=True,
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"TTS failed: {e}")
+        logger.exception("TTS generation failed")
+        raise HTTPException(status_code=500, detail="TTS generation failed") from e
 
     return result
 
