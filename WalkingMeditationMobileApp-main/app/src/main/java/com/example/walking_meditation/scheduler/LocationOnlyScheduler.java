@@ -9,30 +9,29 @@ import java.util.List;
 
 public class LocationOnlyScheduler implements AudioScheduler {
 
-    private static final float RADIUS_METERS = 5f;
+    private static final float RADIUS_METERS = 20f;
     private static final long COOLDOWN_MS = 15_000L;
 
     private final Context context;
     private final List<LocationAudio> queue;
 
     private MediaPlayer mediaPlayer;
+    private int nextTargetIndex = 0;
+    private boolean resumePlayback = false;
 
     public LocationOnlyScheduler(Context context,
                                  List<LocationAudio> queue) {
         this.context = context;
         this.queue = queue;
 
-        Toast.makeText(
-                this.context,
-                "Queue size: " + this.queue.size(),
-                Toast.LENGTH_LONG
-        ).show();
     }
 
     @Override
     public void onLocationUpdate(Location location, float speedKmph) {
+        if (nextTargetIndex >= queue.size()) return;
+        if (mediaPlayer != null && mediaPlayer.isPlaying()) return;
 
-        for (LocationAudio target : queue) {
+        LocationAudio target = queue.get(nextTargetIndex);
 
             float[] results = new float[1];
 
@@ -41,7 +40,10 @@ public class LocationOnlyScheduler implements AudioScheduler {
                     location.getLongitude(), target.latitude, target.longitude, results);
 
             float distance = results[0];
-            boolean nowInside = distance <= RADIUS_METERS;
+            float effectiveRadius = location.hasAccuracy()
+                    ? Math.max(RADIUS_METERS, location.getAccuracy())
+                    : RADIUS_METERS;
+            boolean nowInside = distance <= effectiveRadius;
 
             if (!target.isInside && nowInside) {
 
@@ -51,15 +53,13 @@ public class LocationOnlyScheduler implements AudioScheduler {
 
                 if (now - target.lastPlayedAtMs >= COOLDOWN_MS) {
                     target.lastPlayedAtMs = now;
-                    play(target.audioResId);
-                    break;
+                    if (play(target)) nextTargetIndex++;
                 }
             }
 
             if (target.isInside && !nowInside) {
                 target.isInside = false;
             }
-        }
     }
 
     public float getDistanceToClosest(Location location) {
@@ -68,9 +68,8 @@ public class LocationOnlyScheduler implements AudioScheduler {
             return -1f;
         }
 
-        float minDistance = Float.MAX_VALUE;
-
-        for (LocationAudio target : queue) {
+        if (nextTargetIndex >= queue.size()) return 0f;
+        LocationAudio target = queue.get(nextTargetIndex);
 
             float[] results = new float[1];
 
@@ -82,40 +81,57 @@ public class LocationOnlyScheduler implements AudioScheduler {
                     results
             );
 
-            float distance = results[0];
-
-            if (distance < minDistance) {
-                minDistance = distance;
-            }
-        }
-
-        return minDistance;
+        return results[0];
     }
 
-    private void play(int resId) {
+    private boolean play(LocationAudio target) {
 
         if (mediaPlayer != null) {
             mediaPlayer.release();
         }
 
-        mediaPlayer = MediaPlayer.create(context, resId);
-
-        if (mediaPlayer != null) {
-            mediaPlayer.start();
+        try {
+            if (target.audioFilePath != null) {
+                mediaPlayer = new MediaPlayer();
+                mediaPlayer.setDataSource(target.audioFilePath);
+                mediaPlayer.prepare();
+            } else {
+                mediaPlayer = MediaPlayer.create(context, target.audioResId);
+            }
+            if (mediaPlayer != null) {
+                mediaPlayer.start();
+                return true;
+            }
+        } catch (Exception e) {
+            if (mediaPlayer != null) mediaPlayer.release();
+            mediaPlayer = null;
+            Toast.makeText(context, "Unable to play narration", Toast.LENGTH_SHORT).show();
         }
+        return false;
     }
 
     @Override
     public void resume() {
-        if (mediaPlayer != null && !mediaPlayer.isPlaying()){
+        if (resumePlayback && mediaPlayer != null && !mediaPlayer.isPlaying()){
             mediaPlayer.start();
         }
+        resumePlayback = false;
     }
 
     @Override
     public void pause() {
         if(mediaPlayer != null && mediaPlayer.isPlaying()){
+            resumePlayback = true;
             mediaPlayer.pause();
         }
+    }
+
+    @Override
+    public void release() {
+        if (mediaPlayer != null) {
+            mediaPlayer.release();
+            mediaPlayer = null;
+        }
+        resumePlayback = false;
     }
 }

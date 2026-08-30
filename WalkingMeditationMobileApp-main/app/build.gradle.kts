@@ -2,6 +2,16 @@ plugins {
     alias(libs.plugins.android.application)
 }
 
+val serverBaseUrl = providers.gradleProperty("SERVER_BASE_URL")
+    .orElse("http://10.0.2.2:8000")
+val mapsApiKey = providers.gradleProperty("MAPS_API_KEY")
+    .orElse("")
+val serverAccessToken = providers.gradleProperty("SERVER_ACCESS_TOKEN")
+    .orElse("")
+
+fun buildConfigString(value: String): String =
+    "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
 android {
     namespace = "com.example.walking_meditation"
     compileSdk {
@@ -18,6 +28,9 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "SERVER_BASE_URL", buildConfigString(serverBaseUrl.get()))
+        buildConfigField("String", "SERVER_ACCESS_TOKEN", buildConfigString(serverAccessToken.get()))
+        resValue("string", "google_maps_key", mapsApiKey.get())
     }
 
     buildTypes {
@@ -35,6 +48,8 @@ android {
     }
     buildFeatures {
         viewBinding = true
+        buildConfig = true
+        resValues = true
     }
 }
 

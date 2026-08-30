@@ -10,6 +10,7 @@ import org.xmlpull.v1.XmlPullParser;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class LocationQueueFactory {
 
@@ -41,7 +42,7 @@ public class LocationQueueFactory {
 
                         // Remove extension (segment_1.mp3 → segment_1)
                         String resourceName =
-                                clipName.replace(".mp3", "").toLowerCase();
+                                clipName.replace(".mp3", "").toLowerCase(Locale.ROOT);
 
                         int resId = context.getResources().getIdentifier(resourceName, "raw", context.getPackageName());
 

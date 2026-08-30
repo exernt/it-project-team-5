@@ -11,6 +11,7 @@ import android.text.TextWatcher;
 import android.widget.ArrayAdapter;
 import android.widget.AutoCompleteTextView;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -31,6 +32,7 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -61,34 +63,55 @@ public class PathSelectionActivity extends AppCompatActivity {
     private static final long AUTOCOMPLETE_DEBOUNCE_MS = 350;
 
     // Networking
-    private final OkHttpClient httpClient = new OkHttpClient();
+    private final OkHttpClient httpClient = new OkHttpClient.Builder()
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .callTimeout(90, TimeUnit.SECONDS)
+            .build();
     private @Nullable Call inFlightCall;
 
-    private static final String ROUTE_URL = "http://10.0.2.2:8000/route/generate-path";
+    private static final String ROUTE_URL = BuildConfig.SERVER_BASE_URL + "/route/generate-path";
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
     // UI
     private AutoCompleteTextView etSource;
     private AutoCompleteTextView etDestination;
     private Button btnFindPath;
+    private EditText etTotalMinutes;
+    private EditText etContext;
+
+    private static final String STATE_SOURCE_PLACE_ID = "source_place_id";
+    private static final String STATE_DESTINATION_PLACE_ID = "destination_place_id";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_path_selection);
 
+        etSource = findViewById(R.id.et_source);
+        etDestination = findViewById(R.id.et_destination);
+        etTotalMinutes = findViewById(R.id.et_total_minutes);
+        etContext = findViewById(R.id.et_context);
+        btnFindPath = findViewById(R.id.btn_find_path);
+
+        String mapsKey = getString(R.string.google_maps_key).trim();
+        if (mapsKey.isEmpty()) {
+            btnFindPath.setEnabled(false);
+            Toast.makeText(this,
+                    "Set MAPS_API_KEY in Gradle properties to enable route search.",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+
         if (!Places.isInitialized()) {
             Places.initializeWithNewPlacesApiEnabled(
                     getApplicationContext(),
-                    getString(R.string.google_maps_key)
+                    mapsKey
             );
         }
 
         placesClient = Places.createClient(this);
-
-        etSource = findViewById(R.id.et_source);
-        etDestination = findViewById(R.id.et_destination);
-        btnFindPath = findViewById(R.id.btn_find_path);
 
         setupAutocomplete(etSource, true);
         setupAutocomplete(etDestination, false);
@@ -102,9 +125,39 @@ public class PathSelectionActivity extends AppCompatActivity {
                 ).show();
                 return;
             }
+            int totalMinutes;
+            try {
+                totalMinutes = Integer.parseInt(etTotalMinutes.getText().toString().trim());
+            } catch (NumberFormatException e) {
+                etTotalMinutes.setError("Enter a time from 1 to 240 minutes");
+                return;
+            }
+            if (totalMinutes < 1 || totalMinutes > 240) {
+                etTotalMinutes.setError("Enter a time from 1 to 240 minutes");
+                return;
+            }
+            String context = etContext.getText().toString().trim();
+            if (context.isEmpty()) {
+                etContext.setError("Enter a meditation purpose");
+                return;
+            }
             setBusy(true);
-            fetchLatLngAndCallApi();
+            fetchLatLngAndCallApi(totalMinutes * 60, context);
         });
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putString(STATE_SOURCE_PLACE_ID, selectedSourcePlaceId);
+        outState.putString(STATE_DESTINATION_PLACE_ID, selectedDestinationPlaceId);
+    }
+
+    @Override
+    protected void onRestoreInstanceState(@NonNull Bundle savedInstanceState) {
+        super.onRestoreInstanceState(savedInstanceState);
+        selectedSourcePlaceId = savedInstanceState.getString(STATE_SOURCE_PLACE_ID);
+        selectedDestinationPlaceId = savedInstanceState.getString(STATE_DESTINATION_PLACE_ID);
     }
 
     @Override
@@ -118,6 +171,15 @@ public class PathSelectionActivity extends AppCompatActivity {
         if (inFlightCall != null) {
             inFlightCall.cancel();
             inFlightCall = null;
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (btnFindPath != null && inFlightCall == null
+                && !getString(R.string.google_maps_key).trim().isEmpty()) {
+            setBusy(false);
         }
     }
 
@@ -188,7 +250,7 @@ public class PathSelectionActivity extends AppCompatActivity {
                     return;
                 }
 
-                pending[0] = () -> requestPredictions(query, adapter, isSource);
+                pending[0] = () -> requestPredictions(query, textView, adapter, isSource);
                 mainHandler.postDelayed(pending[0], AUTOCOMPLETE_DEBOUNCE_MS);
             }
 
@@ -198,6 +260,7 @@ public class PathSelectionActivity extends AppCompatActivity {
 
     private void requestPredictions(
             @NonNull String query,
+            @NonNull AutoCompleteTextView textView,
             @NonNull ArrayAdapter<String> adapter,
             boolean isSource
     ) {
@@ -207,7 +270,8 @@ public class PathSelectionActivity extends AppCompatActivity {
                         .build();
 
         placesClient.findAutocompletePredictions(request)
-                .addOnSuccessListener(response -> {
+                .addOnSuccessListener(this, response -> {
+                    if (!query.equals(textView.getText().toString().trim())) return;
                     List<AutocompletePrediction> predictions = response.getAutocompletePredictions();
 
                     // Update the stored list that the item-click listener reads
@@ -228,7 +292,8 @@ public class PathSelectionActivity extends AppCompatActivity {
                     adapter.addAll(suggestions);
                     adapter.notifyDataSetChanged();
                 })
-                .addOnFailureListener(e -> {
+                .addOnFailureListener(this, e -> {
+                    if (!query.equals(textView.getText().toString().trim())) return;
                     // Clear stored list to avoid mismatches
                     if (isSource) sourcePredictions.clear(); else destPredictions.clear();
 
@@ -243,7 +308,7 @@ public class PathSelectionActivity extends AppCompatActivity {
                 });
     }
 
-    private void fetchLatLngAndCallApi() {
+    private void fetchLatLngAndCallApi(int totalTravelSeconds, @NonNull String context) {
         // Explicit validation (no assert)
         final String srcId = selectedSourcePlaceId;
         final String dstId = selectedDestinationPlaceId;
@@ -262,7 +327,7 @@ public class PathSelectionActivity extends AppCompatActivity {
 
         FetchPlaceRequest sourceRequest = FetchPlaceRequest.newInstance(srcId, fields);
         placesClient.fetchPlace(sourceRequest)
-                .addOnSuccessListener(sourceResponse -> {
+                .addOnSuccessListener(this, sourceResponse -> {
                     LatLng sourceLatLng = sourceResponse.getPlace().getLocation();
                     if (sourceLatLng == null) {
                         setBusy(false);
@@ -272,7 +337,7 @@ public class PathSelectionActivity extends AppCompatActivity {
 
                     FetchPlaceRequest destRequest = FetchPlaceRequest.newInstance(dstId, fields);
                     placesClient.fetchPlace(destRequest)
-                            .addOnSuccessListener(destResponse -> {
+                            .addOnSuccessListener(PathSelectionActivity.this, destResponse -> {
                                 LatLng destLatLng = destResponse.getPlace().getLocation();
                                 if (destLatLng == null) {
                                     setBusy(false);
@@ -284,10 +349,12 @@ public class PathSelectionActivity extends AppCompatActivity {
                                         sourceLatLng.latitude,
                                         sourceLatLng.longitude,
                                         destLatLng.latitude,
-                                        destLatLng.longitude
+                                        destLatLng.longitude,
+                                        totalTravelSeconds,
+                                        context
                                 );
                             })
-                            .addOnFailureListener(e -> {
+                            .addOnFailureListener(PathSelectionActivity.this, e -> {
                                 setBusy(false);
                                 Toast.makeText(
                                         PathSelectionActivity.this,
@@ -296,7 +363,7 @@ public class PathSelectionActivity extends AppCompatActivity {
                                 ).show();
                             });
                 })
-                .addOnFailureListener(e -> {
+                .addOnFailureListener(this, e -> {
                     setBusy(false);
                     Toast.makeText(
                             PathSelectionActivity.this,
@@ -309,7 +376,9 @@ public class PathSelectionActivity extends AppCompatActivity {
     private void callRouteApi(double originLat,
                               double originLon,
                               double destLat,
-                              double destLon) {
+                              double destLon,
+                              int totalTravelSeconds,
+                              @NonNull String context) {
 
         try {
             JSONObject json = new JSONObject();
@@ -325,15 +394,17 @@ public class PathSelectionActivity extends AppCompatActivity {
             json.put("source", origin);
             json.put("destination", destination);
 
-            // Be explicit about units. Example uses seconds.
-            json.put("total_travel_time", 3600);
+            json.put("total_travel_time", totalTravelSeconds);
 
             RequestBody body = RequestBody.create(json.toString(), JSON);
 
-            Request request = new Request.Builder()
+            Request.Builder requestBuilder = new Request.Builder()
                     .url(ROUTE_URL)
-                    .post(body)
-                    .build();
+                    .post(body);
+            if (!BuildConfig.SERVER_ACCESS_TOKEN.isEmpty()) {
+                requestBuilder.header("X-App-Token", BuildConfig.SERVER_ACCESS_TOKEN);
+            }
+            Request request = requestBuilder.build();
 
             // Cancel prior call if user double-clicked etc.
             if (inFlightCall != null) {
@@ -345,8 +416,9 @@ public class PathSelectionActivity extends AppCompatActivity {
                 @Override
                 public void onFailure(@NonNull Call call, @NonNull IOException e) {
                     runOnUiThread(() -> {
-                        setBusy(false);
+                        inFlightCall = null;
                         if (isFinishing() || isDestroyed()) return;
+                        setBusy(false);
                         Toast.makeText(
                                 PathSelectionActivity.this,
                                 "API call failed: " + e.getMessage(),
@@ -368,8 +440,9 @@ public class PathSelectionActivity extends AppCompatActivity {
                         final String bodyString = responseBody;
 
                         runOnUiThread(() -> {
-                            setBusy(false);
+                            inFlightCall = null;
                             if (isFinishing() || isDestroyed()) return;
+                            setBusy(false);
 
                             if (!ok) {
                                 Toast.makeText(
@@ -387,6 +460,8 @@ public class PathSelectionActivity extends AppCompatActivity {
 
                                 Intent intent = new Intent(PathSelectionActivity.this, RouteOptionsActivity.class);
                                 intent.putExtra(EXTRA_ROUTE_JSON_PATH, path);
+                                intent.putExtra(com.example.walking_meditation.nav.Extras.EXTRA_CONTEXT, context);
+                                intent.putExtra(com.example.walking_meditation.nav.Extras.EXTRA_TOTAL_TRAVEL_SECONDS, totalTravelSeconds);
                                 startActivity(intent);
                             } catch (IOException ioe) {
                                 Toast.makeText(
@@ -399,8 +474,9 @@ public class PathSelectionActivity extends AppCompatActivity {
 
                     } catch (IOException e) {
                         runOnUiThread(() -> {
-                            setBusy(false);
+                            inFlightCall = null;
                             if (isFinishing() || isDestroyed()) return;
+                            setBusy(false);
                             Toast.makeText(
                                     PathSelectionActivity.this,
                                     "Response read failed: " + e.getMessage(),

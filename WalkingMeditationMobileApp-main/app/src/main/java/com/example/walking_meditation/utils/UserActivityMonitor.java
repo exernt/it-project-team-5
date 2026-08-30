@@ -18,11 +18,15 @@ public class UserActivityMonitor {
         void onActivityChanged(String activity, float speedMps, float speedKmph);
     }
 
-    private static UserActivityMonitor instance;
+    private static volatile UserActivityMonitor instance;
 
     public static UserActivityMonitor getInstance(Context context) {
         if (instance == null) {
-            instance = new UserActivityMonitor(context.getApplicationContext());
+            synchronized (UserActivityMonitor.class) {
+                if (instance == null) {
+                    instance = new UserActivityMonitor(context.getApplicationContext());
+                }
+            }
         }
         return instance;
     }
@@ -79,17 +83,10 @@ public class UserActivityMonitor {
 
     public void stop() {
         if (pendingIntent != null) {
-            if (ActivityCompat.checkSelfPermission(this.context, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) {
-                // TODO: Consider calling
-                //    ActivityCompat#requestPermissions
-                // here to request the missing permissions, and then overriding
-                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-                //                                          int[] grantResults)
-                // to handle the case where the user grants the permission. See the documentation
-                // for ActivityCompat#requestPermissions for more details.
-                return;
+            if (ActivityCompat.checkSelfPermission(this.context, Manifest.permission.ACTIVITY_RECOGNITION)
+                    == PackageManager.PERMISSION_GRANTED) {
+                activityClient.removeActivityUpdates(pendingIntent);
             }
-            activityClient.removeActivityUpdates(pendingIntent);
         }
         stopLocationUpdates();
     }
@@ -147,6 +144,8 @@ public class UserActivityMonitor {
 
     private void startLocationUpdates() {
 
+        if (locationCallback != null) return;
+
         LocationRequest request = LocationRequest.create();
         request.setInterval(3000);
         request.setPriority(Priority.PRIORITY_HIGH_ACCURACY);
@@ -177,6 +176,7 @@ public class UserActivityMonitor {
     private void stopLocationUpdates() {
         if (locationCallback != null) {
             locationClient.removeLocationUpdates(locationCallback);
+            locationCallback = null;
         }
     }
 }
