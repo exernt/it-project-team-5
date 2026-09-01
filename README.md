@@ -53,6 +53,81 @@ The Android build and local unit tests do not require credentials. With no
 `MAPS_API_KEY`, route search is disabled and the app displays a configuration
 message.
 
+## Server setup
+
+Requirements:
+- Python 3.13 specifically. Other versions may cause dependency issues.
+- Docker Desktop, for the local PostgreSQL database.
+
+From `WalkingMeditationServer-main`:
+
+1. Create and activate a virtual environment, then install dependencies:
+   ```powershell
+   python -m venv venv
+   venv\Scripts\Activate.ps1
+   pip install -r requirements.txt
+   ```
+2. Copy `.env.example` to `.env`:
+   ```powershell
+   Copy-Item .env.example .env
+   ```
+   Fill in `GOOGLE_MAPS_API_KEY` and `OPENAI_API_KEY`. The `POSTGRES_*`/`DATABASE_*` defaults already match the Docker Compose setup below and don't need to change for local development. For `JWT_SECRET_KEY`, generate your own random value rather than using the placeholder:
+   ```powershell
+   python -c "import secrets; print(secrets.token_urlsafe(32))"
+   ```
+3. Ensure Docker Desktop is running, then start PostgreSQL:
+   ```powershell
+   docker compose up -d database
+   docker compose ps
+   ```
+4. Apply database migrations:
+   ```powershell
+   alembic upgrade head
+   ```
+5. Start the FastAPI server:
+   ```powershell
+   uvicorn main:app --host 127.0.0.1 --port 8000 --reload --reload-exclude "venv/*"
+   ```
+6. In a second PowerShell window, confirm it's up:
+   ```powershell
+   Invoke-RestMethod http://127.0.0.1:8000/
+   Invoke-RestMethod http://127.0.0.1:8000/health/database
+   ```
+
+See `READList/Procedure.md` for the full set of database commands (inspecting migration state, opening a psql console, resetting the local database, etc.).
+
+### Server environment variables
+
+| Variable | Purpose |
+|---|---|
+| `GOOGLE_MAPS_API_KEY` | Google Routes/Places/Elevation/Weather access |
+| `OPENAI_API_KEY` | Meditation script generation |
+| `APP_API_TOKEN` | Optional shared secret checked against the mobile app's `X-App-Token` header (see [Authentication](#authentication) below) |
+| `DATABASE_URL` | PostgreSQL connection string (defaults match the local Docker Compose setup) |
+| `JWT_SECRET_KEY` | Signs access tokens — generate a real random value per environment, never reuse the placeholder |
+| `JWT_ALGORITHM` | Defaults to `HS256` |
+| `ACCESS_TOKEN_TTL_MINUTES` | Access token lifetime, default 15 |
+| `REFRESH_TOKEN_TTL_DAYS` | Refresh token lifetime, default 30 |
+
+---
+
+## Authentication
+
+The server exposes account and session endpoints under `/auth`:
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /auth/register` | Create an account (email + password) |
+| `POST /auth/login` | Exchange email + password for an access token and a refresh token |
+| `POST /auth/refresh` | Exchange a refresh token for a new access/refresh pair (rotates the refresh token) |
+| `POST /auth/logout` | Revoke a refresh token |
+| `POST /auth/password-reset/request` | Request a password reset token (emailed in production; logged to the server console in local development) |
+| `POST /auth/password-reset/confirm` | Complete a password reset with the token and a new password |
+
+This is separate from the `APP_API_TOKEN`/`X-App-Token` mechanism described in the Android setup section above — `X-App-Token` is a single shared secret gating access to the app's own routing/script/narration endpoints, unrelated to which user is logged in. The `/auth` endpoints above are per-user login and don't currently gate any other endpoint; no route yet requires a logged-in user.
+
+Details, worked PowerShell examples, and manual test steps for each of these live in `READList/`.
+
 ## Server tests
 
 After preparing the server development environment, run its credential-free unit tests from
