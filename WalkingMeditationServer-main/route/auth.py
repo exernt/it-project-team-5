@@ -1,9 +1,9 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.sql import func
-
-from datetime import datetime, timezone
 
 from route.models import (
     RegisterRequest,
@@ -12,16 +12,26 @@ from route.models import (
     PasswordResetRequestResponse,
     PasswordResetConfirmRequest,
     PasswordResetConfirmResponse,
+    LoginRequest,
+    LoginResponse,
+    LogoutRequest,
+    LogoutResponse,
 )
 from route.persistence.database import DatabaseSessionDependency
-from route.persistence.orm_models import User, PasswordResetToken
-from route.services.passwords import hash_password
+from route.persistence.orm_models import User, PasswordResetToken, RefreshToken
+from route.services.passwords import hash_password, verify_password
 from route.services.password_reset import (
     generate_reset_token,
     hash_reset_token,
     reset_token_expiry,
 )
 from route.services.email_sender import send_password_reset_email
+from route.services.tokens import (
+    create_access_token,
+    generate_refresh_token,
+    hash_refresh_token,
+    refresh_token_expiry,
+)
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -39,8 +49,8 @@ def _email_already_registered() -> HTTPException:
     status_code=status.HTTP_201_CREATED,
 )
 async def register_user(
-    payload: RegisterRequest,
-    session: DatabaseSessionDependency,
+        payload: RegisterRequest,
+        session: DatabaseSessionDependency,
 ) -> RegisterResponse:
     email = str(payload.email)
     existing_user_id = await session.scalar(
@@ -64,6 +74,7 @@ async def register_user(
         raise _email_already_registered() from exc
 
     return RegisterResponse(message="Registration successful")
+
 
 def _invalid_reset_token() -> HTTPException:
     return HTTPException(
@@ -142,3 +153,68 @@ async def confirm_password_reset(
     await session.commit()
 
     return PasswordResetConfirmResponse(message="Password has been reset")
+
+
+def _invalid_credentials() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid email or password",
+    )
+
+
+@router.post(
+    "/login",
+    response_model=LoginResponse,
+)
+async def login(
+        payload: LoginRequest,
+        session: DatabaseSessionDependency,
+) -> LoginResponse:
+    email = str(payload.email)
+    user = await session.scalar(select(User).where(User.email == email))
+
+    if user is None:
+        raise _invalid_credentials()
+
+    if not await verify_password(payload.password, user.password_hash):
+        raise _invalid_credentials()
+
+    access_token = create_access_token(user.id)
+    raw_refresh_token = generate_refresh_token()
+    session.add(
+        RefreshToken(
+            user_id=user.id,
+            token_hash=hash_refresh_token(raw_refresh_token),
+            expires_at=refresh_token_expiry(),
+        )
+    )
+    await session.commit()
+
+    return LoginResponse(
+        access_token=access_token,
+        refresh_token=raw_refresh_token,
+    )
+
+
+@router.post(
+    "/logout",
+    response_model=LogoutResponse,
+)
+async def logout(
+        payload: LogoutRequest,
+        session: DatabaseSessionDependency,
+) -> LogoutResponse:
+    token_hash = hash_refresh_token(payload.refresh_token)
+    await session.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.token_hash == token_hash,
+            RefreshToken.revoked_at.is_(None),
+            )
+        .values(revoked_at=func.now())
+    )
+    await session.commit()
+
+    # Same message whether or not the token existed/was already revoked —
+    # logout is idempotent from the client's point of view.
+    return LogoutResponse(message="Logged out")

@@ -88,3 +88,21 @@ def get_script_generation_prompt(meditation_style:str ) -> str:
         return load_template(PROMPT_FOLDER / "without_park.txt")
     else:
         return load_template(PROMPT_FOLDER / "with_park_xml.txt")
+
+def jwt_secret_key() -> str:
+    key = os.getenv("JWT_SECRET_KEY", "").strip()
+    if not key:
+        raise ValueError("Missing env var JWT_SECRET_KEY")
+    return key
+
+
+def jwt_algorithm() -> str:
+    return os.getenv("JWT_ALGORITHM", "HS256").strip()
+
+
+def access_token_ttl_minutes() -> int:
+    return _positive_int_env("ACCESS_TOKEN_TTL_MINUTES", 15)
+
+
+def refresh_token_ttl_days() -> int:
+    return _positive_int_env("REFRESH_TOKEN_TTL_DAYS", 30)
