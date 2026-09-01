@@ -172,3 +172,26 @@ class StepSegment(BaseModel):
     elev_end_m: float
     elev_gain_m: float
     label: str
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip().casefold()
+        return value
+
+
+class PasswordResetRequestResponse(BaseModel):
+    message: str
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=8, max_length=1_024)
+
+
+class PasswordResetConfirmResponse(BaseModel):
+    message: str
