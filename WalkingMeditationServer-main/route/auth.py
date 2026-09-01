@@ -16,6 +16,8 @@ from route.models import (
     LoginResponse,
     LogoutRequest,
     LogoutResponse,
+    RefreshRequest,
+    RefreshResponse,
 )
 from route.persistence.database import DatabaseSessionDependency
 from route.persistence.orm_models import User, PasswordResetToken, RefreshToken
@@ -218,3 +220,52 @@ async def logout(
     # Same message whether or not the token existed/was already revoked —
     # logout is idempotent from the client's point of view.
     return LogoutResponse(message="Logged out")
+
+def _invalid_refresh_token() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Refresh token is invalid, expired, or has been revoked",
+    )
+
+
+@router.post(
+    "/refresh",
+    response_model=RefreshResponse,
+)
+async def refresh(
+        payload: RefreshRequest,
+        session: DatabaseSessionDependency,
+) -> RefreshResponse:
+    token_hash = hash_refresh_token(payload.refresh_token)
+    refresh_token_row = await session.scalar(
+        select(RefreshToken).where(RefreshToken.token_hash == token_hash)
+    )
+
+    if (
+            refresh_token_row is None
+            or refresh_token_row.revoked_at is not None
+            or refresh_token_row.expires_at < datetime.now(timezone.utc)
+    ):
+        raise _invalid_refresh_token()
+
+    # Rotate: revoke the token that was just used, issue a brand new one.
+    # If a stolen refresh token is ever used by an attacker, the legitimate
+    # client's next refresh attempt will fail here — a detectable signal,
+    # rather than the same token silently working for either party for 30 days.
+    refresh_token_row.revoked_at = func.now()
+
+    new_access_token = create_access_token(refresh_token_row.user_id)
+    new_raw_refresh_token = generate_refresh_token()
+    session.add(
+        RefreshToken(
+            user_id=refresh_token_row.user_id,
+            token_hash=hash_refresh_token(new_raw_refresh_token),
+            expires_at=refresh_token_expiry(),
+        )
+    )
+    await session.commit()
+
+    return RefreshResponse(
+        access_token=new_access_token,
+        refresh_token=new_raw_refresh_token,
+    )
