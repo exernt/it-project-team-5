@@ -1,5 +1,6 @@
 package com.example.walking_meditation;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.widget.Toast;
 
@@ -11,6 +12,8 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.walking_meditation.adapters.NarrationAdapter;
 import com.example.walking_meditation.models.NarrationItem;
+import com.example.walking_meditation.models.LatLon;
+import com.example.walking_meditation.utils.PolylineDecoder;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import org.json.JSONObject;
@@ -31,6 +34,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import static com.example.walking_meditation.nav.Extras.EXTRA_AUDIO_LATITUDES;
+import static com.example.walking_meditation.nav.Extras.EXTRA_AUDIO_LONGITUDES;
+import static com.example.walking_meditation.nav.Extras.EXTRA_AUDIO_PATHS;
+import static com.example.walking_meditation.nav.Extras.EXTRA_ROUTE_POLYLINES;
+
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
@@ -48,7 +56,7 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
     // NEW: matches RouteOptionsActivity intent extra key
     public static final String EXTRA_SCRIPT_JSON_PATH = "script_json_path";
 
-    private static final String BASE_URL = "http://10.0.2.2:8000";
+    private static final String BASE_URL = BuildConfig.SERVER_BASE_URL;
     private static final String TTS_URL = BASE_URL + "/tts";
 
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
@@ -61,7 +69,12 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
 
     // Queue state
     private boolean isQueueRunning = false;
+    private boolean isDownloadActive = false;
     private int currentQueueIndex = -1;
+    private boolean destroyed = false;
+    private Call activeTtsCall;
+    private ArrayList<String> routePolylines = new ArrayList<>();
+    private String scriptId = "script";
 
     // OkHttp with reasonable timeouts (tts mp3 can take time)
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
@@ -80,6 +93,8 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
         fabDownloadAll = findViewById(R.id.fabDownloadAll);
 
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
+        ArrayList<String> receivedPolylines = getIntent().getStringArrayListExtra(EXTRA_ROUTE_POLYLINES);
+        if (receivedPolylines != null) routePolylines = receivedPolylines;
 
         // NEW: read JSON from file path extra
         String path = getIntent().getStringExtra(EXTRA_SCRIPT_JSON_PATH);
@@ -120,6 +135,7 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
             finish();
             return;
         }
+        scriptId = Integer.toHexString(xml.hashCode());
 
         narrationItems.clear();
         narrationItems.addAll(parseNarrations(xml));
@@ -130,9 +146,15 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
 
         adapter = new NarrationAdapter(narrationItems, this);
         recyclerView.setAdapter(adapter);
-
-        // If you want to enable the queue button:
-        // fabDownloadAll.setOnClickListener(v -> startDownloadQueue());
+        restoreExistingDownloads();
+        updateFabState();
+        fabDownloadAll.setOnClickListener(v -> {
+            if (allNarrationsDownloaded()) {
+                startPlayback();
+            } else {
+                startDownloadQueue();
+            }
+        });
     }
 
     /**
@@ -144,6 +166,7 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
      */
     @Override
     public void onNarrationClicked(NarrationItem item, int position) {
+        if (isDownloadActive) return;
         if (item.status == NarrationItem.Status.DOWNLOADING) return;
 
         if (item.status == NarrationItem.Status.DOWNLOADED && item.localFilePath != null) {
@@ -151,15 +174,13 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
             return;
         }
 
-        if (item.status == NarrationItem.Status.ERROR) {
-            // Retry ONLY this item
+        if (item.status == NarrationItem.Status.ERROR || item.status == NarrationItem.Status.READY) {
             downloadSingleItem(position);
         }
-        // READY: do nothing (burden reduction). If you prefer: allow tap-to-download READY too.
     }
 
     private void startDownloadQueue() {
-        if (isQueueRunning) {
+        if (isQueueRunning || isDownloadActive) {
             Toast.makeText(this, "Download already running…", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -181,8 +202,7 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
     private void stopDownloadQueue() {
         isQueueRunning = false;
         currentQueueIndex = -1;
-        fabDownloadAll.setEnabled(true);
-        fabDownloadAll.setAlpha(1f);
+        updateFabState();
     }
 
     /**
@@ -228,7 +248,13 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
         int next = findNextDownloadIndex(justFinishedIndex);
         if (next == -1) {
             stopDownloadQueue();
-            Toast.makeText(this, "All downloads completed", Toast.LENGTH_SHORT).show();
+            Toast.makeText(
+                    this,
+                    allNarrationsDownloaded()
+                            ? "All downloads completed"
+                            : "Some downloads failed. Tap download to retry.",
+                    Toast.LENGTH_SHORT
+            ).show();
             return;
         }
 
@@ -242,6 +268,11 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             factory.setNamespaceAware(false);
+            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+            factory.setXIncludeAware(false);
+            factory.setExpandEntityReferences(false);
             DocumentBuilder builder = factory.newDocumentBuilder();
 
             InputStream is = new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8));
@@ -260,7 +291,7 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
                 if (text != null) text = text.trim();
 
                 if (text != null && !text.isEmpty()) {
-                    items.add(new NarrationItem(id, text));
+                    addNarrationChunks(items, id, text);
                 }
             }
         } catch (Exception e) {
@@ -270,10 +301,28 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
         return items;
     }
 
+    private void addNarrationChunks(List<NarrationItem> items, String id, String text) {
+        final int maxChars = 4000;
+        int chunk = 1;
+        String remaining = text.trim();
+        while (remaining.length() > maxChars) {
+            int split = remaining.lastIndexOf(' ', maxChars);
+            if (split < maxChars / 2) split = maxChars;
+            items.add(new NarrationItem(id + "-" + chunk, remaining.substring(0, split).trim()));
+            remaining = remaining.substring(split).trim();
+            chunk++;
+        }
+        if (!remaining.isEmpty()) {
+            items.add(new NarrationItem(chunk == 1 ? id : id + "-" + chunk, remaining));
+        }
+    }
+
     private void downloadTTS(NarrationItem item, int position, boolean fromQueue) {
+        isDownloadActive = true;
         item.status = NarrationItem.Status.DOWNLOADING;
         item.progress = 0;
         adapter.notifyItemChanged(position);
+        updateFabState();
 
         try {
             JSONObject payload = new JSONObject();
@@ -281,20 +330,27 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
             payload.put("language", "English");
             payload.put("speaker", "Ryan");
             payload.put("instruct", "Calm and clear");
+            payload.put("bitrate", "192k");
 
             RequestBody body = RequestBody.create(payload.toString(), JSON);
 
-            Request request = new Request.Builder()
+            Request.Builder requestBuilder = new Request.Builder()
                     .url(TTS_URL)
-                    .post(body)
-                    .build();
+                    .post(body);
+            if (!BuildConfig.SERVER_ACCESS_TOKEN.isEmpty()) {
+                requestBuilder.header("X-App-Token", BuildConfig.SERVER_ACCESS_TOKEN);
+            }
+            Request request = requestBuilder.build();
 
-            httpClient.newCall(request).enqueue(new Callback() {
+            activeTtsCall = httpClient.newCall(request);
+            activeTtsCall.enqueue(new Callback() {
 
                 @Override
                 public void onFailure(Call call, IOException e) {
                     runOnUiThread(() -> {
+                        if (destroyed) return;
                         item.status = NarrationItem.Status.ERROR;
+                        isDownloadActive = false;
                         item.progress = 0;
                         adapter.notifyItemChanged(position);
 
@@ -304,6 +360,8 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
 
                         if (fromQueue) {
                             advanceQueue(position);
+                        } else {
+                            updateFabState();
                         }
                     });
                 }
@@ -313,7 +371,9 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
                     ResponseBody responseBody = response.body();
                     if (!response.isSuccessful() || responseBody == null) {
                         runOnUiThread(() -> {
+                            if (destroyed) return;
                             item.status = NarrationItem.Status.ERROR;
+                            isDownloadActive = false;
                             item.progress = 0;
                             adapter.notifyItemChanged(position);
 
@@ -323,6 +383,8 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
 
                             if (fromQueue) {
                                 advanceQueue(position);
+                            } else {
+                                updateFabState();
                             }
                         });
                         response.close();
@@ -348,14 +410,18 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
                                 if (p > 100) p = 100;
                                 item.progress = p;
 
-                                runOnUiThread(() -> adapter.notifyItemChanged(position));
+                                runOnUiThread(() -> {
+                                    if (!destroyed) adapter.notifyItemChanged(position);
+                                });
                             }
                         }
 
                         out.flush();
 
                         runOnUiThread(() -> {
+                            if (destroyed) return;
                             item.status = NarrationItem.Status.DOWNLOADED;
+                            isDownloadActive = false;
                             item.progress = 100;
                             item.localFilePath = outFile.getAbsolutePath();
                             adapter.notifyItemChanged(position);
@@ -363,6 +429,7 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
                             if (fromQueue) {
                                 advanceQueue(position);
                             } else {
+                                updateFabState();
                                 Toast.makeText(ScriptActivity.this,
                                         "Downloaded MP3: " + outFile.getName(),
                                         Toast.LENGTH_SHORT).show();
@@ -372,7 +439,9 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
                     } catch (Exception e) {
                         e.printStackTrace();
                         runOnUiThread(() -> {
+                            if (destroyed) return;
                             item.status = NarrationItem.Status.ERROR;
+                            isDownloadActive = false;
                             item.progress = 0;
                             adapter.notifyItemChanged(position);
 
@@ -382,6 +451,8 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
 
                             if (fromQueue) {
                                 advanceQueue(position);
+                            } else {
+                                updateFabState();
                             }
                         });
                     } finally {
@@ -393,6 +464,7 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
         } catch (Exception e) {
             e.printStackTrace();
             item.status = NarrationItem.Status.ERROR;
+            isDownloadActive = false;
             item.progress = 0;
             adapter.notifyItemChanged(position);
 
@@ -400,12 +472,95 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
 
             if (fromQueue) {
                 advanceQueue(position);
+            } else {
+                updateFabState();
             }
         }
     }
 
     private String buildMp3FileName(NarrationItem item, int position) {
-        return "tts_" + sanitize(item.id) + "_" + position + ".mp3";
+        return "tts_" + scriptId + "_" + sanitize(item.id) + "_" + position + ".mp3";
+    }
+
+    private void restoreExistingDownloads() {
+        for (int i = 0; i < narrationItems.size(); i++) {
+            NarrationItem item = narrationItems.get(i);
+            File file = new File(getFilesDir(), buildMp3FileName(item, i));
+            if (file.isFile() && file.length() > 0) {
+                item.status = NarrationItem.Status.DOWNLOADED;
+                item.progress = 100;
+                item.localFilePath = file.getAbsolutePath();
+            }
+        }
+        adapter.notifyDataSetChanged();
+    }
+
+    private boolean allNarrationsDownloaded() {
+        if (narrationItems.isEmpty()) return false;
+        for (NarrationItem item : narrationItems) {
+            if (item.status != NarrationItem.Status.DOWNLOADED || item.localFilePath == null) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void updateFabState() {
+        fabDownloadAll.setEnabled(!isQueueRunning && !isDownloadActive && !narrationItems.isEmpty());
+        fabDownloadAll.setAlpha(fabDownloadAll.isEnabled() ? 1f : 0.5f);
+        fabDownloadAll.setImageResource(
+                allNarrationsDownloaded()
+                        ? android.R.drawable.ic_media_play
+                        : android.R.drawable.stat_sys_download
+        );
+    }
+
+    private void startPlayback() {
+        List<LatLon> points = new ArrayList<>();
+        try {
+            for (String encoded : routePolylines) {
+                List<LatLon> decoded = PolylineDecoder.decode(encoded);
+                if (!points.isEmpty() && !decoded.isEmpty()) decoded.remove(0);
+                points.addAll(decoded);
+            }
+        } catch (IllegalArgumentException e) {
+            Toast.makeText(this, "The selected route geometry is invalid.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (points.isEmpty()) {
+            Toast.makeText(this, "The selected route has no playback coordinates.", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        ArrayList<String> paths = new ArrayList<>();
+        double[] latitudes = new double[narrationItems.size()];
+        double[] longitudes = new double[narrationItems.size()];
+        for (int i = 0; i < narrationItems.size(); i++) {
+            NarrationItem item = narrationItems.get(i);
+            paths.add(item.localFilePath);
+            int pointIndex = narrationItems.size() == 1
+                    ? 0
+                    : (int) Math.round(i * (points.size() - 1.0) / (narrationItems.size() - 1.0));
+            LatLon point = points.get(pointIndex);
+            latitudes[i] = point.lat;
+            longitudes[i] = point.lon;
+        }
+
+        Intent intent = new Intent(this, MeditationPlaybackActivity.class);
+        intent.putStringArrayListExtra(EXTRA_AUDIO_PATHS, paths);
+        intent.putExtra(EXTRA_AUDIO_LATITUDES, latitudes);
+        intent.putExtra(EXTRA_AUDIO_LONGITUDES, longitudes);
+        startActivity(intent);
+    }
+
+    @Override
+    protected void onDestroy() {
+        destroyed = true;
+        if (activeTtsCall != null) {
+            activeTtsCall.cancel();
+            activeTtsCall = null;
+        }
+        super.onDestroy();
     }
 
     private String sanitize(String s) {

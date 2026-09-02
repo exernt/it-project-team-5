@@ -1,5 +1,21 @@
-from typing import List, Tuple
-from pydantic import BaseModel, Field
+from typing import List, Literal, Tuple
+from pydantic import BaseModel, EmailStr, Field, field_validator
+
+
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=8, max_length=1_024)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip().casefold()
+        return value
+
+
+class RegisterResponse(BaseModel):
+    message: str
 
 class LatLng(BaseModel):
     lat: float = Field(..., ge=-90, le=90)
@@ -62,7 +78,7 @@ class ParkDetourResponse(BaseModel):
     parks_considered: int
     feasible_detours: List[ParkDetourOption]
     infeasible_detours: List[ParkDetourOption]
-    html_files: List[str] = []
+    html_files: List[str] = Field(default_factory=list)
 
 class Place(BaseModel):
     place_id: str
@@ -81,10 +97,10 @@ class ScriptWithParkRequest(BaseModel):
     source: LatLng
     destination: LatLng
     park:LatLng
-    to_park_time: int
-    park_time: int
-    park_to_destination_time: int
-    context:str
+    to_park_time: int = Field(..., ge=0, le=14_400)
+    park_time: int = Field(..., ge=0, le=14_400)
+    park_to_destination_time: int = Field(..., ge=0, le=14_400)
+    context: str = Field(..., min_length=1, max_length=1_000)
 
 class ScriptWithParkResponse(BaseModel):
     script: str
@@ -92,8 +108,8 @@ class ScriptWithParkResponse(BaseModel):
 class ScriptWithoutParkRequest(BaseModel):
     source: LatLng
     destination: LatLng
-    total_walking_time: int
-    context:str
+    total_walking_time: int = Field(..., ge=0, le=14_400)
+    context: str = Field(..., min_length=1, max_length=1_000)
 
 class ScriptWithoutParkResponse(BaseModel):
     script: str
@@ -115,8 +131,12 @@ class ParkDetourResult(BaseModel):
     park: ParkPlace
     baseline_s: int
     detour_s: int
+    to_park_s: int
+    park_to_destination_s: int
     added_s: int
     slack_s: int
+    polyline_to_park: str
+    polyline_from_park: str
 
 class WalkRouteResponse(BaseModel):
     origin: LatLng
@@ -128,14 +148,14 @@ class WalkRouteResponse(BaseModel):
 class WalkRouteRequest(BaseModel):
     source: LatLng
     destination: LatLng
-    total_travel_time: int
+    total_travel_time: int = Field(..., ge=0, le=14_400)
 
 class TTSRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=5000)
     language: str = "English"   # or "Auto"
     speaker: str = "Ryan"
     instruct: str = ""
-    bitrate: str = "192k"
+    bitrate: Literal["96k", "128k", "160k", "192k", "256k", "320k"] = "192k"
 
 class TTSResponse(BaseModel):
     content: bytes
@@ -153,4 +173,59 @@ class StepSegment(BaseModel):
     elev_gain_m: float
     label: str
 
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip().casefold()
+        return value
+
+
+class PasswordResetRequestResponse(BaseModel):
+    message: str
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=8, max_length=1_024)
+
+
+class PasswordResetConfirmResponse(BaseModel):
+    message: str
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip().casefold()
+        return value
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: str
+
+
+class LogoutResponse(BaseModel):
+    message: str
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class RefreshResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"

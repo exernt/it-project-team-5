@@ -43,4 +43,9 @@ public class LocationAndSpeedScheduler implements AudioScheduler {
     public void pause() {
         locationScheduler.pause();
     }
+
+    @Override
+    public void release() {
+        locationScheduler.release();
+    }
 }

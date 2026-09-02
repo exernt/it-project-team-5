@@ -1,25 +1,26 @@
 from __future__ import annotations
 import re
 import math
-import polyline as poly_decoder
+from decimal import Decimal, InvalidOperation, ROUND_CEILING
 import subprocess
 from pathlib import Path
 from typing import Dict, Any
 
 from route.errors import GoogleRoutesError, AudioConversionError
 
-import subprocess
-from pathlib import Path
-
-
-_DURATION_RE = re.compile(r"^(\d+)s$")
+_DURATION_RE = re.compile(r"^(\d+(?:\.\d{1,9})?)s$")
 
 
 def duration_to_seconds(duration: str) -> int:
     m = _DURATION_RE.match(duration or "")
     if not m:
         raise GoogleRoutesError(f"Unexpected duration format: {duration!r}")
-    return int(m.group(1))
+    try:
+        # Route feasibility must not be understated when Google returns a
+        # protobuf Duration containing fractional seconds.
+        return int(Decimal(m.group(1)).to_integral_value(rounding=ROUND_CEILING))
+    except (InvalidOperation, ValueError) as exc:
+        raise GoogleRoutesError(f"Unexpected duration format: {duration!r}") from exc
 
 
 def latlng_waypoint(lat: float, lon: float) -> Dict[str, Any]:
@@ -30,6 +31,8 @@ def polyline_to_path_string(encoded_polyline: str) -> str:
     """
     Convert encoded polyline -> "lat,lon;lat,lon;..."
     """
+    import polyline as poly_decoder
+
     decoded_points = poly_decoder.decode(encoded_polyline)  # [(lat, lon), ...]
     return ";".join(f"{lat},{lon}" for lat, lon in decoded_points)
 

@@ -9,8 +9,8 @@ public class RouteOption {
     public int durationSeconds;   // baseline.duration_s or park.detour_s
     public int addedSeconds;      // 0 for baseline, park.added_s for parks
 
-    // Optional useful fields later
-    public String polyline;       // currently only baseline has it (based on your JSON)
+    public String polyline;
+    public String polylineFromPark;
     public String parkPlaceId;
 
     public static RouteOption fromBaseline(ApiResponse resp) {
@@ -30,7 +30,8 @@ public class RouteOption {
         opt.title = (p.park != null && p.park.name != null) ? p.park.name : "Park detour";
         opt.durationSeconds = p.detour_s;
         opt.addedSeconds = p.added_s;
-        opt.polyline = null; // your current response doesn't include detour polyline
+        opt.polyline = p.polyline_to_park;
+        opt.polylineFromPark = p.polyline_from_park;
         opt.parkPlaceId = (p.park != null) ? p.park.place_id : null;
         return opt;
     }

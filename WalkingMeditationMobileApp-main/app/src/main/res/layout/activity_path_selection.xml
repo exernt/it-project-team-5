@@ -34,6 +34,30 @@
             android:id="@+id/et_destination"
             style="@style/App.RoundedInput"
             android:hint="Enter destination"
+            android:layout_marginBottom="@dimen/space_24" />
+
+        <TextView
+            style="@style/App.Label"
+            android:text="Available time (minutes)" />
+
+        <EditText
+            android:id="@+id/et_total_minutes"
+            style="@style/App.RoundedInput"
+            android:hint="60"
+            android:inputType="number"
+            android:maxLength="3"
+            android:layout_marginBottom="@dimen/space_24" />
+
+        <TextView
+            style="@style/App.Label"
+            android:text="Meditation purpose" />
+
+        <EditText
+            android:id="@+id/et_context"
+            style="@style/App.RoundedInput"
+            android:hint="For example: prepare for a stressful meeting"
+            android:inputType="textCapSentences|textMultiLine"
+            android:maxLength="1000"
             android:layout_marginBottom="@dimen/space_36" />
 
         <Button

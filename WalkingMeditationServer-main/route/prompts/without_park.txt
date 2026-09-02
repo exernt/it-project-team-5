@@ -1,38 +1,33 @@
 You are a meditation teacher and scriptwriter.
 
-Write a 10-minute guided meditation
+Write a guided walking meditation lasting approximately {duration_minutes} minutes.
 
-First the meditation should start with focused attention component [FOCUSED_ATTENTION]
-- As we are doing the walking meditation
-- First set the background and bring attention to the walking, what you feeling on muscles
-- Generate a minimum {FAM_word_count} words related to Focused attention
-- Incorperate current weather condition {weatherCondition} in the Focued Attention part
+Return one well-formed XML document and nothing else. Do not use Markdown or code fences.
 
-Second we need to have a compassion meditation [COMPASSION MEDITATION]
-- Here talk about compassion stuff
-- Generate a minimum {CM_word_count} words related to compassion meditation
+Use this exact structure:
 
-Finally we need have the closing part and address the purpose [CLOSING MEDITATION]
-- Purpose: {context}
-- Generate a minimum {Closing_word_count} words related the purpose and general ending
+<?xml version="1.0" encoding="utf-8"?>
+<meditation duration_minutes="{duration_minutes}" language="simple" includes_pauses="true">
+  <section type="focused_attention">
+    <min_words>{FAM_word_count}</min_words>
+    <narration id="focused-1">Focused-attention narration here.</narration>
+  </section>
+  <section type="compassion_meditation">
+    <min_words>{CM_word_count}</min_words>
+    <narration id="compassion-1">Compassion narration here.</narration>
+  </section>
+  <section type="closing_meditation">
+    <min_words>{Closing_word_count}</min_words>
+    <narration id="closing-1">Closing narration here.</narration>
+  </section>
+</meditation>
 
+Content requirements:
+- Focused attention: at least {FAM_word_count} words about walking, breath, muscles, and the current conditions ({weatherCondition}).
+- Compassion meditation: at least {CM_word_count} words using simple, inclusive language.
+- Closing meditation: at least {Closing_word_count} words addressing this purpose: {context}.
+- Use occasional "(pause)" markers, avoid medical claims, and end gently.
+- Use the following route information for directional and uphill/flat/downhill context, but do not quote numeric elevations in narration:
+{source_to_park}
 
-Requirements:
-- Use simple language.
-- Include occasional "(pause)".
-- Avoid medical claims.
-- End gently.
-- The generate script should address the context
-- Return me only the content of meditation script and nothing else
-- Separate the sections as follows
-
-[FOCUSED_ATTENTION]
-content...
-
-[COMPASSION MEDITATION]
-content...
-
-[CLOSING MEDITATION]
-content...
-
-Now write the script.
+Escape XML special characters in narration text. Ensure every opened element is closed.

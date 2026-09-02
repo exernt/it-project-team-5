@@ -1,0 +1,8 @@
+This directory contains Alembic database migrations. Create later revisions
+after changing the ORM models with:
+
+    alembic revision --autogenerate -m "describe the schema change"
+
+Review generated migrations before applying them with:
+
+    alembic upgrade head

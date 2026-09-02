@@ -37,6 +37,8 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 import static com.example.walking_meditation.nav.Extras.EXTRA_ROUTE_JSON_PATH;
+import static com.example.walking_meditation.nav.Extras.EXTRA_CONTEXT;
+import static com.example.walking_meditation.nav.Extras.EXTRA_ROUTE_POLYLINES;
 import static com.example.walking_meditation.nav.Extras.EXTRA_SCRIPT_JSON_PATH;
 
 import com.example.walking_meditation.utils.CacheFiles;
@@ -44,7 +46,7 @@ import com.example.walking_meditation.utils.CacheFiles;
 public class RouteOptionsActivity extends AppCompatActivity implements RouteOptionsAdapter.OnRouteClickListener {
 
     // Change to your server base (emulator -> host machine)
-    private static final String BASE_URL = "http://10.0.2.2:8000";
+    private static final String BASE_URL = BuildConfig.SERVER_BASE_URL;
     private static final String URL_WITHOUT_PARK = BASE_URL + "/route/generate-script/without-park";
     private static final String URL_WITH_PARK = BASE_URL + "/route/generate-script/park";
 
@@ -68,10 +70,12 @@ public class RouteOptionsActivity extends AppCompatActivity implements RouteOpti
             .connectTimeout(20, TimeUnit.SECONDS)
             .readTimeout(120, TimeUnit.SECONDS)   // allow long server generation
             .writeTimeout(30, TimeUnit.SECONDS)
-            .callTimeout(90, TimeUnit.SECONDS)
+            .callTimeout(240, TimeUnit.SECONDS)
             .build();
 
     private volatile boolean isLoading = false;
+    private Call inFlightCall;
+    private String meditationContext;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -82,6 +86,10 @@ public class RouteOptionsActivity extends AppCompatActivity implements RouteOpti
         tvEmpty = findViewById(R.id.tv_empty);
         rvRoutes = findViewById(R.id.rv_routes);
         loadingOverlay = findViewById(R.id.loading_overlay);
+        meditationContext = getIntent().getStringExtra(EXTRA_CONTEXT);
+        if (meditationContext == null || meditationContext.trim().isEmpty()) {
+            meditationContext = "general wellbeing";
+        }
 
         // Read file path (instead of huge JSON string extra)
         String path = getIntent().getStringExtra(EXTRA_ROUTE_JSON_PATH);
@@ -114,8 +122,11 @@ public class RouteOptionsActivity extends AppCompatActivity implements RouteOpti
             return;
         }
 
-        // Build options list: baseline always first
-        if (resp != null && resp.baseline != null) {
+        boolean baselineFits = resp != null
+                && resp.baseline != null
+                && resp.total_travel_time != null
+                && resp.baseline.duration_s <= resp.total_travel_time;
+        if (baselineFits) {
             options.add(RouteOption.fromBaseline(resp));
         }
         if (resp != null && resp.parks != null) {
@@ -125,12 +136,17 @@ public class RouteOptionsActivity extends AppCompatActivity implements RouteOpti
         }
 
         int parkCount = (resp != null && resp.parks != null) ? resp.parks.size() : 0;
-        tvHeader.setText(String.format(Locale.US,
-                "Choose a route (Baseline + %d park option%s)",
-                parkCount,
-                parkCount == 1 ? "" : "s"));
-
-        tvEmpty.setVisibility(parkCount == 0 ? View.VISIBLE : View.GONE);
+        if (options.isEmpty()) {
+            tvHeader.setText("No route fits the available time");
+            tvEmpty.setText("Increase the available time or choose closer locations.");
+            tvEmpty.setVisibility(View.VISIBLE);
+        } else {
+            tvHeader.setText(String.format(Locale.US,
+                    "Choose a route (Baseline + %d park option%s)",
+                    parkCount,
+                    parkCount == 1 ? "" : "s"));
+            tvEmpty.setVisibility(parkCount == 0 ? View.VISIBLE : View.GONE);
+        }
 
         rvRoutes.setLayoutManager(new LinearLayoutManager(this));
         rvRoutes.setAdapter(new RouteOptionsAdapter(options, this));
@@ -145,7 +161,7 @@ public class RouteOptionsActivity extends AppCompatActivity implements RouteOpti
                             Toast.LENGTH_SHORT).show();
                 } else {
                     setEnabled(false);
-                    RouteOptionsActivity.this.onBackPressed();
+                    getOnBackPressedDispatcher().onBackPressed();
                 }
             }
         });
@@ -160,11 +176,10 @@ public class RouteOptionsActivity extends AppCompatActivity implements RouteOpti
             return;
         }
 
-        // Replace this with a real input later
-        String context = "stressful meeting";
-
         if (option.type == RouteOption.Type.BASELINE) {
-            callGenerateWithoutPark(resp.origin, resp.destination, resp.baseline.duration_s, context);
+            callGenerateWithoutPark(
+                    resp.origin, resp.destination, resp.baseline.duration_s,
+                    meditationContext, option);
         } else {
             ParkItem selectedParkItem = findParkItemByPlaceId(option.parkPlaceId);
             if (selectedParkItem == null || selectedParkItem.park == null) {
@@ -177,7 +192,9 @@ public class RouteOptionsActivity extends AppCompatActivity implements RouteOpti
                     resp.destination,
                     selectedParkItem.park.lat,
                     selectedParkItem.park.lon,
-                    context
+                    meditationContext,
+                    selectedParkItem,
+                    option
             );
         }
     }
@@ -198,7 +215,8 @@ public class RouteOptionsActivity extends AppCompatActivity implements RouteOpti
         rvRoutes.setEnabled(!loading);
     }
 
-    private void callGenerateWithoutPark(LatLon source, LatLon destination, int totalWalkingTime, String context) {
+    private void callGenerateWithoutPark(LatLon source, LatLon destination, int totalWalkingTime,
+                                         String context, RouteOption option) {
         try {
             JSONObject payload = new JSONObject();
 
@@ -215,14 +233,17 @@ public class RouteOptionsActivity extends AppCompatActivity implements RouteOpti
             payload.put("total_walking_time", totalWalkingTime);
             payload.put("context", context);
 
-            postJson(URL_WITHOUT_PARK, payload);
+            ArrayList<String> polylines = new ArrayList<>();
+            if (option.polyline != null && !option.polyline.isEmpty()) polylines.add(option.polyline);
+            postJson(URL_WITHOUT_PARK, payload, polylines);
 
         } catch (Exception e) {
             Toast.makeText(this, "JSON build error: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 
-    private void callGenerateWithPark(LatLon source, LatLon destination, double parkLat, double parkLon, String context) {
+    private void callGenerateWithPark(LatLon source, LatLon destination, double parkLat, double parkLon,
+                                      String context, ParkItem parkItem, RouteOption option) {
         try {
             JSONObject payload = new JSONObject();
 
@@ -243,30 +264,41 @@ public class RouteOptionsActivity extends AppCompatActivity implements RouteOpti
             payload.put("park", park);
             payload.put("context", context);
 
-            payload.put("to_park_time", 500);
-            payload.put("park_time", 1000);
-            payload.put("park_to_destination_time", 600);
+            payload.put("to_park_time", parkItem.to_park_s);
+            payload.put("park_time", parkItem.slack_s);
+            payload.put("park_to_destination_time", parkItem.park_to_destination_s);
 
-            postJson(URL_WITH_PARK, payload);
+            ArrayList<String> polylines = new ArrayList<>();
+            if (option.polyline != null && !option.polyline.isEmpty()) polylines.add(option.polyline);
+            if (option.polylineFromPark != null && !option.polylineFromPark.isEmpty()) {
+                polylines.add(option.polylineFromPark);
+            }
+            postJson(URL_WITH_PARK, payload, polylines);
 
         } catch (Exception e) {
             Toast.makeText(this, "JSON build error: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 
-    private void postJson(String url, JSONObject payload) {
+    private void postJson(String url, JSONObject payload, ArrayList<String> routePolylines) {
         setLoading(true);
 
         RequestBody body = RequestBody.create(payload.toString(), JSON);
-        Request req = new Request.Builder()
+        Request.Builder requestBuilder = new Request.Builder()
                 .url(url)
-                .post(body)
-                .build();
+                .post(body);
+        if (!BuildConfig.SERVER_ACCESS_TOKEN.isEmpty()) {
+            requestBuilder.header("X-App-Token", BuildConfig.SERVER_ACCESS_TOKEN);
+        }
+        Request req = requestBuilder.build();
 
-        httpClient.newCall(req).enqueue(new Callback() {
+        if (inFlightCall != null) inFlightCall.cancel();
+        inFlightCall = httpClient.newCall(req);
+        inFlightCall.enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
                     setLoading(false);
                     Toast.makeText(RouteOptionsActivity.this,
                             "Generate failed: " + e.getMessage(),
@@ -276,16 +308,21 @@ public class RouteOptionsActivity extends AppCompatActivity implements RouteOpti
 
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                String respBody = response.body() != null ? response.body().string() : "";
+                final String respBody;
+                final boolean successful = response.isSuccessful();
+                final int responseCode = response.code();
+                try (Response closedResponse = response) {
+                    respBody = closedResponse.body() != null ? closedResponse.body().string() : "";
+                }
 
                 runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
                     setLoading(false);
 
-                    if (!response.isSuccessful()) {
+                    if (!successful) {
                         Toast.makeText(RouteOptionsActivity.this,
-                                "Server error: " + response.code() + "\n" + respBody,
+                                "Server error: " + responseCode + "\n" + respBody,
                                 Toast.LENGTH_LONG).show();
-                        response.close();
                         return;
                     }
 
@@ -302,18 +339,26 @@ public class RouteOptionsActivity extends AppCompatActivity implements RouteOpti
 
                         Intent intent = new Intent(RouteOptionsActivity.this, ScriptActivity.class);
                         intent.putExtra(EXTRA_SCRIPT_JSON_PATH, scriptPath);
+                        intent.putStringArrayListExtra(EXTRA_ROUTE_POLYLINES, routePolylines);
                         startActivity(intent);
 
                     } catch (IOException ioe) {
                         Toast.makeText(RouteOptionsActivity.this,
                                 "Failed to save script response: " + ioe.getMessage(),
                                 Toast.LENGTH_LONG).show();
-                    } finally {
-                        response.close();
                     }
                 });
             }
         });
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (inFlightCall != null) {
+            inFlightCall.cancel();
+            inFlightCall = null;
+        }
+        super.onDestroy();
     }
 
 }

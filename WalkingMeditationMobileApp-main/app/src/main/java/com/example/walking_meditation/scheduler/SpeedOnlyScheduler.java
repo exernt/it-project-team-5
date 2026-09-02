@@ -13,6 +13,7 @@ public class SpeedOnlyScheduler implements AudioScheduler {
 
     private MediaPlayer mediaPlayer;
     private long lastPlayedTime = 0L;
+    private boolean resumePlayback = false;
 
     public SpeedOnlyScheduler(Context context,
                               SpeedAudioQueue queue) {
@@ -50,16 +51,27 @@ public class SpeedOnlyScheduler implements AudioScheduler {
 
     @Override
     public void resume() {
-        if (mediaPlayer != null && !mediaPlayer.isPlaying()){
+        if (resumePlayback && mediaPlayer != null && !mediaPlayer.isPlaying()){
             mediaPlayer.start();
         }
+        resumePlayback = false;
     }
 
     @Override
     public void pause() {
         if(mediaPlayer != null && mediaPlayer.isPlaying()){
+            resumePlayback = true;
             mediaPlayer.pause();
         }
+    }
+
+    @Override
+    public void release() {
+        if (mediaPlayer != null) {
+            mediaPlayer.release();
+            mediaPlayer = null;
+        }
+        resumePlayback = false;
     }
 
     private void play(int resId) {

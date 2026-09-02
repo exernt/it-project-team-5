@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import httpx
-from typing import List, Tuple
+from typing import List
 from route.config import *
 from route.models import StepSegment, LatLng
 from route.clients.google_steps import compute_walking_steps
 from route.clients.google_elevation import fetch_elevation_samples_for_polyline
-from route.clients.google_routes import fetch_route_polyline
 from route.utils.route_hint import extract_street_hint
 from route.utils.utils import classify_step
 
@@ -16,12 +15,9 @@ async def build_route_elevation_segments(
     dest: LatLng,
     *,
     per_step_samples: int = 2,   # 2 = start/end only; 10 = smoother per-step
-    overall_samples: int = 200,  # overall elevation profile granularity
-) -> Tuple[List[StepSegment], List[Tuple[float, float]]]:
+) -> List[StepSegment]:
     async with httpx.AsyncClient(timeout=40) as client:
         steps = await compute_walking_steps(client, origin, dest)
-
-        print("steps", steps)
 
         segments: List[StepSegment] = []
         for i, st in enumerate(steps, start=1):
@@ -29,11 +25,19 @@ async def build_route_elevation_segments(
             sp = (st.get("startLocation") or {}).get("latLng") or {}
             ep = (st.get("endLocation") or {}).get("latLng") or {}
             poly = ((st.get("polyline") or {}).get("encodedPolyline")) or ""
-            if not poly or "latitude" not in sp or "latitude" not in ep:
+            if (
+                not poly
+                or "latitude" not in sp
+                or "longitude" not in sp
+                or "latitude" not in ep
+                or "longitude" not in ep
+            ):
                 continue
 
             elev = await fetch_elevation_samples_for_polyline(client, poly, samples=per_step_samples)
             # The Elevation API returns results sampled along the path inclusive endpoints.  [oai_citation:6‡Google for Developers](https://developers.google.com/maps/documentation/elevation/requests-elevation?utm_source=chatgpt.com)
+            if not elev:
+                continue
             elev_start = float(elev[0]["elevation"])
             elev_end = float(elev[-1]["elevation"])
             gain = elev_end - elev_start
@@ -52,21 +56,7 @@ async def build_route_elevation_segments(
                     label=label
                 )
             )
-        print("segments", segments)
-
-        # Build an overall elevation profile (single call on the full route polyline):
-        # We need a full route polyline; easiest is to request it from computeRoutes.
-        poly = await fetch_route_polyline(client, origin, dest)
-        
-        elev_profile = await fetch_elevation_samples_for_polyline(client, poly, samples=overall_samples)
-
-        profile = [
-            (float(p["location"]["lat"]), float(p["elevation"]))
-            for p in elev_profile
-        ]
-        print("profile", profile)
-
-        return segments, profile
+        return segments
 
 def print_segments(segments: List[StepSegment], origin: LatLng, dest: LatLng) -> list:
 
@@ -89,5 +79,5 @@ async def source_to_dest_elevation(
     destination: LatLng
     ) -> list:
 
-    (segments, profile) = await build_route_elevation_segments(source, destination)
+    segments = await build_route_elevation_segments(source, destination)
     return print_segments(segments, source, destination)

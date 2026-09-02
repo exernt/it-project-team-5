@@ -8,4 +8,6 @@ public interface AudioScheduler {
     void resume();
 
     void pause();
+
+    void release();
 }

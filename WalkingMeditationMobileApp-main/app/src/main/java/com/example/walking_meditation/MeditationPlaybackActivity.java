@@ -3,7 +3,6 @@ package com.example.walking_meditation;
 import android.Manifest;
 import android.content.pm.PackageManager;
 import android.location.Location;
-import android.media.AudioAttributes;
 import android.media.MediaPlayer;
 import android.os.Bundle;
 import android.os.Looper;
@@ -20,6 +19,12 @@ import com.example.walking_meditation.scheduler.factory.SpeedQueueFactory;
 import com.google.android.gms.location.*;
 
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Locale;
+
+import static com.example.walking_meditation.nav.Extras.EXTRA_AUDIO_LATITUDES;
+import static com.example.walking_meditation.nav.Extras.EXTRA_AUDIO_LONGITUDES;
+import static com.example.walking_meditation.nav.Extras.EXTRA_AUDIO_PATHS;
 
 public class MeditationPlaybackActivity extends AppCompatActivity {
 
@@ -54,7 +59,6 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
 
         buildQueuesAndScheduler();
         startWhiteNoise();
-        requestLocationPermission();
     }
 
 
@@ -69,14 +73,6 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
         // Lower volume (0.0f – 1.0f)
         whiteNoisePlayer.setVolume(0.3f, 0.3f);
 
-        // Set proper audio attributes
-        whiteNoisePlayer.setAudioAttributes(
-                new AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                        .build()
-        );
-
         whiteNoisePlayer.start();
     }
 
@@ -89,9 +85,21 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
     }
 
     private void buildQueuesAndScheduler() {
+        ArrayList<String> audioPaths = getIntent().getStringArrayListExtra(EXTRA_AUDIO_PATHS);
+        double[] latitudes = getIntent().getDoubleArrayExtra(EXTRA_AUDIO_LATITUDES);
+        double[] longitudes = getIntent().getDoubleArrayExtra(EXTRA_AUDIO_LONGITUDES);
 
-        locationQueue =
-                LocationQueueFactory.createFromNavigationXml(this);
+        if (audioPaths != null && latitudes != null && longitudes != null
+                && audioPaths.size() == latitudes.length
+                && audioPaths.size() == longitudes.length
+                && !audioPaths.isEmpty()) {
+            locationQueue = new ArrayList<>();
+            for (int i = 0; i < audioPaths.size(); i++) {
+                locationQueue.add(new LocationAudio(latitudes[i], longitudes[i], audioPaths.get(i)));
+            }
+        } else {
+            locationQueue = LocationQueueFactory.createFromNavigationXml(this);
+        }
 
         speedQueue =
                 SpeedQueueFactory.createMeditationSpeedProfile();
@@ -126,6 +134,8 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
 
     private void startLocationUpdates() {
 
+        if (locationCallback != null) return;
+
         LocationRequest request =
                 new LocationRequest.Builder(
                         Priority.PRIORITY_HIGH_ACCURACY,
@@ -140,8 +150,9 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
                 for (Location location :
                         result.getLocations()) {
 
-                    scheduler.onLocationUpdate(location, 0);
-                    updateUI(location, 0);
+                    float speedKmph = location.hasSpeed() ? location.getSpeed() * 3.6f : 0f;
+                    scheduler.onLocationUpdate(location, speedKmph);
+                    updateUI(location, speedKmph);
                 }
             }
         };
@@ -185,7 +196,7 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
                                     .getDistanceToClosest(location);
 
                     builder.append("\nClosest Distance: ")
-                            .append(String.format("%.2f", distance))
+                            .append(String.format(Locale.getDefault(), "%.2f", distance))
                             .append(" meters");
                 }
                 break;
@@ -213,6 +224,7 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
 
         if (locationCallback != null) {
             fusedLocationClient.removeLocationUpdates(locationCallback);
+            locationCallback = null;
         }
 
         if (whiteNoisePlayer != null && whiteNoisePlayer.isPlaying()) {
@@ -230,7 +242,7 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
 
         requestLocationPermission();
 
-        if (whiteNoisePlayer != null) {
+        if (whiteNoisePlayer != null && !whiteNoisePlayer.isPlaying()) {
             whiteNoisePlayer.start();
         }
 
@@ -245,8 +257,10 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
 
         if (locationCallback != null) {
             fusedLocationClient.removeLocationUpdates(locationCallback);
+            locationCallback = null;
         }
 
+        if (scheduler != null) scheduler.release();
         stopWhiteNoise();
     }
 
