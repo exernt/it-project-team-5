@@ -8,7 +8,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 public class MainActivity extends AppCompatActivity {
 
-    Button btnExplore, btnStudy;
+    private Button btnExplore, btnStudy;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
