@@ -8,6 +8,14 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from route.persistence.database import Base
 
+import enum
+
+from sqlalchemy import Enum as SqlEnum
+
+class Role(str, enum.Enum):
+    PARTICIPANT = "participant"
+    RESEARCHER = "researcher"
+    ADMIN = "admin"
 
 class User(Base):
     """Authentication identity stored by the server."""
@@ -22,6 +30,11 @@ class User(Base):
     )
     email: Mapped[str] = mapped_column(Text, nullable=False)
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    role: Mapped[Role] = mapped_column(
+        SqlEnum(Role, name="user_role", native_enum=True),
+        nullable=False,
+        server_default=text("'participant'::user_role"),
+    )
     email_verified: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -32,7 +45,6 @@ class User(Base):
         nullable=False,
         server_default=func.now(),
     )
-
 class PasswordResetToken(Base):
     """A single-use, time-limited token for resetting a user's password."""
 
