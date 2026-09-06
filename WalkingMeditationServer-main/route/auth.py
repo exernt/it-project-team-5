@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.sql import func
@@ -36,7 +36,8 @@ from route.services.tokens import (
     hash_refresh_token,
     refresh_token_expiry,
 )
-from route.dependencies import CurrentUserDependency
+from route.dependencies import CurrentUserDependency, require_role
+from uuid import UUID
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -297,6 +298,33 @@ async def register_researcher(
     )
     session.add(profile)
     await session.commit()
+
+    return ResearcherProfileResponse(
+        institution=profile.institution,
+        verified_at=profile.verified_at,
+        role=user.role.value,
+    )
+
+@router.post(
+    "/admin/researchers/{user_id}/verify",
+    response_model=ResearcherProfileResponse,
+    dependencies=[Depends(require_role(Role.ADMIN))],
+)
+async def verify_researcher(
+        user_id: UUID,
+        session: DatabaseSessionDependency,
+) -> ResearcherProfileResponse:
+    profile = await session.get(ResearcherProfile, user_id)
+    if profile is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No researcher profile found for that user",
+        )
+
+    profile.verified_at = func.now()
+    await session.commit()
+
+    user = await session.get(User, user_id)
 
     return ResearcherProfileResponse(
         institution=profile.institution,
