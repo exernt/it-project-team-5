@@ -148,3 +148,49 @@ class Study(Base):
     )
     name: Mapped[str] = mapped_column(Text, nullable=False)
     duration: Mapped[int] = mapped_column(nullable=False)
+
+
+class StudyRegistration(Base):
+    """Connect a user to a study they have joined."""
+
+    __tablename__ = "study_registrations"
+
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    study_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("study.id", ondelete="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
+    registered_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+class StudyCreatedBy(Base):
+    """Record the researcher who created a study."""
+
+    __tablename__ = "study_created_by"
+
+    researcher_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    study_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("study.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    created_on: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )

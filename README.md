@@ -141,6 +141,11 @@ endpoint requires the JWT access token returned by `/auth/login`:
 }
 ```
 
+Any logged-in user can join an existing study with
+`POST /studies/{study_id}/join`. The server derives the user ID from the bearer
+access token; the request has no body. A user can register for each study only
+once.
+
 ## Server tests
 
 After preparing the server development environment, run its credential-free unit tests from

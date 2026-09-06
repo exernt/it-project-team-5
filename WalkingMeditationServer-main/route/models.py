@@ -257,3 +257,9 @@ class StudyResponse(BaseModel):
     id: UUID
     name: str
     duration: int
+
+
+class StudyRegistrationResponse(BaseModel):
+    user_id: UUID
+    study_id: UUID
+    registered_at: datetime
