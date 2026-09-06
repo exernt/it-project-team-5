@@ -321,7 +321,7 @@ async def verify_researcher(
             detail="No researcher profile found for that user",
         )
 
-    profile.verified_at = func.now()
+    profile.verified_at = datetime.now(timezone.utc)
     await session.commit()
 
     user = await session.get(User, user_id)
