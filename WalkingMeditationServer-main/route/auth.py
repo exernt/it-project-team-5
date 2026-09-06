@@ -18,9 +18,11 @@ from route.models import (
     LogoutResponse,
     RefreshRequest,
     RefreshResponse,
+    RegisterResearcherRequest,
+    ResearcherProfileResponse,
 )
 from route.persistence.database import DatabaseSessionDependency
-from route.persistence.orm_models import User, PasswordResetToken, RefreshToken
+from route.persistence.orm_models import User, PasswordResetToken, RefreshToken, ResearcherProfile, Role
 from route.services.passwords import hash_password, verify_password
 from route.services.password_reset import (
     generate_reset_token,
@@ -34,6 +36,7 @@ from route.services.tokens import (
     hash_refresh_token,
     refresh_token_expiry,
 )
+from route.dependencies import CurrentUserDependency
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -268,4 +271,35 @@ async def refresh(
     return RefreshResponse(
         access_token=new_access_token,
         refresh_token=new_raw_refresh_token,
+    )
+
+@router.post(
+    "/register-researcher",
+    response_model=ResearcherProfileResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def register_researcher(
+        payload: RegisterResearcherRequest,
+        user: CurrentUserDependency,
+        session: DatabaseSessionDependency,
+) -> ResearcherProfileResponse:
+    existing_profile = await session.get(ResearcherProfile, user.id)
+    if existing_profile is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Researcher profile already exists for this account",
+        )
+
+    user.role = Role.RESEARCHER
+    profile = ResearcherProfile(
+        user_id=user.id,
+        institution=payload.institution,
+    )
+    session.add(profile)
+    await session.commit()
+
+    return ResearcherProfileResponse(
+        institution=profile.institution,
+        verified_at=profile.verified_at,
+        role=user.role.value,
     )

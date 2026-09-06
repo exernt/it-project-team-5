@@ -7,7 +7,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from route.persistence.database import DatabaseSessionDependency
-from route.persistence.orm_models import User
+from route.persistence.orm_models import User, Role
 from route.services.tokens import decode_access_token
 
 _bearer_scheme = HTTPBearer()
@@ -39,3 +39,17 @@ async def get_current_user(
 
 
 CurrentUserDependency = Annotated[User, Depends(get_current_user)]
+
+def require_role(*allowed_roles: Role):
+    """FastAPI dependency factory: reject with 403 unless the current user's
+    role is one of allowed_roles. Use as Depends(require_role(Role.ADMIN))."""
+
+    async def _check_role(user: CurrentUserDependency) -> User:
+        if user.role not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to perform this action",
+            )
+        return user
+
+    return _check_role
