@@ -1,6 +1,6 @@
 from typing import List, Literal, Tuple
 from pydantic import BaseModel, EmailStr, Field, field_validator
-
+from datetime import datetime
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -229,3 +229,12 @@ class RefreshResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+
+class RegisterResearcherRequest(BaseModel):
+    institution: str | None = None
+
+
+class ResearcherProfileResponse(BaseModel):
+    institution: str | None
+    verified_at: datetime | None
+    role: str
