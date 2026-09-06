@@ -5,8 +5,8 @@ from uuid import UUID, uuid4
 from sqlalchemy import UniqueConstraint
 from sqlalchemy.exc import IntegrityError
 
-from route.persistence.database import create_configured_database
-from route.persistence.orm_models import User
+from database.core import create_configured_database
+from database.models import User
 
 
 class UserModelTests(unittest.TestCase):
@@ -15,7 +15,7 @@ class UserModelTests(unittest.TestCase):
 
         self.assertEqual("users", table.name)
         self.assertEqual(
-            {"id", "email", "password_hash", "email_verified", "created_on"},
+            {"id", "email", "password_hash", "role", "email_verified", "created_on"},
             set(table.columns.keys()),
         )
         self.assertTrue(table.c.id.primary_key)

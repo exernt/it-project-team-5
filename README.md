@@ -82,7 +82,7 @@ From `WalkingMeditationServer-main`:
    ```
 4. Apply database migrations:
    ```powershell
-   alembic upgrade head
+   alembic -c database/alembic.ini upgrade head
    ```
 5. Start the FastAPI server:
    ```powershell

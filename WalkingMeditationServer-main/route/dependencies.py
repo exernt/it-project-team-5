@@ -6,8 +6,8 @@ import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from route.persistence.database import DatabaseSessionDependency
-from route.persistence.orm_models import ResearcherProfile, User, Role
+from database.core import DatabaseSessionDependency
+from database.models import ResearcherProfile, User, Role
 from route.services.tokens import decode_access_token
 
 _bearer_scheme = HTTPBearer()

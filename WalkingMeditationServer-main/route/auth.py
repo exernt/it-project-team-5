@@ -21,8 +21,8 @@ from route.models import (
     RegisterResearcherRequest,
     ResearcherProfileResponse,
 )
-from route.persistence.database import DatabaseSessionDependency
-from route.persistence.orm_models import User, PasswordResetToken, RefreshToken, ResearcherProfile, Role
+from database.core import DatabaseSessionDependency
+from database.models import User, PasswordResetToken, RefreshToken, ResearcherProfile, Role
 from route.services.passwords import hash_password, verify_password
 from route.services.password_reset import (
     generate_reset_token,

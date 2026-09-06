@@ -16,7 +16,7 @@ from route.services.generate_script import generate_script_with_park, generate_s
 from route.services.get_route import generate_walk_route
 from route.models import WalkRouteRequest, WalkRouteResponse, ScriptWithParkRequest, ScriptWithParkResponse
 from route.models import ScriptWithoutParkRequest, ScriptWithoutParkResponse, TTSRequest
-from route.persistence.database import create_configured_database
+from database.core import create_configured_database
 from route.utils.utils import _ensure_ffmpeg
 
 logger = logging.getLogger(__name__)

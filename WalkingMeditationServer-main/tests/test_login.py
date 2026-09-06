@@ -9,7 +9,7 @@ from fastapi import HTTPException
 from route.auth import login, logout
 from route.dependencies import get_current_user
 from route.models import LoginRequest, LogoutRequest
-from route.persistence.orm_models import RefreshToken, User
+from database.models import RefreshToken, User
 from route.services.tokens import create_access_token
 
 

@@ -9,8 +9,8 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from route.config import database_url
-from route.persistence import orm_models  # noqa: F401 - registers ORM metadata
-from route.persistence.database import Base
+from database import models  # noqa: F401 - registers ORM metadata
+from database.core import Base
 
 
 config = context.config

@@ -1,1 +1,1 @@
-"""Persistence infrastructure for the Walking Meditation server."""
+"""Filesystem persistence helpers for the Walking Meditation server."""

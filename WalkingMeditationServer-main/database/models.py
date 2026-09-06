@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import Boolean, CheckConstraint, DateTime, Text, UniqueConstraint, Uuid, func, text, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 
-from route.persistence.database import Base
+from database.core import Base
 
 import enum
 

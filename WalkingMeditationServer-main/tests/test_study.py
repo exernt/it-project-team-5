@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 
 from route.dependencies import get_verified_researcher
 from route.models import CreateStudyRequest
-from route.persistence.orm_models import (
+from database.models import (
     ResearcherProfile,
     Role,
     Study,

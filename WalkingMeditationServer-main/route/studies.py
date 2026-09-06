@@ -6,8 +6,8 @@ from sqlalchemy.exc import IntegrityError
 
 from route.dependencies import CurrentUserDependency, VerifiedResearcherDependency
 from route.models import CreateStudyRequest, StudyRegistrationResponse, StudyResponse
-from route.persistence.database import DatabaseSessionDependency
-from route.persistence.orm_models import Study, StudyCreatedBy, StudyRegistration
+from database.core import DatabaseSessionDependency
+from database.models import Study, StudyCreatedBy, StudyRegistration
 
 
 router = APIRouter(prefix="/studies", tags=["studies"])
