@@ -100,3 +100,29 @@ class RefreshToken(Base):
         nullable=False,
         server_default=func.now(),
     )
+
+class ResearcherProfile(Base):
+    """Extra profile data for users with the researcher role.
+
+    verified_at is nullable and stays null until an admin approves the
+    researcher — having role=researcher alone isn't enough to launch a
+    study, per the design model's gating rule.
+    """
+
+    __tablename__ = "researcher_profiles"
+
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    institution: Mapped[str | None] = mapped_column(Text, nullable=True)
+    verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    created_on: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
