@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, Text, UniqueConstraint, Uuid, func, text, ForeignKey
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Text, UniqueConstraint, Uuid, func, text, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 
 from route.persistence.database import Base
@@ -131,3 +131,20 @@ class ResearcherProfile(Base):
         nullable=False,
         server_default=func.now(),
     )
+
+
+class Study(Base):
+    """A researcher-created walking meditation study."""
+
+    __tablename__ = "study"
+    __table_args__ = (
+        CheckConstraint("duration > 0", name="ck_study_duration_positive"),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    duration: Mapped[int] = mapped_column(nullable=False)

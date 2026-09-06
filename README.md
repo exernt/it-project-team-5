@@ -123,10 +123,23 @@ The server exposes account and session endpoints under `/auth`:
 | `POST /auth/logout` | Revoke a refresh token |
 | `POST /auth/password-reset/request` | Request a password reset token (emailed in production; logged to the server console in local development) |
 | `POST /auth/password-reset/confirm` | Complete a password reset with the token and a new password |
+| `POST /auth/register-researcher` | Upgrade the logged-in account to a researcher account pending admin verification |
+| `POST /auth/admin/researchers/{user_id}/verify` | Verify a researcher account (admin only) |
 
-This is separate from the `APP_API_TOKEN`/`X-App-Token` mechanism described in the Android setup section above — `X-App-Token` is a single shared secret gating access to the app's own routing/script/narration endpoints, unrelated to which user is logged in. The `/auth` endpoints above are per-user login and don't currently gate any other endpoint; no route yet requires a logged-in user.
+This is separate from the `APP_API_TOKEN`/`X-App-Token` mechanism described in the Android setup section above — `X-App-Token` is a single shared secret gating access to the app's own routing/script/narration endpoints, unrelated to which user is logged in. Bearer login is currently used for researcher registration, admin verification, and study creation; the routing/script/narration endpoints are not associated with a logged-in user.
 
 Details, worked PowerShell examples, and manual test steps for each of these live in `READList/`.
+
+Verified researchers can create studies with `POST /studies`. The request body
+contains a non-empty `name` and a positive integer `duration` in days. This
+endpoint requires the JWT access token returned by `/auth/login`:
+
+```json
+{
+  "name": "Two-week walking meditation",
+  "duration": 14
+}
+```
 
 ## Server tests
 

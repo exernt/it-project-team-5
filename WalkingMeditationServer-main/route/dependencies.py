@@ -7,7 +7,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from route.persistence.database import DatabaseSessionDependency
-from route.persistence.orm_models import User, Role
+from route.persistence.orm_models import ResearcherProfile, User, Role
 from route.services.tokens import decode_access_token
 
 _bearer_scheme = HTTPBearer()
@@ -39,6 +39,30 @@ async def get_current_user(
 
 
 CurrentUserDependency = Annotated[User, Depends(get_current_user)]
+
+
+async def get_verified_researcher(
+    user: CurrentUserDependency,
+    session: DatabaseSessionDependency,
+) -> User:
+    """Require a researcher account that has been approved by an admin."""
+    if user.role != Role.RESEARCHER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only researchers can perform this action",
+        )
+
+    profile = await session.get(ResearcherProfile, user.id)
+    if profile is None or profile.verified_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Researcher account has not been verified",
+        )
+
+    return user
+
+
+VerifiedResearcherDependency = Annotated[User, Depends(get_verified_researcher)]
 
 def require_role(*allowed_roles: Role):
     """FastAPI dependency factory: reject with 403 unless the current user's

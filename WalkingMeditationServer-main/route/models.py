@@ -1,6 +1,7 @@
 from typing import List, Literal, Tuple
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from datetime import datetime
+from uuid import UUID
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -238,3 +239,21 @@ class ResearcherProfileResponse(BaseModel):
     institution: str | None
     verified_at: datetime | None
     role: str
+
+
+class CreateStudyRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    duration: int = Field(..., gt=0, description="Study duration in days")
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+
+class StudyResponse(BaseModel):
+    id: UUID
+    name: str
+    duration: int
