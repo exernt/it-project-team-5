@@ -31,7 +31,12 @@ class User(Base):
     email: Mapped[str] = mapped_column(Text, nullable=False)
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     role: Mapped[Role] = mapped_column(
-        SqlEnum(Role, name="user_role", native_enum=True),
+        SqlEnum(
+            Role,
+            name="user_role",
+            native_enum=True,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
         nullable=False,
         server_default=text("'participant'::user_role"),
     )
