@@ -54,15 +54,21 @@ async def create_study(
     status_code=status.HTTP_201_CREATED,
 )
 async def join_study(
-    study_id: UUID,
-    user: CurrentUserDependency,
-    session: DatabaseSessionDependency,
+        study_id: UUID,
+        user: CurrentUserDependency,
+        session: DatabaseSessionDependency,
 ) -> StudyRegistrationResponse:
     study = await session.get(Study, study_id)
     if study is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Study not found",
+        )
+
+    if study.status not in (StudyStatus.RECRUITING, StudyStatus.ACTIVE):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This study is not currently accepting participants",
         )
 
     existing_registration = await session.get(
