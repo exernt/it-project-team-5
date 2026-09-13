@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from typing import Annotated
 
 import jwt
@@ -7,7 +9,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from database.core import DatabaseSessionDependency
-from database.models import ResearcherProfile, User, Role
+from database.models import ResearcherProfile, User, Role, StudyCreatedBy
 from route.services.tokens import decode_access_token
 
 _bearer_scheme = HTTPBearer()
@@ -77,3 +79,28 @@ def require_role(*allowed_roles: Role):
         return user
 
     return _check_role
+
+async def require_study_owner(
+        study_id: UUID,
+        researcher: VerifiedResearcherDependency,
+        session: DatabaseSessionDependency,
+) -> User:
+    """Require that the current verified researcher owns the given study."""
+    study = await session.get(Study, study_id)
+    if study is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Study not found",
+        )
+
+    ownership = await session.get(StudyCreatedBy, study_id)
+    if ownership is None or ownership.researcher_id != researcher.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not own this study",
+        )
+
+    return researcher
+
+
+StudyOwnerDependency = Annotated[User, Depends(require_study_owner)]
