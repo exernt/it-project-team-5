@@ -263,3 +263,6 @@ class StudyRegistrationResponse(BaseModel):
     user_id: UUID
     study_id: UUID
     registered_at: datetime
+
+class StudyListResponse(BaseModel):
+    studies: list[StudyResponse]

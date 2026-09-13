@@ -3,9 +3,15 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import select
 
 from route.dependencies import CurrentUserDependency, VerifiedResearcherDependency
-from route.models import CreateStudyRequest, StudyRegistrationResponse, StudyResponse
+from route.models import (
+    CreateStudyRequest,
+    StudyRegistrationResponse,
+    StudyResponse,
+    StudyListResponse,
+)
 from database.core import DatabaseSessionDependency
 from database.models import Study, StudyCreatedBy, StudyRegistration
 
@@ -91,3 +97,38 @@ async def join_study(
         study_id=registration.study_id,
         registered_at=registration.registered_at,
     )
+
+@router.get(
+    "",
+    response_model=StudyListResponse,
+)
+async def list_studies(
+        _user: CurrentUserDependency,
+        session: DatabaseSessionDependency,
+) -> StudyListResponse:
+    studies = await session.scalars(select(Study))
+    return StudyListResponse(
+        studies=[
+            StudyResponse(id=s.id, name=s.name, duration=s.duration)
+            for s in studies
+        ]
+    )
+
+
+@router.get(
+    "/{study_id}",
+    response_model=StudyResponse,
+)
+async def get_study(
+        study_id: UUID,
+        _user: CurrentUserDependency,
+        session: DatabaseSessionDependency,
+) -> StudyResponse:
+    study = await session.get(Study, study_id)
+    if study is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Study not found",
+        )
+
+    return StudyResponse(id=study.id, name=study.name, duration=study.duration)
