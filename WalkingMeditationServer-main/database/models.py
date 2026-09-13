@@ -132,6 +132,11 @@ class ResearcherProfile(Base):
         server_default=func.now(),
     )
 
+class StudyStatus(str, enum.Enum):
+    DRAFT = "draft"
+    RECRUITING = "recruiting"
+    ACTIVE = "active"
+    CLOSED = "closed"
 
 class Study(Base):
     """A researcher-created walking meditation study."""
@@ -148,8 +153,16 @@ class Study(Base):
     )
     name: Mapped[str] = mapped_column(Text, nullable=False)
     duration: Mapped[int] = mapped_column(nullable=False)
-
-
+    status: Mapped[StudyStatus] = mapped_column(
+        SqlEnum(
+            StudyStatus,
+            name="study_status",
+            native_enum=True,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
+        server_default=text("'draft'::study_status"),
+    )
 class StudyRegistration(Base):
     """Connect a user to a study they have joined."""
 
