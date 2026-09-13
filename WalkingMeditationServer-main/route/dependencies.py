@@ -9,7 +9,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from database.core import DatabaseSessionDependency
-from database.models import ResearcherProfile, User, Role, StudyCreatedBy
+from database.models import ResearcherProfile, Role, Study, StudyCreatedBy, User
 from route.services.tokens import decode_access_token
 
 _bearer_scheme = HTTPBearer()

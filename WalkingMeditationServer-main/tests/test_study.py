@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 
-from route.dependencies import get_verified_researcher
+from route.dependencies import get_verified_researcher, require_study_owner
 from route.models import CreateStudyRequest
 from database.models import (
     ResearcherProfile,
@@ -15,9 +15,18 @@ from database.models import (
     Study,
     StudyCreatedBy,
     StudyRegistration,
+    StudyStatus,
     User,
 )
-from route.studies import create_study, get_study, join_study, list_studies
+from route.studies import (
+    activate_study,
+    close_study,
+    create_study,
+    get_study,
+    join_study,
+    list_studies,
+    publish_study,
+)
 
 class CreateStudyTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
@@ -123,7 +132,12 @@ class JoinStudyTests(unittest.IsolatedAsyncioTestCase):
             password_hash="hash",
             role=Role.PARTICIPANT,
         )
-        self.study = Study(id=uuid4(), name="Morning walks", duration=14)
+        self.study = Study(
+            id=uuid4(),
+            name="Morning walks",
+            duration=14,
+            status=StudyStatus.RECRUITING,
+        )
 
     async def test_joins_existing_study(self):
         self.session.get.side_effect = [self.study, None]
@@ -191,8 +205,18 @@ class ListStudiesTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_returns_all_studies(self):
         studies = [
-            Study(id=uuid4(), name="Morning walks", duration=14),
-            Study(id=uuid4(), name="Evening walks", duration=7),
+            Study(
+                id=uuid4(),
+                name="Morning walks",
+                duration=14,
+                status=StudyStatus.RECRUITING,
+            ),
+            Study(
+                id=uuid4(),
+                name="Evening walks",
+                duration=7,
+                status=StudyStatus.RECRUITING,
+            ),
         ]
         self.session.scalars.return_value = studies
 
@@ -222,7 +246,7 @@ class GetStudyTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_returns_existing_study(self):
-        study = Study(id=uuid4(), name="Morning walks", duration=14)
+        study = Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.RECRUITING)
         self.session.get.return_value = study
 
         response = await get_study(study.id, self.user, self.session)
@@ -238,6 +262,160 @@ class GetStudyTests(unittest.IsolatedAsyncioTestCase):
             await get_study(uuid4(), self.user, self.session)
 
         self.assertEqual(404, raised.exception.status_code)
-        
+
+class StudyOwnerTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.session = MagicMock()
+        self.session.get = AsyncMock()
+        self.researcher = User(
+            id=uuid4(),
+            email="researcher@example.com",
+            password_hash="hash",
+            role=Role.RESEARCHER,
+        )
+        self.study = Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.DRAFT)
+
+    async def test_allows_actual_owner(self):
+        ownership = StudyCreatedBy(researcher_id=self.researcher.id, study_id=self.study.id)
+        self.session.get.side_effect = [self.study, ownership]
+
+        result = await require_study_owner(self.study.id, self.researcher, self.session)
+
+        self.assertIs(self.researcher, result)
+
+    async def test_rejects_non_owner(self):
+        other_researcher_id = uuid4()
+        ownership = StudyCreatedBy(researcher_id=other_researcher_id, study_id=self.study.id)
+        self.session.get.side_effect = [self.study, ownership]
+
+        with self.assertRaises(HTTPException) as raised:
+            await require_study_owner(self.study.id, self.researcher, self.session)
+
+        self.assertEqual(403, raised.exception.status_code)
+
+    async def test_missing_study_returns_404(self):
+        self.session.get.return_value = None
+
+        with self.assertRaises(HTTPException) as raised:
+            await require_study_owner(uuid4(), self.researcher, self.session)
+
+        self.assertEqual(404, raised.exception.status_code)
+
+
+class StudyLifecycleTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.session = MagicMock()
+        self.session.get = AsyncMock()
+        self.session.commit = AsyncMock()
+        self.researcher = User(
+            id=uuid4(),
+            email="researcher@example.com",
+            password_hash="hash",
+            role=Role.RESEARCHER,
+        )
+
+    async def test_publish_moves_draft_to_recruiting(self):
+        study = Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.DRAFT)
+        self.session.get.return_value = study
+
+        response = await publish_study(study.id, self.researcher, self.session)
+
+        self.assertEqual(StudyStatus.RECRUITING, study.status)
+        self.assertEqual("recruiting", response.status)
+        self.session.commit.assert_awaited_once()
+
+    async def test_publish_rejects_non_draft(self):
+        study = Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.RECRUITING)
+        self.session.get.return_value = study
+
+        with self.assertRaises(HTTPException) as raised:
+            await publish_study(study.id, self.researcher, self.session)
+
+        self.assertEqual(409, raised.exception.status_code)
+
+    async def test_activate_moves_recruiting_to_active(self):
+        study = Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.RECRUITING)
+        self.session.get.return_value = study
+
+        response = await activate_study(study.id, self.researcher, self.session)
+
+        self.assertEqual(StudyStatus.ACTIVE, study.status)
+        self.assertEqual("active", response.status)
+
+    async def test_activate_rejects_draft(self):
+        study = Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.DRAFT)
+        self.session.get.return_value = study
+
+        with self.assertRaises(HTTPException) as raised:
+            await activate_study(study.id, self.researcher, self.session)
+
+        self.assertEqual(409, raised.exception.status_code)
+
+    async def test_close_allowed_from_recruiting(self):
+        study = Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.RECRUITING)
+        self.session.get.return_value = study
+
+        response = await close_study(study.id, self.researcher, self.session)
+
+        self.assertEqual(StudyStatus.CLOSED, study.status)
+        self.assertEqual("closed", response.status)
+
+    async def test_close_allowed_from_active(self):
+        study = Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.ACTIVE)
+        self.session.get.return_value = study
+
+        response = await close_study(study.id, self.researcher, self.session)
+
+        self.assertEqual(StudyStatus.CLOSED, study.status)
+        self.assertEqual("closed", response.status)
+
+    async def test_close_rejects_draft(self):
+        study = Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.DRAFT)
+        self.session.get.return_value = study
+
+        with self.assertRaises(HTTPException) as raised:
+            await close_study(study.id, self.researcher, self.session)
+
+        self.assertEqual(409, raised.exception.status_code)
+
+
+class JoinStudyStatusGateTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.session = MagicMock()
+        self.session.get = AsyncMock()
+        self.session.commit = AsyncMock()
+        self.user = User(
+            id=uuid4(),
+            email="participant@example.com",
+            password_hash="hash",
+            role=Role.PARTICIPANT,
+        )
+
+    async def test_rejects_joining_draft_study(self):
+        study = Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.DRAFT)
+        self.session.get.return_value = study
+
+        with self.assertRaises(HTTPException) as raised:
+            await join_study(study.id, self.user, self.session)
+
+        self.assertEqual(409, raised.exception.status_code)
+
+    async def test_rejects_joining_closed_study(self):
+        study = Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.CLOSED)
+        self.session.get.return_value = study
+
+        with self.assertRaises(HTTPException) as raised:
+            await join_study(study.id, self.user, self.session)
+
+        self.assertEqual(409, raised.exception.status_code)
+
+    async def test_allows_joining_recruiting_study(self):
+        study = Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.RECRUITING)
+        self.session.get.side_effect = [study, None]
+
+        response = await join_study(study.id, self.user, self.session)
+
+        self.assertEqual(self.user.id, response.user_id)
+
 if __name__ == "__main__":
     unittest.main()
