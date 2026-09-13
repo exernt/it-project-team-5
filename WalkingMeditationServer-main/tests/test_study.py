@@ -17,8 +17,7 @@ from database.models import (
     StudyRegistration,
     User,
 )
-from route.studies import create_study, join_study
-
+from route.studies import create_study, get_study, join_study, list_studies
 
 class CreateStudyTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
@@ -179,6 +178,66 @@ class JoinStudyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(409, raised.exception.status_code)
         self.session.rollback.assert_awaited_once()
 
+class ListStudiesTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.session = MagicMock()
+        self.session.scalars = AsyncMock()
+        self.user = User(
+            id=uuid4(),
+            email="participant@example.com",
+            password_hash="hash",
+            role=Role.PARTICIPANT,
+        )
 
+    async def test_returns_all_studies(self):
+        studies = [
+            Study(id=uuid4(), name="Morning walks", duration=14),
+            Study(id=uuid4(), name="Evening walks", duration=7),
+        ]
+        self.session.scalars.return_value = studies
+
+        response = await list_studies(self.user, self.session)
+
+        self.assertEqual(2, len(response.studies))
+        self.assertEqual("Morning walks", response.studies[0].name)
+        self.assertEqual("Evening walks", response.studies[1].name)
+
+    async def test_returns_empty_list_when_no_studies(self):
+        self.session.scalars.return_value = []
+
+        response = await list_studies(self.user, self.session)
+
+        self.assertEqual(0, len(response.studies))
+
+
+class GetStudyTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.session = MagicMock()
+        self.session.get = AsyncMock()
+        self.user = User(
+            id=uuid4(),
+            email="participant@example.com",
+            password_hash="hash",
+            role=Role.PARTICIPANT,
+        )
+
+    async def test_returns_existing_study(self):
+        study = Study(id=uuid4(), name="Morning walks", duration=14)
+        self.session.get.return_value = study
+
+        response = await get_study(study.id, self.user, self.session)
+
+        self.assertEqual(study.id, response.id)
+        self.assertEqual("Morning walks", response.name)
+        self.assertEqual(14, response.duration)
+
+    async def test_missing_study_returns_404(self):
+        self.session.get.return_value = None
+
+        with self.assertRaises(HTTPException) as raised:
+            await get_study(uuid4(), self.user, self.session)
+
+        self.assertEqual(404, raised.exception.status_code)
+        
 if __name__ == "__main__":
     unittest.main()
