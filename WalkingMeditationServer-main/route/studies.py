@@ -13,8 +13,7 @@ from route.models import (
     StudyListResponse,
 )
 from database.core import DatabaseSessionDependency
-from database.models import Study, StudyCreatedBy, StudyRegistration
-
+from database.models import Study, StudyCreatedBy, StudyRegistration, StudyStatus
 
 router = APIRouter(prefix="/studies", tags=["studies"])
 
@@ -25,14 +24,15 @@ router = APIRouter(prefix="/studies", tags=["studies"])
     status_code=status.HTTP_201_CREATED,
 )
 async def create_study(
-    payload: CreateStudyRequest,
-    _researcher: VerifiedResearcherDependency,
-    session: DatabaseSessionDependency,
+        payload: CreateStudyRequest,
+        _researcher: VerifiedResearcherDependency,
+        session: DatabaseSessionDependency,
 ) -> StudyResponse:
     study = Study(
         id=uuid4(),
         name=payload.name,
         duration=payload.duration,
+        status=StudyStatus.DRAFT,
     )
     ownership = StudyCreatedBy(
         researcher_id=_researcher.id,
@@ -45,8 +45,8 @@ async def create_study(
         id=study.id,
         name=study.name,
         duration=study.duration,
+        status=study.status.value,
     )
-
 
 @router.post(
     "/{study_id}/join",
@@ -109,7 +109,7 @@ async def list_studies(
     studies = await session.scalars(select(Study))
     return StudyListResponse(
         studies=[
-            StudyResponse(id=s.id, name=s.name, duration=s.duration)
+            StudyResponse(id=s.id, name=s.name, duration=s.duration, status=s.status.value)
             for s in studies
         ]
     )
@@ -131,4 +131,4 @@ async def get_study(
             detail="Study not found",
         )
 
-    return StudyResponse(id=study.id, name=study.name, duration=study.duration)
+    return StudyResponse(id=study.id, name=study.name, duration=study.duration, status=study.status.value)
