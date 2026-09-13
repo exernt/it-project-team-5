@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
 
-from route.dependencies import CurrentUserDependency, VerifiedResearcherDependency
+from route.dependencies import CurrentUserDependency, StudyOwnerDependency, VerifiedResearcherDependency
 from route.models import (
     CreateStudyRequest,
     StudyRegistrationResponse,
@@ -130,5 +130,71 @@ async def get_study(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Study not found",
         )
+
+    return StudyResponse(id=study.id, name=study.name, duration=study.duration, status=study.status.value)
+
+def _invalid_transition(current: StudyStatus, target: StudyStatus) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=f"Cannot move study from '{current.value}' to '{target.value}'",
+    )
+
+
+@router.post(
+    "/{study_id}/publish",
+    response_model=StudyResponse,
+)
+async def publish_study(
+        study_id: UUID,
+        _owner: StudyOwnerDependency,
+        session: DatabaseSessionDependency,
+) -> StudyResponse:
+    study = await session.get(Study, study_id)
+
+    if study.status != StudyStatus.DRAFT:
+        raise _invalid_transition(study.status, StudyStatus.RECRUITING)
+
+    study.status = StudyStatus.RECRUITING
+    await session.commit()
+
+    return StudyResponse(id=study.id, name=study.name, duration=study.duration, status=study.status.value)
+
+
+@router.post(
+    "/{study_id}/activate",
+    response_model=StudyResponse,
+)
+async def activate_study(
+        study_id: UUID,
+        _owner: StudyOwnerDependency,
+        session: DatabaseSessionDependency,
+) -> StudyResponse:
+    study = await session.get(Study, study_id)
+
+    if study.status != StudyStatus.RECRUITING:
+        raise _invalid_transition(study.status, StudyStatus.ACTIVE)
+
+    study.status = StudyStatus.ACTIVE
+    await session.commit()
+
+    return StudyResponse(id=study.id, name=study.name, duration=study.duration, status=study.status.value)
+
+
+@router.post(
+    "/{study_id}/close",
+    response_model=StudyResponse,
+)
+async def close_study(
+        study_id: UUID,
+        _owner: StudyOwnerDependency,
+        session: DatabaseSessionDependency,
+) -> StudyResponse:
+    study = await session.get(Study, study_id)
+
+    if study.status not in (StudyStatus.RECRUITING, StudyStatus.ACTIVE):
+        raise _invalid_transition(study.status, StudyStatus.CLOSED)
+
+    study.status = StudyStatus.CLOSED
+    await session.commit()
 
     return StudyResponse(id=study.id, name=study.name, duration=study.duration, status=study.status.value)
