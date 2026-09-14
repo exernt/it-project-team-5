@@ -143,8 +143,22 @@ endpoint requires the JWT access token returned by `/auth/login`:
 
 Any logged-in user can join an existing study with
 `POST /studies/{study_id}/join`. The server derives the user ID from the bearer
-access token; the request has no body. A user can register for each study only
-once.
+access token. The request confirms consent with
+`{"agrees_to_consent": true}`. A user can have only one active registration for
+each study.
+
+The study owner can add a questionnaire with
+`POST /studies/{study_id}/setquestion`. Questionnaire IDs start at 1 and
+increment independently within each study. The temporary request format is:
+
+```json
+{
+  "title": "Weekly check-in"
+}
+```
+
+The questionnaire is stored as JSON so the payload can be expanded once its
+final format is decided.
 
 ## Server tests
 

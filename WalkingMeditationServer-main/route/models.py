@@ -1,5 +1,5 @@
 from typing import List, Literal, Tuple
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from datetime import datetime
 from uuid import UUID
 
@@ -266,6 +266,19 @@ class ConsentFormResponse(BaseModel):
 
 class JoinStudyRequest(BaseModel):
     agrees_to_consent: bool
+
+
+class SetQuestionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+
+
+class QuestionnaireResponse(BaseModel):
+    id: int
+    study_id: UUID
+    data: dict[str, object]
+
 
 class StudyRegistrationResponse(BaseModel):
     user_id: UUID

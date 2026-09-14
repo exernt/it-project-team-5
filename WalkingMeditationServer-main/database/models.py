@@ -4,6 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import Boolean, CheckConstraint, DateTime, Text, UniqueConstraint, Uuid, func, text, ForeignKey
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database.core import Base
@@ -233,3 +234,29 @@ class ConsentForm(Base):
     )
     body_text: Mapped[str] = mapped_column(Text, nullable=False)
     version: Mapped[int] = mapped_column(nullable=False, server_default=text("1"))
+
+
+class Questionnaire(Base):
+    """A JSON questionnaire belonging to a study.
+
+    The payload remains intentionally unstructured while the questionnaire
+    format is being designed. IDs are allocated sequentially within a study.
+    """
+
+    __tablename__ = "questionnaires"
+    __table_args__ = (
+        CheckConstraint("id > 0", name="ck_questionnaires_id_positive"),
+    )
+
+    study_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("study.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    data: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    created_on: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )

@@ -3,19 +3,28 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from route.dependencies import CurrentUserDependency, StudyOwnerDependency, VerifiedResearcherDependency
 from route.models import (
     ConsentFormResponse,
     CreateStudyRequest,
     JoinStudyRequest,
+    QuestionnaireResponse,
+    SetQuestionRequest,
     StudyListResponse,
     StudyRegistrationResponse,
     StudyResponse,
 )
 from database.core import DatabaseSessionDependency
-from database.models import ConsentForm, Study, StudyCreatedBy, StudyRegistration, StudyStatus
+from database.models import (
+    ConsentForm,
+    Questionnaire,
+    Study,
+    StudyCreatedBy,
+    StudyRegistration,
+    StudyStatus,
+)
 
 router = APIRouter(prefix="/studies", tags=["studies"])
 
@@ -232,6 +241,44 @@ async def close_study(
     await session.commit()
 
     return StudyResponse(id=study.id, name=study.name, duration=study.duration, status=study.status.value)
+
+
+@router.post(
+    "/{study_id}/setquestion",
+    response_model=QuestionnaireResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def set_question(
+        study_id: UUID,
+        payload: SetQuestionRequest,
+        _owner: StudyOwnerDependency,
+        session: DatabaseSessionDependency,
+) -> QuestionnaireResponse:
+    # Serialize ID allocation for each study so concurrent requests cannot
+    # calculate the same next value.
+    await session.execute(
+        select(Study.id)
+        .where(Study.id == study_id)
+        .with_for_update()
+    )
+    current_max_id = await session.scalar(
+        select(func.max(Questionnaire.id)).where(
+            Questionnaire.study_id == study_id
+        )
+    )
+    questionnaire = Questionnaire(
+        study_id=study_id,
+        id=(current_max_id or 0) + 1,
+        data=payload.model_dump(mode="json"),
+    )
+    session.add(questionnaire)
+    await session.commit()
+
+    return QuestionnaireResponse(
+        id=questionnaire.id,
+        study_id=questionnaire.study_id,
+        data=questionnaire.data,
+    )
 
 @router.get(
     "/{study_id}/consent-form",

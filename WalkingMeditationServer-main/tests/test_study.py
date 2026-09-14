@@ -8,9 +8,10 @@ from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 
 from route.dependencies import get_verified_researcher, require_study_owner
-from route.models import CreateStudyRequest, JoinStudyRequest
+from route.models import CreateStudyRequest, JoinStudyRequest, SetQuestionRequest
 from database.models import (
     ConsentForm,
+    Questionnaire,
     ResearcherProfile,
     Role,
     Study,
@@ -29,6 +30,7 @@ from route.studies import (
     leave_study,
     list_studies,
     publish_study,
+    set_question,
 )
 
 class CreateStudyTests(unittest.IsolatedAsyncioTestCase):
@@ -645,6 +647,56 @@ class RejoinStudyTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(409, raised.exception.status_code)
+
+
+class SetQuestionTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.session = MagicMock()
+        self.session.execute = AsyncMock()
+        self.session.scalar = AsyncMock()
+        self.session.commit = AsyncMock()
+        self.study_id = uuid4()
+        self.owner = User(
+            id=uuid4(),
+            email="researcher@example.com",
+            password_hash="hash",
+            role=Role.RESEARCHER,
+        )
+
+    async def test_stores_questionnaire_json_with_first_id(self):
+        self.session.scalar.return_value = None
+
+        response = await set_question(
+            self.study_id,
+            SetQuestionRequest(title="Weekly check-in"),
+            self.owner,
+            self.session,
+        )
+
+        questionnaire = self.session.add.call_args.args[0]
+        self.assertIsInstance(questionnaire, Questionnaire)
+        self.assertEqual(1, questionnaire.id)
+        self.assertEqual(self.study_id, questionnaire.study_id)
+        self.assertEqual({"title": "Weekly check-in"}, questionnaire.data)
+        self.assertEqual(questionnaire.data, response.data)
+        self.session.execute.assert_awaited_once()
+        self.session.commit.assert_awaited_once()
+
+    async def test_increments_id_within_study(self):
+        self.session.scalar.return_value = 2
+
+        response = await set_question(
+            self.study_id,
+            SetQuestionRequest(title="Follow-up"),
+            self.owner,
+            self.session,
+        )
+
+        self.assertEqual(3, response.id)
+
+    def test_rejects_fields_other_than_title(self):
+        with self.assertRaises(ValidationError):
+            SetQuestionRequest(title="Check-in", questions=[])
 
 if __name__ == "__main__":
     unittest.main()
