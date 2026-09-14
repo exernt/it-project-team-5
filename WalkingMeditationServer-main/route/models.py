@@ -259,6 +259,11 @@ class StudyResponse(BaseModel):
     duration: int
     status: str
 
+class ConsentFormResponse(BaseModel):
+    study_id: UUID
+    body_text: str
+    version: int
+
 class StudyRegistrationResponse(BaseModel):
     user_id: UUID
     study_id: UUID

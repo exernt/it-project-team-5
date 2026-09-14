@@ -7,10 +7,11 @@ from sqlalchemy import select
 
 from route.dependencies import CurrentUserDependency, StudyOwnerDependency, VerifiedResearcherDependency
 from route.models import (
+    ConsentFormResponse,
     CreateStudyRequest,
+    StudyListResponse,
     StudyRegistrationResponse,
     StudyResponse,
-    StudyListResponse,
 )
 from database.core import DatabaseSessionDependency
 from database.models import ConsentForm, Study, StudyCreatedBy, StudyRegistration, StudyStatus
@@ -208,3 +209,25 @@ async def close_study(
     await session.commit()
 
     return StudyResponse(id=study.id, name=study.name, duration=study.duration, status=study.status.value)
+
+@router.get(
+    "/{study_id}/consent-form",
+    response_model=ConsentFormResponse,
+)
+async def get_consent_form(
+        study_id: UUID,
+        _user: CurrentUserDependency,
+        session: DatabaseSessionDependency,
+) -> ConsentFormResponse:
+    consent_form = await session.get(ConsentForm, study_id)
+    if consent_form is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Consent form not found",
+        )
+
+    return ConsentFormResponse(
+        study_id=consent_form.study_id,
+        body_text=consent_form.body_text,
+        version=consent_form.version,
+    )
