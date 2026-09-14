@@ -323,6 +323,51 @@ class GetConsentFormTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(404, raised.exception.status_code)
 
 
+class ListStudiesFilterTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.session = MagicMock()
+        self.session.scalars = AsyncMock()
+        self.user = User(
+            id=uuid4(),
+            email="participant@example.com",
+            password_hash="hash",
+            role=Role.PARTICIPANT,
+        )
+
+    async def test_no_filter_returns_all_studies(self):
+        studies = [
+            Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.DRAFT),
+            Study(id=uuid4(), name="Evening walks", duration=7, status=StudyStatus.RECRUITING),
+        ]
+        self.session.scalars.return_value = studies
+
+        response = await list_studies(self.user, self.session, status_filter=None)
+
+        self.assertEqual(2, len(response.studies))
+
+    async def test_filter_by_recruiting_only_matches_recruiting(self):
+        recruiting_only = [
+            Study(id=uuid4(), name="Evening walks", duration=7, status=StudyStatus.RECRUITING),
+        ]
+        self.session.scalars.return_value = recruiting_only
+
+        response = await list_studies(
+            self.user, self.session, status_filter=StudyStatus.RECRUITING
+        )
+
+        self.assertEqual(1, len(response.studies))
+        self.assertEqual("recruiting", response.studies[0].status)
+
+    async def test_filter_with_no_matches_returns_empty_list(self):
+        self.session.scalars.return_value = []
+
+        response = await list_studies(
+            self.user, self.session, status_filter=StudyStatus.CLOSED
+        )
+
+        self.assertEqual(0, len(response.studies))
+
+
 class ListStudiesTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.session = MagicMock()
