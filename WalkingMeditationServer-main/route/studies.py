@@ -9,6 +9,7 @@ from route.dependencies import CurrentUserDependency, StudyOwnerDependency, Veri
 from route.models import (
     ConsentFormResponse,
     CreateStudyRequest,
+    JoinStudyRequest,
     StudyListResponse,
     StudyRegistrationResponse,
     StudyResponse,
@@ -60,6 +61,7 @@ async def create_study(
 )
 async def join_study(
         study_id: UUID,
+        payload: JoinStudyRequest,
         user: CurrentUserDependency,
         session: DatabaseSessionDependency,
 ) -> StudyRegistrationResponse:
@@ -76,6 +78,12 @@ async def join_study(
             detail="This study is not currently accepting participants",
         )
 
+    if not payload.agrees_to_consent:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You must agree to the consent form to join this study",
+        )
+
     existing_registration = await session.get(
         StudyRegistration,
         (user.id, study_id),
@@ -86,11 +94,12 @@ async def join_study(
             detail="User is already registered for this study",
         )
 
-    registered_at = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
     registration = StudyRegistration(
         user_id=user.id,
         study_id=study_id,
-        registered_at=registered_at,
+        registered_at=now,
+        consented_at=now,
     )
     session.add(registration)
 
@@ -107,6 +116,7 @@ async def join_study(
         user_id=registration.user_id,
         study_id=registration.study_id,
         registered_at=registration.registered_at,
+        consented_at=registration.consented_at,
     )
 
 @router.get(

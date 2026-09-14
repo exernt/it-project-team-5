@@ -264,10 +264,14 @@ class ConsentFormResponse(BaseModel):
     body_text: str
     version: int
 
+class JoinStudyRequest(BaseModel):
+    agrees_to_consent: bool
+
 class StudyRegistrationResponse(BaseModel):
     user_id: UUID
     study_id: UUID
     registered_at: datetime
+    consented_at: datetime
 
 class StudyListResponse(BaseModel):
     studies: list[StudyResponse]
