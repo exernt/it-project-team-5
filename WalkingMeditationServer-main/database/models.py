@@ -188,6 +188,10 @@ class StudyRegistration(Base):
         DateTime(timezone=True),
         nullable=False,
     )
+    withdrawn_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
 
 class StudyCreatedBy(Base):
