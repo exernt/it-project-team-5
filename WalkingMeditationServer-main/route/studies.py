@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func, select
 
@@ -184,8 +184,13 @@ async def join_study(
 async def list_studies(
         _user: CurrentUserDependency,
         session: DatabaseSessionDependency,
+        status_filter: StudyStatus | None = Query(default=None, alias="status"),
 ) -> StudyListResponse:
-    studies = await session.scalars(select(Study))
+    query = select(Study)
+    if status_filter is not None:
+        query = query.where(Study.status == status_filter)
+
+    studies = await session.scalars(query)
     return StudyListResponse(
         studies=[
             StudyResponse(id=s.id, name=s.name, duration=s.duration, status=s.status.value)
