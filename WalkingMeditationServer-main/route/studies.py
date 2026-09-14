@@ -36,6 +36,9 @@ async def create_study(
         duration=payload.duration,
         status=StudyStatus.DRAFT,
     )
+    session.add(study)
+    await session.flush()  # ensures study exists in the DB before FK-dependent inserts
+
     ownership = StudyCreatedBy(
         researcher_id=_researcher.id,
         study_id=study.id,
@@ -45,7 +48,7 @@ async def create_study(
         body_text="Placeholder consent text — to be finalized.",
         version=1,
     )
-    session.add_all([study, ownership, consent_form])
+    session.add_all([ownership, consent_form])
     await session.commit()
 
     return StudyResponse(
@@ -54,6 +57,7 @@ async def create_study(
         duration=study.duration,
         status=study.status.value,
     )
+
 @router.post(
     "/{study_id}/join",
     response_model=StudyRegistrationResponse,
