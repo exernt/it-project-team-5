@@ -13,7 +13,7 @@ from route.models import (
     StudyListResponse,
 )
 from database.core import DatabaseSessionDependency
-from database.models import Study, StudyCreatedBy, StudyRegistration, StudyStatus
+from database.models import ConsentForm, Study, StudyCreatedBy, StudyRegistration, StudyStatus
 
 router = APIRouter(prefix="/studies", tags=["studies"])
 
@@ -38,7 +38,12 @@ async def create_study(
         researcher_id=_researcher.id,
         study_id=study.id,
     )
-    session.add_all([study, ownership])
+    consent_form = ConsentForm(
+        study_id=study.id,
+        body_text="Placeholder consent text — to be finalized.",
+        version=1,
+    )
+    session.add_all([study, ownership, consent_form])
     await session.commit()
 
     return StudyResponse(
@@ -47,7 +52,6 @@ async def create_study(
         duration=study.duration,
         status=study.status.value,
     )
-
 @router.post(
     "/{study_id}/join",
     response_model=StudyRegistrationResponse,
