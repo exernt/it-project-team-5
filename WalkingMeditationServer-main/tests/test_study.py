@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -26,6 +26,7 @@ from route.studies import (
     get_consent_form,
     get_study,
     join_study,
+    leave_study,
     list_studies,
     publish_study,
 )
@@ -33,6 +34,7 @@ from route.studies import (
 class CreateStudyTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.session = MagicMock()
+        self.session.flush = AsyncMock()
         self.session.commit = AsyncMock()
         self.researcher = User(
             id=uuid4(),
@@ -46,10 +48,10 @@ class CreateStudyTests(unittest.IsolatedAsyncioTestCase):
 
         response = await create_study(payload, self.researcher, self.session)
 
+        added_study = self.session.add.call_args.args[0]
         added_records = self.session.add_all.call_args.args[0]
-        added_study = added_records[0]
-        ownership = added_records[1]
-        consent_form = added_records[2]
+        ownership = added_records[0]
+        consent_form = added_records[1]
         self.assertIsInstance(added_study, Study)
         self.assertIsInstance(ownership, StudyCreatedBy)
         self.assertIsInstance(consent_form, ConsentForm)
@@ -61,6 +63,7 @@ class CreateStudyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(added_study.id, response.id)
         self.assertEqual("Morning walks", response.name)
         self.assertEqual(14, response.duration)
+        self.session.flush.assert_awaited_once()
         self.session.commit.assert_awaited_once()
 
     def test_rejects_non_positive_duration(self):
@@ -527,6 +530,121 @@ class JoinStudyStatusGateTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(self.user.id, response.user_id)
+
+class LeaveStudyTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.session = MagicMock()
+        self.session.get = AsyncMock()
+        self.session.commit = AsyncMock()
+        self.user = User(
+            id=uuid4(),
+            email="participant@example.com",
+            password_hash="hash",
+            role=Role.PARTICIPANT,
+        )
+        self.study_id = uuid4()
+
+    async def test_leaves_active_registration(self):
+        registration = StudyRegistration(
+            user_id=self.user.id,
+            study_id=self.study_id,
+            registered_at=datetime.now(timezone.utc),
+            consented_at=datetime.now(timezone.utc),
+            withdrawn_at=None,
+        )
+        self.session.get.return_value = registration
+
+        response = await leave_study(self.study_id, self.user, self.session)
+
+        self.assertIsNotNone(registration.withdrawn_at)
+        self.assertIsNotNone(response.withdrawn_at)
+        self.session.commit.assert_awaited_once()
+
+    async def test_rejects_leaving_when_never_registered(self):
+        self.session.get.return_value = None
+
+        with self.assertRaises(HTTPException) as raised:
+            await leave_study(self.study_id, self.user, self.session)
+
+        self.assertEqual(404, raised.exception.status_code)
+
+    async def test_rejects_leaving_twice(self):
+        registration = StudyRegistration(
+            user_id=self.user.id,
+            study_id=self.study_id,
+            registered_at=datetime.now(timezone.utc),
+            consented_at=datetime.now(timezone.utc),
+            withdrawn_at=datetime.now(timezone.utc),
+        )
+        self.session.get.return_value = registration
+
+        with self.assertRaises(HTTPException) as raised:
+            await leave_study(self.study_id, self.user, self.session)
+
+        self.assertEqual(409, raised.exception.status_code)
+
+
+class RejoinStudyTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.session = MagicMock()
+        self.session.get = AsyncMock()
+        self.session.commit = AsyncMock()
+        self.user = User(
+            id=uuid4(),
+            email="participant@example.com",
+            password_hash="hash",
+            role=Role.PARTICIPANT,
+        )
+        self.study = Study(
+            id=uuid4(),
+            name="Morning walks",
+            duration=14,
+            status=StudyStatus.RECRUITING,
+        )
+
+    async def test_rejoining_reactivates_withdrawn_registration(self):
+        old_registered_at = datetime.now(timezone.utc) - timedelta(days=5)
+        withdrawn_registration = StudyRegistration(
+            user_id=self.user.id,
+            study_id=self.study.id,
+            registered_at=old_registered_at,
+            consented_at=old_registered_at,
+            withdrawn_at=datetime.now(timezone.utc) - timedelta(days=1),
+        )
+        self.session.get.side_effect = [self.study, withdrawn_registration]
+
+        response = await join_study(
+            self.study.id,
+            JoinStudyRequest(agrees_to_consent=True),
+            self.user,
+            self.session,
+        )
+
+        self.assertIsNone(withdrawn_registration.withdrawn_at)
+        self.assertIsNone(response.withdrawn_at)
+        self.assertGreater(withdrawn_registration.registered_at, old_registered_at)
+        self.session.add.assert_not_called()  # reactivated, not re-inserted
+        self.session.commit.assert_awaited_once()
+
+    async def test_rejoining_still_blocked_if_not_withdrawn(self):
+        active_registration = StudyRegistration(
+            user_id=self.user.id,
+            study_id=self.study.id,
+            registered_at=datetime.now(timezone.utc),
+            consented_at=datetime.now(timezone.utc),
+            withdrawn_at=None,
+        )
+        self.session.get.side_effect = [self.study, active_registration]
+
+        with self.assertRaises(HTTPException) as raised:
+            await join_study(
+                self.study.id,
+                JoinStudyRequest(agrees_to_consent=True),
+                self.user,
+                self.session,
+            )
+
+        self.assertEqual(409, raised.exception.status_code)
 
 if __name__ == "__main__":
     unittest.main()

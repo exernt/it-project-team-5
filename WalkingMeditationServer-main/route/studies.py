@@ -129,6 +129,7 @@ async def join_study(
         study_id=registration.study_id,
         registered_at=registration.registered_at,
         consented_at=registration.consented_at,
+        withdrawn_at=registration.withdrawn_at,
     )
 
 @router.get(
