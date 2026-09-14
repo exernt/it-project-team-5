@@ -8,8 +8,9 @@ from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 
 from route.dependencies import get_verified_researcher, require_study_owner
-from route.models import CreateStudyRequest
+from route.models import CreateStudyRequest, JoinStudyRequest
 from database.models import (
+    ConsentForm,
     ResearcherProfile,
     Role,
     Study,
@@ -22,6 +23,7 @@ from route.studies import (
     activate_study,
     close_study,
     create_study,
+    get_consent_form,
     get_study,
     join_study,
     list_studies,
@@ -47,12 +49,15 @@ class CreateStudyTests(unittest.IsolatedAsyncioTestCase):
         added_records = self.session.add_all.call_args.args[0]
         added_study = added_records[0]
         ownership = added_records[1]
+        consent_form = added_records[2]
         self.assertIsInstance(added_study, Study)
         self.assertIsInstance(ownership, StudyCreatedBy)
+        self.assertIsInstance(consent_form, ConsentForm)
         self.assertEqual("Morning walks", added_study.name)
         self.assertEqual(14, added_study.duration)
         self.assertEqual(self.researcher.id, ownership.researcher_id)
         self.assertEqual(added_study.id, ownership.study_id)
+        self.assertEqual(added_study.id, consent_form.study_id)
         self.assertEqual(added_study.id, response.id)
         self.assertEqual("Morning walks", response.name)
         self.assertEqual(14, response.duration)
@@ -142,7 +147,12 @@ class JoinStudyTests(unittest.IsolatedAsyncioTestCase):
     async def test_joins_existing_study(self):
         self.session.get.side_effect = [self.study, None]
 
-        response = await join_study(self.study.id, self.user, self.session)
+        response = await join_study(
+            self.study.id,
+            JoinStudyRequest(agrees_to_consent=True),
+            self.user,
+            self.session,
+        )
 
         registration = self.session.add.call_args.args[0]
         self.assertIsInstance(registration, StudyRegistration)
@@ -151,13 +161,19 @@ class JoinStudyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.user.id, response.user_id)
         self.assertEqual(self.study.id, response.study_id)
         self.assertIsNotNone(response.registered_at)
+        self.assertIsNotNone(response.consented_at)
         self.session.commit.assert_awaited_once()
 
     async def test_missing_study_returns_404(self):
         self.session.get.return_value = None
 
         with self.assertRaises(HTTPException) as raised:
-            await join_study(uuid4(), self.user, self.session)
+            await join_study(
+                uuid4(),
+                JoinStudyRequest(agrees_to_consent=True),
+                self.user,
+                self.session,
+            )
 
         self.assertEqual(404, raised.exception.status_code)
         self.session.add.assert_not_called()
@@ -168,11 +184,17 @@ class JoinStudyTests(unittest.IsolatedAsyncioTestCase):
             user_id=self.user.id,
             study_id=self.study.id,
             registered_at=datetime.now(timezone.utc),
+            consented_at=datetime.now(timezone.utc),
         )
         self.session.get.side_effect = [self.study, existing]
 
         with self.assertRaises(HTTPException) as raised:
-            await join_study(self.study.id, self.user, self.session)
+            await join_study(
+                self.study.id,
+                JoinStudyRequest(agrees_to_consent=True),
+                self.user,
+                self.session,
+            )
 
         self.assertEqual(409, raised.exception.status_code)
         self.session.add.assert_not_called()
@@ -187,10 +209,84 @@ class JoinStudyTests(unittest.IsolatedAsyncioTestCase):
         )
 
         with self.assertRaises(HTTPException) as raised:
-            await join_study(self.study.id, self.user, self.session)
+            await join_study(
+                self.study.id,
+                JoinStudyRequest(agrees_to_consent=True),
+                self.user,
+                self.session,
+            )
 
         self.assertEqual(409, raised.exception.status_code)
         self.session.rollback.assert_awaited_once()
+
+
+class JoinStudyConsentTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.session = MagicMock()
+        self.session.get = AsyncMock()
+        self.session.commit = AsyncMock()
+        self.user = User(
+            id=uuid4(),
+            email="participant@example.com",
+            password_hash="hash",
+            role=Role.PARTICIPANT,
+        )
+        self.study = Study(
+            id=uuid4(),
+            name="Morning walks",
+            duration=14,
+            status=StudyStatus.RECRUITING,
+        )
+
+    async def test_rejects_joining_without_consent(self):
+        self.session.get.return_value = self.study
+
+        with self.assertRaises(HTTPException) as raised:
+            await join_study(
+                self.study.id,
+                JoinStudyRequest(agrees_to_consent=False),
+                self.user,
+                self.session,
+            )
+
+        self.assertEqual(400, raised.exception.status_code)
+        self.session.add.assert_not_called()
+
+
+class GetConsentFormTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.session = MagicMock()
+        self.session.get = AsyncMock()
+        self.user = User(
+            id=uuid4(),
+            email="participant@example.com",
+            password_hash="hash",
+            role=Role.PARTICIPANT,
+        )
+
+    async def test_returns_existing_consent_form(self):
+        study_id = uuid4()
+        consent_form = ConsentForm(
+            study_id=study_id,
+            body_text="Placeholder consent text — to be finalized.",
+            version=1,
+        )
+        self.session.get.return_value = consent_form
+
+        response = await get_consent_form(study_id, self.user, self.session)
+
+        self.assertEqual(study_id, response.study_id)
+        self.assertEqual("Placeholder consent text — to be finalized.", response.body_text)
+        self.assertEqual(1, response.version)
+
+    async def test_missing_consent_form_returns_404(self):
+        self.session.get.return_value = None
+
+        with self.assertRaises(HTTPException) as raised:
+            await get_consent_form(uuid4(), self.user, self.session)
+
+        self.assertEqual(404, raised.exception.status_code)
+
 
 class ListStudiesTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
@@ -396,7 +492,12 @@ class JoinStudyStatusGateTests(unittest.IsolatedAsyncioTestCase):
         self.session.get.return_value = study
 
         with self.assertRaises(HTTPException) as raised:
-            await join_study(study.id, self.user, self.session)
+            await join_study(
+                study.id,
+                JoinStudyRequest(agrees_to_consent=True),
+                self.user,
+                self.session,
+            )
 
         self.assertEqual(409, raised.exception.status_code)
 
@@ -405,7 +506,12 @@ class JoinStudyStatusGateTests(unittest.IsolatedAsyncioTestCase):
         self.session.get.return_value = study
 
         with self.assertRaises(HTTPException) as raised:
-            await join_study(study.id, self.user, self.session)
+            await join_study(
+                study.id,
+                JoinStudyRequest(agrees_to_consent=True),
+                self.user,
+                self.session,
+            )
 
         self.assertEqual(409, raised.exception.status_code)
 
@@ -413,7 +519,12 @@ class JoinStudyStatusGateTests(unittest.IsolatedAsyncioTestCase):
         study = Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.RECRUITING)
         self.session.get.side_effect = [study, None]
 
-        response = await join_study(study.id, self.user, self.session)
+        response = await join_study(
+            study.id,
+            JoinStudyRequest(agrees_to_consent=True),
+            self.user,
+            self.session,
+        )
 
         self.assertEqual(self.user.id, response.user_id)
 
