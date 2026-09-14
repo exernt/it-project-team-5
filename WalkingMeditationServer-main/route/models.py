@@ -253,6 +253,13 @@ class CreateStudyRequest(BaseModel):
         return value
 
 
+class EditStudyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    column: str
+    value: object
+
+
 class StudyResponse(BaseModel):
     id: UUID
     name: str

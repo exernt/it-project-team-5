@@ -141,6 +141,21 @@ endpoint requires the JWT access token returned by `/auth/login`:
 }
 ```
 
+The study owner can edit its name or duration with
+`POST /studies/{study_id}/edit`. The request names one editable column and its
+new value. The value must use the column's JSON type (`name` is a string and
+`duration` is a positive integer):
+
+```json
+{
+  "column": "duration",
+  "value": 21
+}
+```
+
+Study IDs cannot be changed, and status changes must use the dedicated study
+lifecycle endpoints.
+
 Any logged-in user can join an existing study with
 `POST /studies/{study_id}/join`. The server derives the user ID from the bearer
 access token. The request confirms consent with

@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 
 from route.dependencies import get_verified_researcher, require_study_owner
-from route.models import CreateStudyRequest, JoinStudyRequest, SetQuestionRequest
+from route.models import CreateStudyRequest, EditStudyRequest, JoinStudyRequest, SetQuestionRequest
 from database.models import (
     ConsentForm,
     Questionnaire,
@@ -24,6 +24,7 @@ from route.studies import (
     activate_study,
     close_study,
     create_study,
+    edit_study,
     get_consent_form,
     get_study,
     join_study,
@@ -363,6 +364,99 @@ class GetStudyTests(unittest.IsolatedAsyncioTestCase):
             await get_study(uuid4(), self.user, self.session)
 
         self.assertEqual(404, raised.exception.status_code)
+
+
+class EditStudyTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.session = MagicMock()
+        self.session.get = AsyncMock()
+        self.session.commit = AsyncMock()
+        self.owner = User(
+            id=uuid4(),
+            email="researcher@example.com",
+            password_hash="hash",
+            role=Role.RESEARCHER,
+        )
+        self.study = Study(
+            id=uuid4(),
+            name="Morning walks",
+            duration=14,
+            status=StudyStatus.DRAFT,
+        )
+        self.session.get.return_value = self.study
+
+    async def test_edits_and_normalizes_name(self):
+        response = await edit_study(
+            self.study.id,
+            EditStudyRequest(column="name", value="  Evening walks  "),
+            self.owner,
+            self.session,
+        )
+
+        self.assertEqual("Evening walks", self.study.name)
+        self.assertEqual("Evening walks", response.name)
+        self.session.commit.assert_awaited_once()
+
+    async def test_edits_duration(self):
+        response = await edit_study(
+            self.study.id,
+            EditStudyRequest(column="duration", value=21),
+            self.owner,
+            self.session,
+        )
+
+        self.assertEqual(21, self.study.duration)
+        self.assertEqual(21, response.duration)
+        self.session.commit.assert_awaited_once()
+
+    async def test_rejects_unknown_column(self):
+        with self.assertRaises(HTTPException) as raised:
+            await edit_study(
+                self.study.id,
+                EditStudyRequest(column="location", value="Melbourne"),
+                self.owner,
+                self.session,
+            )
+
+        self.assertEqual(400, raised.exception.status_code)
+        self.session.commit.assert_not_awaited()
+
+    async def test_rejects_protected_column(self):
+        with self.assertRaises(HTTPException) as raised:
+            await edit_study(
+                self.study.id,
+                EditStudyRequest(column="status", value="active"),
+                self.owner,
+                self.session,
+            )
+
+        self.assertEqual(400, raised.exception.status_code)
+        self.session.commit.assert_not_awaited()
+
+    async def test_rejects_wrong_value_type(self):
+        with self.assertRaises(HTTPException) as raised:
+            await edit_study(
+                self.study.id,
+                EditStudyRequest(column="duration", value="21"),
+                self.owner,
+                self.session,
+            )
+
+        self.assertEqual(422, raised.exception.status_code)
+        self.session.commit.assert_not_awaited()
+
+    async def test_rejects_invalid_value(self):
+        with self.assertRaises(HTTPException) as raised:
+            await edit_study(
+                self.study.id,
+                EditStudyRequest(column="name", value="   "),
+                self.owner,
+                self.session,
+            )
+
+        self.assertEqual(422, raised.exception.status_code)
+        self.session.commit.assert_not_awaited()
+
 
 class StudyOwnerTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):

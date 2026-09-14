@@ -9,6 +9,7 @@ from route.dependencies import CurrentUserDependency, StudyOwnerDependency, Veri
 from route.models import (
     ConsentFormResponse,
     CreateStudyRequest,
+    EditStudyRequest,
     JoinStudyRequest,
     QuestionnaireResponse,
     SetQuestionRequest,
@@ -175,6 +176,74 @@ async def get_study(
         )
 
     return StudyResponse(id=study.id, name=study.name, duration=study.duration, status=study.status.value)
+
+
+_EDITABLE_STUDY_COLUMNS: dict[str, type] = {
+    "name": str,
+    "duration": int,
+}
+
+
+def _validate_study_edit(column: str, value: object) -> str | int:
+    if column not in Study.__table__.columns.keys():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Study column '{column}' does not exist",
+        )
+
+    expected_type = _EDITABLE_STUDY_COLUMNS.get(column)
+    if expected_type is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Study column '{column}' cannot be edited",
+        )
+
+    # Exact type checks prevent JSON booleans being accepted as integers.
+    if type(value) is not expected_type:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Study column '{column}' requires a {expected_type.__name__} value",
+        )
+
+    if column == "name":
+        normalized_name = value.strip()
+        if not normalized_name or len(normalized_name) > 255:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Study name must contain between 1 and 255 characters",
+            )
+        return normalized_name
+
+    if value <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Study duration must be greater than zero",
+        )
+    return value
+
+
+@router.post(
+    "/{study_id}/edit",
+    response_model=StudyResponse,
+)
+async def edit_study(
+        study_id: UUID,
+        payload: EditStudyRequest,
+        _owner: StudyOwnerDependency,
+        session: DatabaseSessionDependency,
+) -> StudyResponse:
+    study = await session.get(Study, study_id)
+    validated_value = _validate_study_edit(payload.column, payload.value)
+
+    setattr(study, payload.column, validated_value)
+    await session.commit()
+
+    return StudyResponse(
+        id=study.id,
+        name=study.name,
+        duration=study.duration,
+        status=study.status.value,
+    )
 
 def _invalid_transition(current: StudyStatus, target: StudyStatus) -> HTTPException:
     return HTTPException(
