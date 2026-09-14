@@ -8,7 +8,13 @@ from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 
 from route.dependencies import get_verified_researcher, require_study_owner
-from route.models import CreateStudyRequest, EditStudyRequest, JoinStudyRequest, SetQuestionRequest
+from route.models import (
+    CreateStudyRequest,
+    EditStudyRequest,
+    JoinStudyRequest,
+    SetQuestionRequest,
+    SwapStudyGroupRequest,
+)
 from database.models import (
     ConsentForm,
     Questionnaire,
@@ -28,11 +34,13 @@ from route.studies import (
     edit_study,
     get_consent_form,
     get_study,
+    get_study_status,
     join_study,
     leave_study,
     list_studies,
     publish_study,
     set_question,
+    swap_study_group,
 )
 
 class CreateStudyTests(unittest.IsolatedAsyncioTestCase):
@@ -385,6 +393,144 @@ class GetStudyTests(unittest.IsolatedAsyncioTestCase):
             await get_study(uuid4(), self.user, self.session)
 
         self.assertEqual(404, raised.exception.status_code)
+
+
+class GetStudyStatusTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.session = MagicMock()
+        self.session.get = AsyncMock()
+        self.session.execute = AsyncMock()
+        self.owner = User(
+            id=uuid4(),
+            email="researcher@example.com",
+            password_hash="hash",
+            role=Role.RESEARCHER,
+        )
+        self.study = Study(
+            id=uuid4(),
+            name="Morning walks",
+            duration=14,
+            status=StudyStatus.ACTIVE,
+        )
+        self.session.get.return_value = self.study
+
+    async def test_returns_demographics_grouped_by_assignment(self):
+        control_user_id = uuid4()
+        experimental_user_id = uuid4()
+        query_result = MagicMock()
+        query_result.all.return_value = [
+            (StudyGroup.CONTROL, control_user_id, "woman", 28),
+            (StudyGroup.EXPERIMENTAL, experimental_user_id, None, None),
+        ]
+        self.session.execute.return_value = query_result
+
+        response = await get_study_status(
+            self.study.id,
+            self.owner,
+            self.session,
+        )
+
+        self.assertEqual("Morning walks", response.name)
+        self.assertEqual(14, response.duration)
+        self.assertEqual(control_user_id, response.groups["control"][0].user_id)
+        self.assertEqual("woman", response.groups["control"][0].gender)
+        self.assertEqual(28, response.groups["control"][0].age)
+        self.assertEqual(
+            experimental_user_id,
+            response.groups["experimental"][0].user_id,
+        )
+        self.assertIsNone(response.groups["experimental"][0].gender)
+        self.assertIsNone(response.groups["experimental"][0].age)
+
+        statement = self.session.execute.await_args.args[0]
+        self.assertIn("withdrawn_at IS NULL", str(statement))
+
+    async def test_returns_both_groups_when_study_has_no_participants(self):
+        query_result = MagicMock()
+        query_result.all.return_value = []
+        self.session.execute.return_value = query_result
+
+        response = await get_study_status(
+            self.study.id,
+            self.owner,
+            self.session,
+        )
+
+        self.assertEqual([], response.groups["control"])
+        self.assertEqual([], response.groups["experimental"])
+
+
+class SwapStudyGroupTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.session = MagicMock()
+        self.session.get = AsyncMock()
+        self.session.commit = AsyncMock()
+        self.owner = User(
+            id=uuid4(),
+            email="researcher@example.com",
+            password_hash="hash",
+            role=Role.RESEARCHER,
+        )
+        self.study_id = uuid4()
+        self.user_id = uuid4()
+
+    async def test_moves_registered_user_to_target_group(self):
+        registration = StudyRegistration(
+            user_id=self.user_id,
+            study_id=self.study_id,
+            registered_at=datetime.now(timezone.utc),
+            consented_at=datetime.now(timezone.utc),
+            study_group=StudyGroup.CONTROL,
+        )
+        self.session.get.return_value = registration
+
+        response = await swap_study_group(
+            self.study_id,
+            SwapStudyGroupRequest(
+                user_id=self.user_id,
+                target_group="experimental",
+            ),
+            self.owner,
+            self.session,
+        )
+
+        self.assertEqual(StudyGroup.EXPERIMENTAL, registration.study_group)
+        self.assertEqual("experimental", response.group)
+        self.assertEqual(self.user_id, response.user_id)
+        self.session.commit.assert_awaited_once()
+
+    async def test_rejects_unknown_target_group(self):
+        with self.assertRaises(HTTPException) as raised:
+            await swap_study_group(
+                self.study_id,
+                SwapStudyGroupRequest(
+                    user_id=self.user_id,
+                    target_group="placebo",
+                ),
+                self.owner,
+                self.session,
+            )
+
+        self.assertEqual(422, raised.exception.status_code)
+        self.session.get.assert_not_awaited()
+        self.session.commit.assert_not_awaited()
+
+    async def test_rejects_user_not_registered_for_study(self):
+        self.session.get.return_value = None
+
+        with self.assertRaises(HTTPException) as raised:
+            await swap_study_group(
+                self.study_id,
+                SwapStudyGroupRequest(
+                    user_id=self.user_id,
+                    target_group="control",
+                ),
+                self.owner,
+                self.session,
+            )
+
+        self.assertEqual(404, raised.exception.status_code)
+        self.session.commit.assert_not_awaited()
 
 
 class EditStudyTests(unittest.IsolatedAsyncioTestCase):

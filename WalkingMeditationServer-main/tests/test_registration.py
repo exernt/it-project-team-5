@@ -25,6 +25,25 @@ class RegistrationRequestTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             RegisterRequest(email="alice@example.com", password="short")
 
+    def test_normalizes_optional_demographics(self):
+        request = RegisterRequest(
+            email="alice@example.com",
+            password="correct horse battery staple",
+            gender="  non-binary  ",
+            age=31,
+        )
+
+        self.assertEqual("non-binary", request.gender)
+        self.assertEqual(31, request.age)
+
+    def test_rejects_invalid_age(self):
+        with self.assertRaises(ValidationError):
+            RegisterRequest(
+                email="alice@example.com",
+                password="correct horse battery staple",
+                age=151,
+            )
+
 
 class PasswordHashTests(unittest.IsolatedAsyncioTestCase):
     async def test_hashes_with_argon2id_and_embeds_verification_data(self):
@@ -51,6 +70,8 @@ class RegistrationServiceTests(unittest.IsolatedAsyncioTestCase):
         payload = RegisterRequest(
             email="  New.User@Example.COM ",
             password="valid password",
+            gender="woman",
+            age=28,
         )
 
         response = await register_user(payload, self.session)
@@ -60,6 +81,8 @@ class RegistrationServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("users", inserted_user.__tablename__)
         self.assertEqual("new.user@example.com", inserted_user.email)
         self.assertEqual("$argon2id$test-only-hash", inserted_user.password_hash)
+        self.assertEqual("woman", inserted_user.gender)
+        self.assertEqual(28, inserted_user.age)
         self.session.commit.assert_awaited_once()
 
     @patch("route.auth.hash_password", new_callable=AsyncMock)

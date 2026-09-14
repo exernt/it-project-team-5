@@ -13,9 +13,13 @@ from route.models import (
     JoinStudyRequest,
     QuestionnaireResponse,
     SetQuestionRequest,
+    StudyGroupAssignmentResponse,
     StudyListResponse,
+    StudyParticipantStatusResponse,
     StudyRegistrationResponse,
     StudyResponse,
+    StudyStatusResponse,
+    SwapStudyGroupRequest,
 )
 from database.core import DatabaseSessionDependency
 from database.models import (
@@ -26,6 +30,7 @@ from database.models import (
     StudyGroup,
     StudyRegistration,
     StudyStatus,
+    User,
 )
 
 router = APIRouter(prefix="/studies", tags=["studies"])
@@ -206,6 +211,89 @@ async def get_study(
         )
 
     return StudyResponse(id=study.id, name=study.name, duration=study.duration, status=study.status.value)
+
+
+@router.post(
+    "/{study_id}/getstatus",
+    response_model=StudyStatusResponse,
+)
+async def get_study_status(
+        study_id: UUID,
+        _owner: StudyOwnerDependency,
+        session: DatabaseSessionDependency,
+) -> StudyStatusResponse:
+    study = await session.get(Study, study_id)
+    participant_rows = await session.execute(
+        select(
+            StudyRegistration.study_group,
+            User.id,
+            User.gender,
+            User.age,
+        )
+        .join(User, User.id == StudyRegistration.user_id)
+        .where(
+            StudyRegistration.study_id == study_id,
+            StudyRegistration.withdrawn_at.is_(None),
+        )
+        .order_by(StudyRegistration.registered_at, User.id)
+    )
+
+    groups: dict[str, list[StudyParticipantStatusResponse]] = {
+        group.value: [] for group in StudyGroup
+    }
+    for study_group, user_id, gender, age in participant_rows.all():
+        groups[study_group.value].append(
+            StudyParticipantStatusResponse(
+                user_id=user_id,
+                gender=gender,
+                age=age,
+            )
+        )
+
+    return StudyStatusResponse(
+        name=study.name,
+        duration=study.duration,
+        groups=groups,
+    )
+
+
+@router.post(
+    "/{study_id}/swapgroup",
+    response_model=StudyGroupAssignmentResponse,
+)
+async def swap_study_group(
+        study_id: UUID,
+        payload: SwapStudyGroupRequest,
+        _owner: StudyOwnerDependency,
+        session: DatabaseSessionDependency,
+) -> StudyGroupAssignmentResponse:
+    try:
+        target_group = StudyGroup(payload.target_group.strip().casefold())
+    except ValueError as exc:
+        valid_groups = ", ".join(group.value for group in StudyGroup)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Target group must be one of: {valid_groups}",
+        ) from exc
+
+    registration = await session.get(
+        StudyRegistration,
+        (payload.user_id, study_id),
+    )
+    if registration is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User is not registered for this study",
+        )
+
+    registration.study_group = target_group
+    await session.commit()
+
+    return StudyGroupAssignmentResponse(
+        study_id=study_id,
+        user_id=payload.user_id,
+        group=target_group.value,
+    )
 
 
 _EDITABLE_STUDY_COLUMNS: dict[str, type] = {

@@ -22,7 +22,13 @@ class User(Base):
     """Authentication identity stored by the server."""
 
     __tablename__ = "users"
-    __table_args__ = (UniqueConstraint("email", name="uq_users_email"),)
+    __table_args__ = (
+        UniqueConstraint("email", name="uq_users_email"),
+        CheckConstraint(
+            "age IS NULL OR (age >= 0 AND age <= 150)",
+            name="ck_users_age_range",
+        ),
+    )
 
     id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True),
@@ -31,6 +37,8 @@ class User(Base):
     )
     email: Mapped[str] = mapped_column(Text, nullable=False)
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    gender: Mapped[str | None] = mapped_column(Text, nullable=True)
+    age: Mapped[int | None] = mapped_column(nullable=True)
     role: Mapped[Role] = mapped_column(
         SqlEnum(
             Role,

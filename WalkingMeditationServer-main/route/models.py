@@ -6,12 +6,21 @@ from uuid import UUID
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=1_024)
+    gender: str | None = Field(default=None, min_length=1, max_length=100)
+    age: int | None = Field(default=None, ge=0, le=150)
 
     @field_validator("email", mode="before")
     @classmethod
     def normalize_email(cls, value: object) -> object:
         if isinstance(value, str):
             return value.strip().casefold()
+        return value
+
+    @field_validator("gender", mode="before")
+    @classmethod
+    def normalize_gender(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
         return value
 
 
@@ -293,6 +302,31 @@ class StudyRegistrationResponse(BaseModel):
     registered_at: datetime
     consented_at: datetime
     withdrawn_at: datetime | None
+
+
+class StudyParticipantStatusResponse(BaseModel):
+    user_id: UUID
+    gender: str | None
+    age: int | None
+
+
+class StudyStatusResponse(BaseModel):
+    name: str
+    duration: int
+    groups: dict[str, list[StudyParticipantStatusResponse]]
+
+
+class SwapStudyGroupRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: UUID
+    target_group: str
+
+
+class StudyGroupAssignmentResponse(BaseModel):
+    study_id: UUID
+    user_id: UUID
+    group: str
 
 class StudyListResponse(BaseModel):
     studies: list[StudyResponse]

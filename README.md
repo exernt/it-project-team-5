@@ -130,6 +130,10 @@ This is separate from the `APP_API_TOKEN`/`X-App-Token` mechanism described in t
 
 Details, worked PowerShell examples, and manual test steps for each of these live in `READList/`.
 
+Account registration also accepts optional `gender` and `age` fields. Gender is
+a self-described string of up to 100 characters, and age must be between 0 and
+150. Existing clients may continue sending only email and password.
+
 Verified researchers can create studies with `POST /studies`. The request body
 contains a non-empty `name` and a positive integer `duration` in days. This
 endpoint requires the JWT access token returned by `/auth/login`:
@@ -164,6 +168,33 @@ each study. On first registration, the server assigns the participant to the
 smaller of the study's control and experimental groups, choosing control when
 the groups are tied. The assignment is stored with the registration and is
 preserved if the participant leaves and later rejoins.
+
+The verified study owner can retrieve the current active groups with
+`POST /studies/{study_id}/getstatus`. Each participant entry contains the user
+ID and the optional demographics stored on that account:
+
+```json
+{
+  "name": "Two-week walking meditation",
+  "duration": 14,
+  "groups": {
+    "control": [
+      {"user_id": "00000000-0000-0000-0000-000000000001", "gender": "woman", "age": 28}
+    ],
+    "experimental": []
+  }
+}
+```
+
+The owner can move any registered user to another configured group with
+`POST /studies/{study_id}/swapgroup`:
+
+```json
+{
+  "user_id": "00000000-0000-0000-0000-000000000001",
+  "target_group": "experimental"
+}
+```
 
 The study owner can add a questionnaire with
 `POST /studies/{study_id}/setquestion`. Questionnaire IDs start at 1 and
