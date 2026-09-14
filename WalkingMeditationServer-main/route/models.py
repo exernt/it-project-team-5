@@ -272,6 +272,7 @@ class StudyRegistrationResponse(BaseModel):
     study_id: UUID
     registered_at: datetime
     consented_at: datetime
+    withdrawn_at: datetime | None
 
 class StudyListResponse(BaseModel):
     studies: list[StudyResponse]

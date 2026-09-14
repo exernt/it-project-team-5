@@ -88,24 +88,32 @@ async def join_study(
             detail="You must agree to the consent form to join this study",
         )
 
+    now = datetime.now(timezone.utc)
     existing_registration = await session.get(
         StudyRegistration,
         (user.id, study_id),
     )
-    if existing_registration is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="User is already registered for this study",
-        )
 
-    now = datetime.now(timezone.utc)
-    registration = StudyRegistration(
-        user_id=user.id,
-        study_id=study_id,
-        registered_at=now,
-        consented_at=now,
-    )
-    session.add(registration)
+    if existing_registration is not None:
+        if existing_registration.withdrawn_at is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User is already registered for this study",
+            )
+        # Rejoining after a prior withdrawal — reactivate the existing row
+        # rather than inserting a second one (user_id, study_id) is the PK.
+        existing_registration.registered_at = now
+        existing_registration.consented_at = now
+        existing_registration.withdrawn_at = None
+        registration = existing_registration
+    else:
+        registration = StudyRegistration(
+            user_id=user.id,
+            study_id=study_id,
+            registered_at=now,
+            consented_at=now,
+        )
+        session.add(registration)
 
     try:
         await session.commit()
@@ -244,4 +252,37 @@ async def get_consent_form(
         study_id=consent_form.study_id,
         body_text=consent_form.body_text,
         version=consent_form.version,
+    )
+
+@router.post(
+    "/{study_id}/leave",
+    response_model=StudyRegistrationResponse,
+)
+async def leave_study(
+        study_id: UUID,
+        user: CurrentUserDependency,
+        session: DatabaseSessionDependency,
+) -> StudyRegistrationResponse:
+    registration = await session.get(StudyRegistration, (user.id, study_id))
+    if registration is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="You are not registered for this study",
+        )
+
+    if registration.withdrawn_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You have already left this study",
+        )
+
+    registration.withdrawn_at = datetime.now(timezone.utc)
+    await session.commit()
+
+    return StudyRegistrationResponse(
+        user_id=registration.user_id,
+        study_id=registration.study_id,
+        registered_at=registration.registered_at,
+        consented_at=registration.consented_at,
+        withdrawn_at=registration.withdrawn_at,
     )
