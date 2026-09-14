@@ -23,6 +23,7 @@ from database.models import (
     Questionnaire,
     Study,
     StudyCreatedBy,
+    StudyGroup,
     StudyRegistration,
     StudyStatus,
 )
@@ -117,11 +118,40 @@ async def join_study(
         existing_registration.withdrawn_at = None
         registration = existing_registration
     else:
+        # Lock the study while counting and assigning so simultaneous joins
+        # cannot both observe the same group sizes.
+        await session.execute(
+            select(Study.id)
+            .where(Study.id == study_id)
+            .with_for_update()
+        )
+        control_count = await session.scalar(
+            select(func.count())
+            .select_from(StudyRegistration)
+            .where(
+                StudyRegistration.study_id == study_id,
+                StudyRegistration.study_group == StudyGroup.CONTROL,
+            )
+        )
+        experimental_count = await session.scalar(
+            select(func.count())
+            .select_from(StudyRegistration)
+            .where(
+                StudyRegistration.study_id == study_id,
+                StudyRegistration.study_group == StudyGroup.EXPERIMENTAL,
+            )
+        )
+        study_group = (
+            StudyGroup.CONTROL
+            if (control_count or 0) <= (experimental_count or 0)
+            else StudyGroup.EXPERIMENTAL
+        )
         registration = StudyRegistration(
             user_id=user.id,
             study_id=study_id,
             registered_at=now,
             consented_at=now,
+            study_group=study_group,
         )
         session.add(registration)
 

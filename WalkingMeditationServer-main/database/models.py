@@ -139,6 +139,12 @@ class StudyStatus(str, enum.Enum):
     ACTIVE = "active"
     CLOSED = "closed"
 
+
+class StudyGroup(str, enum.Enum):
+    CONTROL = "control"
+    EXPERIMENTAL = "experimental"
+
+
 class Study(Base):
     """A researcher-created walking meditation study."""
 
@@ -192,6 +198,15 @@ class StudyRegistration(Base):
     withdrawn_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
+    )
+    study_group: Mapped[StudyGroup] = mapped_column(
+        SqlEnum(
+            StudyGroup,
+            name="study_group",
+            native_enum=True,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
     )
 
 

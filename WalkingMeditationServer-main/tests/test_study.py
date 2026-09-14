@@ -16,6 +16,7 @@ from database.models import (
     Role,
     Study,
     StudyCreatedBy,
+    StudyGroup,
     StudyRegistration,
     StudyStatus,
     User,
@@ -135,6 +136,8 @@ class JoinStudyTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.session = MagicMock()
         self.session.get = AsyncMock()
+        self.session.execute = AsyncMock()
+        self.session.scalar = AsyncMock(return_value=0)
         self.session.commit = AsyncMock()
         self.session.rollback = AsyncMock()
         self.user = User(
@@ -164,11 +167,28 @@ class JoinStudyTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(registration, StudyRegistration)
         self.assertEqual(self.user.id, registration.user_id)
         self.assertEqual(self.study.id, registration.study_id)
+        self.assertEqual(StudyGroup.CONTROL, registration.study_group)
         self.assertEqual(self.user.id, response.user_id)
         self.assertEqual(self.study.id, response.study_id)
         self.assertIsNotNone(response.registered_at)
         self.assertIsNotNone(response.consented_at)
         self.session.commit.assert_awaited_once()
+
+    async def test_assigns_experimental_when_control_has_more_members(self):
+        self.session.get.side_effect = [self.study, None]
+        self.session.scalar.side_effect = [3, 2]
+
+        await join_study(
+            self.study.id,
+            JoinStudyRequest(agrees_to_consent=True),
+            self.user,
+            self.session,
+        )
+
+        registration = self.session.add.call_args.args[0]
+        self.assertEqual(StudyGroup.EXPERIMENTAL, registration.study_group)
+        self.session.execute.assert_awaited_once()
+        self.assertEqual(2, self.session.scalar.await_count)
 
     async def test_missing_study_returns_404(self):
         self.session.get.return_value = None
@@ -191,6 +211,7 @@ class JoinStudyTests(unittest.IsolatedAsyncioTestCase):
             study_id=self.study.id,
             registered_at=datetime.now(timezone.utc),
             consented_at=datetime.now(timezone.utc),
+            study_group=StudyGroup.CONTROL,
         )
         self.session.get.side_effect = [self.study, existing]
 
@@ -578,6 +599,8 @@ class JoinStudyStatusGateTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.session = MagicMock()
         self.session.get = AsyncMock()
+        self.session.execute = AsyncMock()
+        self.session.scalar = AsyncMock(return_value=0)
         self.session.commit = AsyncMock()
         self.user = User(
             id=uuid4(),
@@ -647,6 +670,7 @@ class LeaveStudyTests(unittest.IsolatedAsyncioTestCase):
             registered_at=datetime.now(timezone.utc),
             consented_at=datetime.now(timezone.utc),
             withdrawn_at=None,
+            study_group=StudyGroup.CONTROL,
         )
         self.session.get.return_value = registration
 
@@ -671,6 +695,7 @@ class LeaveStudyTests(unittest.IsolatedAsyncioTestCase):
             registered_at=datetime.now(timezone.utc),
             consented_at=datetime.now(timezone.utc),
             withdrawn_at=datetime.now(timezone.utc),
+            study_group=StudyGroup.CONTROL,
         )
         self.session.get.return_value = registration
 
@@ -706,6 +731,7 @@ class RejoinStudyTests(unittest.IsolatedAsyncioTestCase):
             registered_at=old_registered_at,
             consented_at=old_registered_at,
             withdrawn_at=datetime.now(timezone.utc) - timedelta(days=1),
+            study_group=StudyGroup.EXPERIMENTAL,
         )
         self.session.get.side_effect = [self.study, withdrawn_registration]
 
@@ -719,6 +745,7 @@ class RejoinStudyTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(withdrawn_registration.withdrawn_at)
         self.assertIsNone(response.withdrawn_at)
         self.assertGreater(withdrawn_registration.registered_at, old_registered_at)
+        self.assertEqual(StudyGroup.EXPERIMENTAL, withdrawn_registration.study_group)
         self.session.add.assert_not_called()  # reactivated, not re-inserted
         self.session.commit.assert_awaited_once()
 
@@ -729,6 +756,7 @@ class RejoinStudyTests(unittest.IsolatedAsyncioTestCase):
             registered_at=datetime.now(timezone.utc),
             consented_at=datetime.now(timezone.utc),
             withdrawn_at=None,
+            study_group=StudyGroup.CONTROL,
         )
         self.session.get.side_effect = [self.study, active_registration]
 

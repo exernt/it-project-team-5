@@ -160,7 +160,10 @@ Any logged-in user can join an existing study with
 `POST /studies/{study_id}/join`. The server derives the user ID from the bearer
 access token. The request confirms consent with
 `{"agrees_to_consent": true}`. A user can have only one active registration for
-each study.
+each study. On first registration, the server assigns the participant to the
+smaller of the study's control and experimental groups, choosing control when
+the groups are tied. The assignment is stored with the registration and is
+preserved if the participant leaves and later rejoins.
 
 The study owner can add a questionnaire with
 `POST /studies/{study_id}/setquestion`. Questionnaire IDs start at 1 and
