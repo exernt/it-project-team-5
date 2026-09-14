@@ -184,6 +184,10 @@ class StudyRegistration(Base):
         nullable=False,
         server_default=func.now(),
     )
+    consented_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
 
 
 class StudyCreatedBy(Base):
@@ -207,3 +211,21 @@ class StudyCreatedBy(Base):
         nullable=False,
         server_default=func.now(),
     )
+
+class ConsentForm(Base):
+    """Placeholder consent text shown to a participant before joining a study.
+
+    Content is a placeholder until the client specifies what consent should
+    actually cover — the mechanism (record that consent was given, when)
+    is real; the wording is not final.
+    """
+
+    __tablename__ = "consent_form"
+
+    study_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("study.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    body_text: Mapped[str] = mapped_column(Text, nullable=False)
+    version: Mapped[int] = mapped_column(nullable=False, server_default=text("1"))
