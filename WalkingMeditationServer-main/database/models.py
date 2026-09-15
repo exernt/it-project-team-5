@@ -215,7 +215,7 @@ class Questionnaire(Base):
     researcher_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     status: Mapped[QuestionnaireStatus] = mapped_column(
@@ -255,7 +255,7 @@ class QuestionnaireResponse(Base):
     respondent_id: Mapped[UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     answers: Mapped[dict] = mapped_column(JSONB, nullable=False)
