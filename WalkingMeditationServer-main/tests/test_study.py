@@ -34,6 +34,7 @@ from route.studies import (
     close_study,
     create_study,
     edit_study,
+    get_current_study_script_parameters,
     get_consent_form,
     get_study,
     get_study_status,
@@ -79,6 +80,7 @@ class CreateStudyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(added_study.id, response.id)
         self.assertEqual("Morning walks", response.name)
         self.assertEqual(14, response.duration)
+        self.assertEqual("", response.description)
         self.session.flush.assert_awaited_once()
         self.session.commit.assert_awaited_once()
 
@@ -149,7 +151,7 @@ class JoinStudyTests(unittest.IsolatedAsyncioTestCase):
         self.session = MagicMock()
         self.session.get = AsyncMock()
         self.session.execute = AsyncMock()
-        self.session.scalar = AsyncMock(return_value=0)
+        self.session.scalar = AsyncMock(side_effect=[None, 0, 0])
         self.session.commit = AsyncMock()
         self.session.rollback = AsyncMock()
         self.user = User(
@@ -188,7 +190,7 @@ class JoinStudyTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_assigns_experimental_when_control_has_more_members(self):
         self.session.get.side_effect = [self.study, None]
-        self.session.scalar.side_effect = [3, 2]
+        self.session.scalar.side_effect = [None, 3, 2]
 
         await join_study(
             self.study.id,
@@ -199,8 +201,45 @@ class JoinStudyTests(unittest.IsolatedAsyncioTestCase):
 
         registration = self.session.add.call_args.args[0]
         self.assertEqual(StudyGroup.EXPERIMENTAL, registration.study_group)
-        self.session.execute.assert_awaited_once()
-        self.assertEqual(2, self.session.scalar.await_count)
+        self.assertEqual(2, self.session.execute.await_count)
+        self.assertEqual(3, self.session.scalar.await_count)
+
+    async def test_rejects_joining_another_current_study(self):
+        other_study_id = uuid4()
+        self.session.get.side_effect = [self.study, None]
+        self.session.scalar.side_effect = [other_study_id]
+
+        with self.assertRaises(HTTPException) as raised:
+            await join_study(
+                self.study.id,
+                JoinStudyRequest(agrees_to_consent=True),
+                self.user,
+                self.session,
+            )
+
+        self.assertEqual(409, raised.exception.status_code)
+        self.assertEqual(
+            "You are already participating in another study",
+            raised.exception.detail,
+        )
+        self.session.add.assert_not_called()
+        self.session.commit.assert_not_awaited()
+
+    async def test_allows_joining_when_previous_study_is_not_current(self):
+        # The enrollment query excludes withdrawn registrations and studies
+        # that have reached the closed state, represented here by no result.
+        self.session.get.side_effect = [self.study, None]
+        self.session.scalar.side_effect = [None, 0, 0]
+
+        response = await join_study(
+            self.study.id,
+            JoinStudyRequest(agrees_to_consent=True),
+            self.user,
+            self.session,
+        )
+
+        self.assertEqual(self.study.id, response.study_id)
+        self.session.commit.assert_awaited_once()
 
     async def test_missing_study_returns_404(self):
         self.session.get.return_value = None
@@ -389,6 +428,7 @@ class ListStudiesTests(unittest.IsolatedAsyncioTestCase):
                 id=uuid4(),
                 name="Morning walks",
                 duration=14,
+                description="A two-week morning walking study.",
                 status=StudyStatus.RECRUITING,
             ),
             Study(
@@ -404,6 +444,10 @@ class ListStudiesTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(2, len(response.studies))
         self.assertEqual("Morning walks", response.studies[0].name)
+        self.assertEqual(
+            "A two-week morning walking study.",
+            response.studies[0].description,
+        )
         self.assertEqual("Evening walks", response.studies[1].name)
 
     async def test_returns_empty_list_when_no_studies(self):
@@ -429,6 +473,7 @@ class ListMyStudiesTests(unittest.IsolatedAsyncioTestCase):
             id=uuid4(),
             name="Morning walks",
             duration=14,
+            description="A mindful morning walking study.",
             status=StudyStatus.RECRUITING,
         )
         registration = StudyRegistration(
@@ -448,6 +493,10 @@ class ListMyStudiesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(1, len(response.studies))
         self.assertEqual(study.id, response.studies[0].study_id)
         self.assertEqual("Morning walks", response.studies[0].name)
+        self.assertEqual(
+            "A mindful morning walking study.",
+            response.studies[0].description,
+        )
         self.assertEqual("recruiting", response.studies[0].status)
         self.assertEqual("control", response.studies[0].study_group)
         self.assertIsNone(response.studies[0].withdrawn_at)
@@ -485,6 +534,58 @@ class ListMyStudiesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(1, len(response.studies))
         self.assertIsNotNone(response.studies[0].withdrawn_at)
 
+
+class CurrentStudyScriptParametersTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.session = MagicMock()
+        self.session.execute = AsyncMock()
+        self.user = User(
+            id=uuid4(),
+            email="participant@example.com",
+            password_hash="hash",
+            role=Role.PARTICIPANT,
+        )
+
+    async def test_returns_parameters_for_current_study(self):
+        study = Study(
+            id=uuid4(),
+            name="Morning walks",
+            duration=14,
+            status=StudyStatus.ACTIVE,
+            script_generation_parameters="Use gratitude-focused language.",
+        )
+        registration = StudyRegistration(
+            user_id=self.user.id,
+            study_id=study.id,
+            registered_at=datetime.now(timezone.utc),
+            consented_at=datetime.now(timezone.utc),
+            study_group=StudyGroup.EXPERIMENTAL,
+        )
+        result_mock = MagicMock()
+        result_mock.first.return_value = (registration, study)
+        self.session.execute.return_value = result_mock
+
+        response = await get_current_study_script_parameters(self.user, self.session)
+
+        self.assertTrue(response.participating)
+        self.assertEqual(study.id, response.study_id)
+        self.assertEqual("active", response.study_status)
+        self.assertEqual(
+            "Use gratitude-focused language.",
+            response.script_generation_parameters,
+        )
+
+    async def test_returns_non_participating_when_no_current_study(self):
+        result_mock = MagicMock()
+        result_mock.first.return_value = None
+        self.session.execute.return_value = result_mock
+
+        response = await get_current_study_script_parameters(self.user, self.session)
+
+        self.assertFalse(response.participating)
+        self.assertIsNone(response.study_id)
+        self.assertEqual("", response.script_generation_parameters)
+
 class GetStudyTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.session = MagicMock()
@@ -497,7 +598,13 @@ class GetStudyTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_returns_existing_study(self):
-        study = Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.RECRUITING)
+        study = Study(
+            id=uuid4(),
+            name="Morning walks",
+            duration=14,
+            description="Walk mindfully each morning for two weeks.",
+            status=StudyStatus.RECRUITING,
+        )
         self.session.get.return_value = study
 
         response = await get_study(study.id, self.user, self.session)
@@ -505,6 +612,7 @@ class GetStudyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(study.id, response.id)
         self.assertEqual("Morning walks", response.name)
         self.assertEqual(14, response.duration)
+        self.assertEqual("Walk mindfully each morning for two weeks.", response.description)
 
     async def test_missing_study_returns_404(self):
         self.session.get.return_value = None
@@ -696,6 +804,70 @@ class EditStudyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(21, response.duration)
         self.session.commit.assert_awaited_once()
 
+    async def test_edits_script_generation_parameters(self):
+        response = await edit_study(
+            self.study.id,
+            EditStudyRequest(
+                column="script_generation_parameters",
+                value="  Keep each narration under 80 words.  ",
+            ),
+            self.owner,
+            self.session,
+        )
+
+        self.assertEqual(
+            "Keep each narration under 80 words.",
+            self.study.script_generation_parameters,
+        )
+        self.assertEqual(
+            "Keep each narration under 80 words.",
+            response.script_generation_parameters,
+        )
+        self.session.commit.assert_awaited_once()
+
+    async def test_edits_and_normalizes_description(self):
+        response = await edit_study(
+            self.study.id,
+            EditStudyRequest(
+                column="description",
+                value="  Walk mindfully each morning for two weeks.  ",
+            ),
+            self.owner,
+            self.session,
+        )
+
+        self.assertEqual(
+            "Walk mindfully each morning for two weeks.",
+            self.study.description,
+        )
+        self.assertEqual(self.study.description, response.description)
+        self.session.commit.assert_awaited_once()
+
+    async def test_rejects_description_over_10000_characters(self):
+        with self.assertRaises(HTTPException) as raised:
+            await edit_study(
+                self.study.id,
+                EditStudyRequest(column="description", value="x" * 10_001),
+                self.owner,
+                self.session,
+            )
+
+        self.assertEqual(422, raised.exception.status_code)
+        self.session.commit.assert_not_awaited()
+
+    async def test_allows_clearing_script_generation_parameters(self):
+        self.study.script_generation_parameters = "Use a body scan."
+
+        response = await edit_study(
+            self.study.id,
+            EditStudyRequest(column="script_generation_parameters", value="   "),
+            self.owner,
+            self.session,
+        )
+
+        self.assertEqual("", self.study.script_generation_parameters)
+        self.assertEqual("", response.script_generation_parameters)
+
     async def test_rejects_unknown_column(self):
         with self.assertRaises(HTTPException) as raised:
             await edit_study(
@@ -866,7 +1038,7 @@ class JoinStudyStatusGateTests(unittest.IsolatedAsyncioTestCase):
         self.session = MagicMock()
         self.session.get = AsyncMock()
         self.session.execute = AsyncMock()
-        self.session.scalar = AsyncMock(return_value=0)
+        self.session.scalar = AsyncMock(side_effect=[None, 0, 0])
         self.session.commit = AsyncMock()
         self.user = User(
             id=uuid4(),
@@ -975,6 +1147,8 @@ class RejoinStudyTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.session = MagicMock()
         self.session.get = AsyncMock()
+        self.session.execute = AsyncMock()
+        self.session.scalar = AsyncMock(return_value=None)
         self.session.commit = AsyncMock()
         self.user = User(
             id=uuid4(),

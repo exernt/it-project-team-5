@@ -39,6 +39,19 @@
         </activity>
 
         <activity
+            android:name=".StudyUnenrolledActivity"
+            android:exported="false" />
+        <activity
+            android:name=".StudyViewListActivity"
+            android:exported="false" />
+        <activity
+            android:name=".StudyDetailsActivity"
+            android:exported="false" />
+        <activity
+            android:name=".StudyUserManageActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".MeditationPlaybackActivity"
             android:exported="false" />
         <activity

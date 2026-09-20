@@ -46,6 +46,7 @@ async def generate_script_with_park(
     park_time: int,                    # seconds
     park_to_destination_time: int,      # seconds
     context: str,
+    study_parameters: str = "",
     output_folder: Path = DEFAULT_OUTPUT_FOLDER,
     save_to_disk: bool = False,
 ) -> str:
@@ -72,6 +73,7 @@ async def generate_script_with_park(
         CM_word_count=cm_words,
         Closing_word_count=closing_words,
         weatherCondition= weather_condition,
+        study_parameters=study_parameters.strip() or "No additional study instructions.",
     )
 
     script = normalize_script_xml(await generate_text(prompt))
@@ -87,6 +89,7 @@ async def generate_script_without_park(
     destination: LatLng,
     total_walking_time: int,   # seconds
     context: str,
+    study_parameters: str = "",
     output_folder: Path = DEFAULT_OUTPUT_FOLDER,
     save_to_disk: bool = False,
 ) -> str:
@@ -111,6 +114,7 @@ async def generate_script_without_park(
         CM_word_count=cm_words,
         Closing_word_count=closing_words,
         weatherCondition=weather_condition,
+        study_parameters=study_parameters.strip() or "No additional study instructions.",
     )
 
     script = normalize_script_xml(await generate_text(prompt))

@@ -9,6 +9,7 @@ from route.dependencies import CurrentUserDependency, StudyOwnerDependency, Veri
 from route.models import (
     ConsentFormResponse,
     CreateStudyRequest,
+    CurrentStudyScriptParametersResponse,
     EditStudyRequest,
     FeedbackListResponse,
     FeedbackResponse,
@@ -55,6 +56,8 @@ async def create_study(
         id=uuid4(),
         name=payload.name,
         duration=payload.duration,
+        description="",
+        script_generation_parameters="",
         status=StudyStatus.DRAFT,
     )
     session.add(study)
@@ -76,7 +79,9 @@ async def create_study(
         id=study.id,
         name=study.name,
         duration=study.duration,
+        description=study.description or "",
         status=study.status.value,
+        script_generation_parameters=study.script_generation_parameters or "",
     )
 
 @router.post(
@@ -109,6 +114,14 @@ async def join_study(
             detail="You must agree to the consent form to join this study",
         )
 
+    # Serialize joins for this user. Without this row lock, two simultaneous
+    # requests for different studies could both pass the check below.
+    await session.execute(
+        select(User.id)
+        .where(User.id == user.id)
+        .with_for_update()
+    )
+
     now = datetime.now(timezone.utc)
     existing_registration = await session.get(
         StudyRegistration,
@@ -121,6 +134,25 @@ async def join_study(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="User is already registered for this study",
             )
+
+    current_study_id = await session.scalar(
+        select(StudyRegistration.study_id)
+        .join(Study, Study.id == StudyRegistration.study_id)
+        .where(
+            StudyRegistration.user_id == user.id,
+            StudyRegistration.study_id != study_id,
+            StudyRegistration.withdrawn_at.is_(None),
+            Study.status.in_((StudyStatus.RECRUITING, StudyStatus.ACTIVE)),
+        )
+        .limit(1)
+    )
+    if current_study_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You are already participating in another study",
+        )
+
+    if existing_registration is not None:
         # Rejoining after a prior withdrawal — reactivate the existing row
         # rather than inserting a second one (user_id, study_id) is the PK.
         existing_registration.registered_at = now
@@ -198,7 +230,14 @@ async def list_studies(
     studies = await session.scalars(query)
     return StudyListResponse(
         studies=[
-            StudyResponse(id=s.id, name=s.name, duration=s.duration, status=s.status.value)
+            StudyResponse(
+                id=s.id,
+                name=s.name,
+                duration=s.duration,
+                description=s.description or "",
+                status=s.status.value,
+                script_generation_parameters=s.script_generation_parameters or "",
+            )
             for s in studies
         ]
     )
@@ -223,6 +262,7 @@ async def list_my_studies(
                 study_id=study.id,
                 name=study.name,
                 duration=study.duration,
+                description=study.description or "",
                 status=study.status.value,
                 study_group=registration.study_group.value,
                 registered_at=registration.registered_at,
@@ -231,6 +271,39 @@ async def list_my_studies(
             )
             for registration, study in result.all()
         ]
+    )
+
+
+@router.get(
+    "/current-script-parameters",
+    response_model=CurrentStudyScriptParametersResponse,
+)
+async def get_current_study_script_parameters(
+        user: CurrentUserDependency,
+        session: DatabaseSessionDependency,
+) -> CurrentStudyScriptParametersResponse:
+    """Return the most recently joined study that still governs meditation scripts."""
+    result = await session.execute(
+        select(StudyRegistration, Study)
+        .join(Study, Study.id == StudyRegistration.study_id)
+        .where(
+            StudyRegistration.user_id == user.id,
+            StudyRegistration.withdrawn_at.is_(None),
+            Study.status.in_((StudyStatus.RECRUITING, StudyStatus.ACTIVE)),
+        )
+        .order_by(StudyRegistration.registered_at.desc())
+        .limit(1)
+    )
+    current = result.first()
+    if current is None:
+        return CurrentStudyScriptParametersResponse(participating=False)
+
+    _registration, study = current
+    return CurrentStudyScriptParametersResponse(
+        participating=True,
+        study_id=study.id,
+        study_status=study.status.value,
+        script_generation_parameters=study.script_generation_parameters or "",
     )
 
 @router.get(
@@ -249,7 +322,14 @@ async def get_study(
             detail="Study not found",
         )
 
-    return StudyResponse(id=study.id, name=study.name, duration=study.duration, status=study.status.value)
+    return StudyResponse(
+        id=study.id,
+        name=study.name,
+        duration=study.duration,
+        description=study.description or "",
+        status=study.status.value,
+        script_generation_parameters=study.script_generation_parameters or "",
+    )
 
 
 @router.post(
@@ -338,6 +418,8 @@ async def swap_study_group(
 _EDITABLE_STUDY_COLUMNS: dict[str, type] = {
     "name": str,
     "duration": int,
+    "description": str,
+    "script_generation_parameters": str,
 }
 
 
@@ -371,6 +453,20 @@ def _validate_study_edit(column: str, value: object) -> str | int:
             )
         return normalized_name
 
+    if column in ("description", "script_generation_parameters"):
+        normalized_text = value.strip()
+        if len(normalized_text) > 10_000:
+            field_name = (
+                "description"
+                if column == "description"
+                else "script generation parameters"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"Study {field_name} cannot exceed 10000 characters",
+            )
+        return normalized_text
+
     if value <= 0:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -399,7 +495,9 @@ async def edit_study(
         id=study.id,
         name=study.name,
         duration=study.duration,
+        description=study.description or "",
         status=study.status.value,
+        script_generation_parameters=study.script_generation_parameters or "",
     )
 
 def _invalid_transition(current: StudyStatus, target: StudyStatus) -> HTTPException:
@@ -426,7 +524,14 @@ async def publish_study(
     study.status = StudyStatus.RECRUITING
     await session.commit()
 
-    return StudyResponse(id=study.id, name=study.name, duration=study.duration, status=study.status.value)
+    return StudyResponse(
+        id=study.id,
+        name=study.name,
+        duration=study.duration,
+        description=study.description or "",
+        status=study.status.value,
+        script_generation_parameters=study.script_generation_parameters or "",
+    )
 
 
 @router.post(
@@ -446,7 +551,14 @@ async def activate_study(
     study.status = StudyStatus.ACTIVE
     await session.commit()
 
-    return StudyResponse(id=study.id, name=study.name, duration=study.duration, status=study.status.value)
+    return StudyResponse(
+        id=study.id,
+        name=study.name,
+        duration=study.duration,
+        description=study.description or "",
+        status=study.status.value,
+        script_generation_parameters=study.script_generation_parameters or "",
+    )
 
 
 @router.post(
@@ -466,7 +578,14 @@ async def close_study(
     study.status = StudyStatus.CLOSED
     await session.commit()
 
-    return StudyResponse(id=study.id, name=study.name, duration=study.duration, status=study.status.value)
+    return StudyResponse(
+        id=study.id,
+        name=study.name,
+        duration=study.duration,
+        description=study.description or "",
+        status=study.status.value,
+        script_generation_parameters=study.script_generation_parameters or "",
+    )
 
 
 @router.post(

@@ -126,7 +126,7 @@ The server exposes account and session endpoints under `/auth`:
 | `POST /auth/register-researcher` | Upgrade the logged-in account to a researcher account pending admin verification |
 | `POST /auth/admin/researchers/{user_id}/verify` | Verify a researcher account (admin only) |
 
-This is separate from the `APP_API_TOKEN`/`X-App-Token` mechanism described in the Android setup section above — `X-App-Token` is a single shared secret gating access to the app's own routing/script/narration endpoints, unrelated to which user is logged in. Bearer login is currently used for researcher registration, admin verification, and study creation; the routing/script/narration endpoints are not associated with a logged-in user.
+This is separate from the `APP_API_TOKEN`/`X-App-Token` mechanism described in the Android setup section above — `X-App-Token` is a single shared secret gating access to the app's own routing/script/narration endpoints. Bearer login is also used to determine whether the current participant has study-controlled meditation settings.
 
 Details, worked PowerShell examples, and manual test steps for each of these live in `READList/`.
 
@@ -150,15 +150,27 @@ endpoint requires the JWT access token returned by `/auth/login`:
 A newly created study starts in `draft` status, and a placeholder consent form
 is created automatically alongside it.
 
-The study owner can edit its name or duration with
+The study owner can edit its name, duration, or meditation script-generation
+parameters with
 `POST /studies/{study_id}/edit`. The request names one editable column and its
-new value. The value must use the column's JSON type (`name` is a string and
-`duration` is a positive integer):
+new value. The value must use the column's JSON type (`name` and
+`script_generation_parameters` are strings, while `duration` is a positive
+integer):
 
 ```json
 {
   "column": "duration",
   "value": 21
+}
+```
+
+For example, a researcher can provide instructions that are added to every
+meditation generated for current participants:
+
+```json
+{
+  "column": "script_generation_parameters",
+  "value": "Use short sentences and emphasize gratitude throughout."
 }
 ```
 
@@ -209,10 +221,11 @@ Any logged-in user can join an existing study with
 access token. The request confirms consent with
 `{"agrees_to_consent": true}`. Joining only succeeds while the study is
 `recruiting` or `active`; a study that hasn't been published yet, or has been
-closed, rejects the join with a conflict. A user can have only one active
-registration for each study. On first registration, the server assigns the
-participant to the smaller of the study's control and experimental groups,
-choosing control when the groups are tied.
+closed, rejects the join with a conflict. A user can participate in only one
+recruiting or active study at a time. They must withdraw from that study, or
+wait until it is closed, before joining another. On first registration, the
+server assigns the participant to the smaller of the study's control and
+experimental groups, choosing control when the groups are tied.
 
 A participant can withdraw from a study they've joined with
 `POST /studies/{study_id}/leave`. This records a withdrawal timestamp rather
@@ -220,6 +233,13 @@ than deleting the registration; leaving a study twice, or leaving one you were
 never registered for, is rejected. Sending another `join` request for the same
 study afterward reactivates the existing registration rather than creating a
 new one — the participant's original group assignment is preserved.
+
+The Android app checks `GET /studies/current-script-parameters` before route
+selection. The endpoint returns the most recently joined, non-withdrawn study
+whose status is `recruiting` or `active`. Its parameters are cached locally and
+included in subsequent meditation-generation prompts. A closed study or a
+withdrawal causes the endpoint to return `participating: false`, restoring the
+normal meditation-purpose input.
 
 ### Groups and questionnaires
 
