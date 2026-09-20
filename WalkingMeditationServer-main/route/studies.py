@@ -10,6 +10,8 @@ from route.models import (
     ConsentFormResponse,
     CreateStudyRequest,
     EditStudyRequest,
+    FeedbackListResponse,
+    FeedbackResponse,
     JoinStudyRequest,
     MyStudiesResponse,
     MyStudyResponse,
@@ -26,6 +28,7 @@ from route.models import (
 from database.core import DatabaseSessionDependency
 from database.models import (
     ConsentForm,
+    Feedback,
     Questionnaire,
     Study,
     StudyCreatedBy,
@@ -556,4 +559,32 @@ async def leave_study(
         registered_at=registration.registered_at,
         consented_at=registration.consented_at,
         withdrawn_at=registration.withdrawn_at,
+    )
+
+@router.get(
+    "/{study_id}/feedback",
+    response_model=FeedbackListResponse,
+)
+async def list_study_feedback(
+        study_id: UUID,
+        _owner: StudyOwnerDependency,
+        session: DatabaseSessionDependency,
+) -> FeedbackListResponse:
+    result = await session.scalars(
+        select(Feedback).where(Feedback.study_id == study_id)
+    )
+
+    return FeedbackListResponse(
+        feedback=[
+            FeedbackResponse(
+                id=f.id,
+                user_id=f.user_id,
+                study_id=f.study_id,
+                category=f.category.value,
+                rating=f.rating,
+                comment=f.comment,
+                created_at=f.created_at,
+            )
+            for f in result
+        ]
     )
