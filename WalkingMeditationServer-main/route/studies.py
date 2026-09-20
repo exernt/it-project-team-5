@@ -11,6 +11,8 @@ from route.models import (
     CreateStudyRequest,
     EditStudyRequest,
     JoinStudyRequest,
+    MyStudiesResponse,
+    MyStudyResponse,
     QuestionnaireResponse,
     SetQuestionRequest,
     StudyGroupAssignmentResponse,
@@ -198,6 +200,35 @@ async def list_studies(
         ]
     )
 
+@router.get(
+    "/mine",
+    response_model=MyStudiesResponse,
+)
+async def list_my_studies(
+        user: CurrentUserDependency,
+        session: DatabaseSessionDependency,
+) -> MyStudiesResponse:
+    result = await session.execute(
+        select(StudyRegistration, Study)
+        .join(Study, Study.id == StudyRegistration.study_id)
+        .where(StudyRegistration.user_id == user.id)
+    )
+
+    return MyStudiesResponse(
+        studies=[
+            MyStudyResponse(
+                study_id=study.id,
+                name=study.name,
+                duration=study.duration,
+                status=study.status.value,
+                study_group=registration.study_group.value,
+                registered_at=registration.registered_at,
+                consented_at=registration.consented_at,
+                withdrawn_at=registration.withdrawn_at,
+            )
+            for registration, study in result.all()
+        ]
+    )
 
 @router.get(
     "/{study_id}",

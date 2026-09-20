@@ -330,3 +330,17 @@ class StudyGroupAssignmentResponse(BaseModel):
 
 class StudyListResponse(BaseModel):
     studies: list[StudyResponse]
+
+class MyStudyResponse(BaseModel):
+    study_id: UUID
+    name: str
+    duration: int
+    status: str
+    study_group: str
+    registered_at: datetime
+    consented_at: datetime
+    withdrawn_at: datetime | None
+
+
+class MyStudiesResponse(BaseModel):
+    studies: list[MyStudyResponse]
