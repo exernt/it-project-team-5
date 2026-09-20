@@ -1,5 +1,5 @@
 from typing import List, Literal, Tuple
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 from datetime import datetime
 from uuid import UUID
 
@@ -344,3 +344,37 @@ class MyStudyResponse(BaseModel):
 
 class MyStudiesResponse(BaseModel):
     studies: list[MyStudyResponse]
+
+class SubmitFeedbackRequest(BaseModel):
+    study_id: UUID | None = None
+    category: str
+    rating: int | None = Field(default=None, ge=1, le=5)
+    comment: str | None = None
+
+    @field_validator("category")
+    @classmethod
+    def validate_category(cls, value: str) -> str:
+        allowed = {"general", "study", "technical"}
+        if value not in allowed:
+            raise ValueError(f"category must be one of {sorted(allowed)}")
+        return value
+
+    @model_validator(mode="after")
+    def require_rating_or_comment(self) -> "SubmitFeedbackRequest":
+        if self.rating is None and self.comment is None:
+            raise ValueError("Feedback must include a rating, a comment, or both")
+        return self
+
+
+class FeedbackResponse(BaseModel):
+    id: UUID
+    user_id: UUID
+    study_id: UUID | None
+    category: str
+    rating: int | None
+    comment: str | None
+    created_at: datetime
+
+
+class FeedbackListResponse(BaseModel):
+    feedback: list[FeedbackResponse]
