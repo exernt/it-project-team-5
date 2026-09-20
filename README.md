@@ -134,6 +134,8 @@ Account registration also accepts optional `gender` and `age` fields. Gender is
 a self-described string of up to 100 characters, and age must be between 0 and
 150. Existing clients may continue sending only email and password.
 
+## Studies
+
 Verified researchers can create studies with `POST /studies`. The request body
 contains a non-empty `name` and a positive integer `duration` in days. This
 endpoint requires the JWT access token returned by `/auth/login`:
@@ -144,6 +146,9 @@ endpoint requires the JWT access token returned by `/auth/login`:
   "duration": 14
 }
 ```
+
+A newly created study starts in `draft` status, and a placeholder consent form
+is created automatically alongside it.
 
 The study owner can edit its name or duration with
 `POST /studies/{study_id}/edit`. The request names one editable column and its
@@ -158,16 +163,65 @@ new value. The value must use the column's JSON type (`name` is a string and
 ```
 
 Study IDs cannot be changed, and status changes must use the dedicated study
-lifecycle endpoints.
+lifecycle endpoints below.
+
+### Browsing studies
+
+Any logged-in user can list studies with `GET /studies`, optionally filtered
+by status, e.g. `GET /studies?status=recruiting`. A single study can be
+retrieved with `GET /studies/{study_id}`.
+
+### Study lifecycle
+
+A study starts in `draft` and is not joinable until its owner publishes it.
+The study owner moves it through its lifecycle with:
+
+- `POST /studies/{study_id}/publish` — `draft` → `recruiting`
+- `POST /studies/{study_id}/activate` — `recruiting` → `active`
+- `POST /studies/{study_id}/close` — `recruiting` or `active` → `closed`
+
+Each of these rejects the request with a conflict if the study isn't in the
+expected starting status. Only the study's owner can call these — any other
+user, including other verified researchers, is rejected.
+
+### Consent
+
+Every study has a consent form, created automatically alongside it. Any
+logged-in user can view it before deciding whether to join:
+
+`GET /studies/{study_id}/consent-form`
+
+```json
+{
+  "study_id": "00000000-0000-0000-0000-000000000001",
+  "body_text": "Placeholder consent text — to be finalized.",
+  "version": 1
+}
+```
+
+The consent text is currently a placeholder pending the actual wording; the
+`agrees_to_consent` requirement on joining (below) is enforced regardless.
+
+### Joining, leaving, and rejoining
 
 Any logged-in user can join an existing study with
 `POST /studies/{study_id}/join`. The server derives the user ID from the bearer
 access token. The request confirms consent with
-`{"agrees_to_consent": true}`. A user can have only one active registration for
-each study. On first registration, the server assigns the participant to the
-smaller of the study's control and experimental groups, choosing control when
-the groups are tied. The assignment is stored with the registration and is
-preserved if the participant leaves and later rejoins.
+`{"agrees_to_consent": true}`. Joining only succeeds while the study is
+`recruiting` or `active`; a study that hasn't been published yet, or has been
+closed, rejects the join with a conflict. A user can have only one active
+registration for each study. On first registration, the server assigns the
+participant to the smaller of the study's control and experimental groups,
+choosing control when the groups are tied.
+
+A participant can withdraw from a study they've joined with
+`POST /studies/{study_id}/leave`. This records a withdrawal timestamp rather
+than deleting the registration; leaving a study twice, or leaving one you were
+never registered for, is rejected. Sending another `join` request for the same
+study afterward reactivates the existing registration rather than creating a
+new one — the participant's original group assignment is preserved.
+
+### Groups and questionnaires
 
 The verified study owner can retrieve the current active groups with
 `POST /studies/{study_id}/getstatus`. Each participant entry contains the user
