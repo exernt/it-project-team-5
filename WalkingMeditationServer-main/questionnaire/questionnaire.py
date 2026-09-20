@@ -48,6 +48,11 @@ class QuestionHandler(ABC):
         """Prompt for and return an answer. Swap this out for a web form,
         API handler, etc. without touching anything else in this file."""
 
+    @abstractmethod
+    def validate_answer(self, question: dict, scales: dict, value: Any) -> None:
+        """Raise ValueError if `value` isn't a well-formed answer to this
+        question -- i.e. matches the shape collect_answer would produce."""
+
 
 class TextHandler(QuestionHandler):
     def validate_definition(self, question: dict, scales: dict) -> None:
@@ -56,6 +61,46 @@ class TextHandler(QuestionHandler):
     def collect_answer(self, question: dict, scales: dict) -> str:
         print(f"\n{question['prompt']}")
         return input("> ").strip()
+
+    def validate_answer(self, question: dict, scales: dict, value: Any) -> None:
+        if not isinstance(value, str):
+            raise ValueError(f"{question['id']}: expected a string, got {type(value).__name__}")
+
+
+def _validate_choice_value(question: dict, options: list, value: Any) -> None:
+    """Shared validation for one selected option's answer shape, used by
+    both SingleChoiceHandler and MultipleChoiceHandler. `value` must be a
+    dict of the form {"value": ..., "detail": ...}, matching what
+    collect_answer produces -- and if the selected option itself required
+    free text, 'detail' must actually be a non-empty string."""
+    if not isinstance(value, dict) or "value" not in value:
+        raise ValueError(
+            f"{question['id']}: expected {{'value': ..., 'detail': ...}}, got {value!r}"
+        )
+
+    valid_values = {
+        (opt.get("value", opt.get("label")) if isinstance(opt, dict) else opt)
+        for opt in options
+    }
+    if value["value"] not in valid_values:
+        raise ValueError(
+            f"{question['id']}: '{value['value']}' is not one of the valid options "
+            f"{sorted(str(v) for v in valid_values)}"
+        )
+
+    matching_option = next(
+        (
+            opt for opt in options
+            if isinstance(opt, dict) and opt.get("value", opt.get("label")) == value["value"]
+        ),
+        None,
+    )
+    if matching_option and matching_option.get("allow_free_text"):
+        detail = value.get("detail")
+        if not isinstance(detail, str) or not detail.strip():
+            raise ValueError(
+                f"{question['id']}: option '{value['value']}' requires non-empty 'detail' text"
+            )
 
 
 class SingleChoiceHandler(QuestionHandler):
@@ -91,6 +136,9 @@ class SingleChoiceHandler(QuestionHandler):
             return answer
 
         return {"value": selected, "detail": None}
+
+    def validate_answer(self, question: dict, scales: dict, value: Any) -> None:
+        _validate_choice_value(question, question["options"], value)
 
 
 class MultipleChoiceHandler(QuestionHandler):
@@ -130,6 +178,12 @@ class MultipleChoiceHandler(QuestionHandler):
                 answers.append({"value": selected, "detail": None})
         return answers
 
+    def validate_answer(self, question: dict, scales: dict, value: Any) -> None:
+        if not isinstance(value, list):
+            raise ValueError(f"{question['id']}: expected a list of selections, got {type(value).__name__}")
+        for item in value:
+            _validate_choice_value(question, question["options"], item)
+
 
 class RatingHandler(QuestionHandler):
     """Rating questions point at a named scale in the questionnaire's
@@ -155,6 +209,25 @@ class RatingHandler(QuestionHandler):
         else:
             print(f"  (enter a number between {scale['min']} and {scale['max']})")
         return int(input("> "))
+
+    def validate_answer(self, question: dict, scales: dict, value: Any) -> None:
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise ValueError(f"{question['id']}: expected an integer, got {type(value).__name__}")
+
+        scale = scales[question["scale_ref"]]
+        if "options" in scale:
+            valid_values = {opt["value"] for opt in scale["options"]}
+            if value not in valid_values:
+                raise ValueError(
+                    f"{question['id']}: {value} is not one of the scale's valid values "
+                    f"{sorted(valid_values)}"
+                )
+        else:
+            if not (scale["min"] <= value <= scale["max"]):
+                raise ValueError(
+                    f"{question['id']}: {value} is outside the scale's range "
+                    f"[{scale['min']}, {scale['max']}]"
+                )
 
 
 # The registry -- this is the only place new question types get "plugged in".
@@ -202,6 +275,40 @@ def validate_questionnaire(questionnaire: dict) -> None:
             )
 
         handler.validate_definition(question, scales)
+
+
+def validate_response(questionnaire: dict, answers: dict) -> None:
+    """Validate a submitted response's answers against the questionnaire's
+    question definitions. Checks:
+    - every answer's question id is actually part of this questionnaire
+    - every question marked 'required' has a matching answer
+    - each provided answer's shape/value is valid for its question type,
+      via that type's own validate_answer (e.g. a rating stays within its
+      scale's range, a choice answer's value is one of the real options)
+
+    Does NOT assume validate_questionnaire() has already been run on
+    `questionnaire` -- call both if the definition itself is untrusted too.
+    """
+    if not isinstance(answers, dict):
+        raise ValueError(f"Response must be a dict of question_id -> answer, got {type(answers).__name__}")
+
+    scales = questionnaire.get("scales", {})
+    questions_by_id = {q["id"]: q for q in questionnaire["questions"]}
+
+    unknown_ids = set(answers.keys()) - set(questions_by_id.keys())
+    if unknown_ids:
+        raise ValueError(f"Response references unknown question id(s): {sorted(unknown_ids)}")
+
+    for question in questionnaire["questions"]:
+        qid = question["id"]
+
+        if qid not in answers:
+            if question.get("required", False):
+                raise ValueError(f"Missing required answer for question '{qid}'")
+            continue
+
+        handler = QUESTION_HANDLERS[QuestionType(question["type"])]
+        handler.validate_answer(question, scales, answers[qid])
 
 
 def ask_question(question: dict, scales: dict):
