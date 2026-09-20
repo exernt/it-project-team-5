@@ -283,3 +283,58 @@ class Questionnaire(Base):
         nullable=False,
         server_default=func.now(),
     )
+
+class FeedbackCategory(str, enum.Enum):
+    GENERAL = "general"
+    STUDY = "study"
+    TECHNICAL = "technical"
+
+
+class Feedback(Base):
+    """Participant-submitted feedback, optionally tied to a study."""
+
+    __tablename__ = "feedback"
+    __table_args__ = (
+        CheckConstraint(
+            "rating IS NULL OR (rating >= 1 AND rating <= 5)",
+            name="ck_feedback_rating_range",
+        ),
+        CheckConstraint(
+            "rating IS NOT NULL OR comment IS NOT NULL",
+            name="ck_feedback_not_empty",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    study_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("study.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    category: Mapped[FeedbackCategory] = mapped_column(
+        SqlEnum(
+            FeedbackCategory,
+            name="feedback_category",
+            native_enum=True,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
+    )
+    rating: Mapped[int | None] = mapped_column(nullable=True)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
