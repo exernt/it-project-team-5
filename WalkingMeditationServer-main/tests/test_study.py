@@ -17,6 +17,8 @@ from route.models import (
 )
 from database.models import (
     ConsentForm,
+    Feedback,
+    FeedbackCategory,
     Questionnaire,
     ResearcherProfile,
     Role,
@@ -39,6 +41,7 @@ from route.studies import (
     leave_study,
     list_my_studies,
     list_studies,
+    list_study_feedback,
     publish_study,
     set_question,
     swap_study_group,
@@ -1082,6 +1085,41 @@ class SetQuestionTests(unittest.IsolatedAsyncioTestCase):
     def test_rejects_fields_other_than_title(self):
         with self.assertRaises(ValidationError):
             SetQuestionRequest(title="Check-in", questions=[])
+
+class ListStudyFeedbackTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.session = MagicMock()
+        self.session.get = AsyncMock()
+        self.session.scalars = AsyncMock()
+        self.researcher = User(
+            id=uuid4(),
+            email="researcher@example.com",
+            password_hash="hash",
+            role=Role.RESEARCHER,
+        )
+        self.study = Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.RECRUITING)
+
+    async def test_returns_feedback_for_owned_study(self):
+        ownership = StudyCreatedBy(researcher_id=self.researcher.id, study_id=self.study.id)
+        self.session.get.side_effect = [self.study, ownership]
+        feedback_item = Feedback(
+            id=uuid4(),
+            user_id=uuid4(),
+            study_id=self.study.id,
+            category=FeedbackCategory.STUDY,
+            rating=4,
+            comment="Good experience",
+            created_at=datetime.now(timezone.utc),
+        )
+        self.session.scalars.return_value = [feedback_item]
+
+        response = await list_study_feedback(self.study.id, self.researcher, self.session)
+
+        self.assertEqual(1, len(response.feedback))
+        self.assertEqual(4, response.feedback[0].rating)
+        self.assertEqual("study", response.feedback[0].category)
+
+
 
 if __name__ == "__main__":
     unittest.main()

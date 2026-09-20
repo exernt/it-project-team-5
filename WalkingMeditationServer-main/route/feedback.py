@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from uuid import UUID
-
+from uuid import UUID, uuid4
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
-
-from database.models import Feedback, Study
+from datetime import datetime, timezone
+from database.models import Feedback, FeedbackCategory, Study
 from database.core import DatabaseSessionDependency
 from route.dependencies import CurrentUserDependency, StudyOwnerDependency
 from route.models import (
@@ -36,11 +35,13 @@ async def submit_feedback(
             )
 
     feedback = Feedback(
+        id=uuid4(),
         user_id=user.id,
         study_id=payload.study_id,
-        category=payload.category,
+        category=FeedbackCategory(payload.category),
         rating=payload.rating,
         comment=payload.comment,
+        created_at=datetime.now(timezone.utc),
     )
     session.add(feedback)
     await session.commit()
