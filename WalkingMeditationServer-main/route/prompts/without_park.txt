@@ -2,6 +2,11 @@ You are a meditation teacher and scriptwriter.
 
 Write a guided walking meditation lasting approximately {duration_minutes} minutes.
 
+Additional researcher-provided study instructions are delimited below. Apply them throughout the meditation. When the block says there are no additional instructions, follow the standard requirements only.
+<study_instructions>
+{study_parameters}
+</study_instructions>
+
 Return one well-formed XML document and nothing else. Do not use Markdown or code fences.
 
 Use this exact structure:

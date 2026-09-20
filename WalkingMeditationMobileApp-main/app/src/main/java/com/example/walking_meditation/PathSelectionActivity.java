@@ -8,10 +8,12 @@ import android.os.Handler;
 import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.AutoCompleteTextView;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -19,6 +21,8 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.walking_meditation.utils.CacheFiles;
+import com.example.walking_meditation.utils.SessionManager;
+import com.example.walking_meditation.utils.StudyConfigClient;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.libraries.places.api.Places;
 import com.google.android.libraries.places.api.model.AutocompletePrediction;
@@ -80,6 +84,13 @@ public class PathSelectionActivity extends AppCompatActivity {
     private Button btnFindPath;
     private EditText etTotalMinutes;
     private EditText etContext;
+    private TextView tvStudyStatus;
+    private boolean participatingInStudy = false;
+    private String studyParameters = "";
+    private String contextBeforeStudy = "";
+    private boolean routeBusy = false;
+    private boolean studyRefreshPending = false;
+    private boolean launchedFromStudyManagement = false;
 
     private static final String STATE_SOURCE_PLACE_ID = "source_place_id";
     private static final String STATE_DESTINATION_PLACE_ID = "destination_place_id";
@@ -93,7 +104,16 @@ public class PathSelectionActivity extends AppCompatActivity {
         etDestination = findViewById(R.id.et_destination);
         etTotalMinutes = findViewById(R.id.et_total_minutes);
         etContext = findViewById(R.id.et_context);
+        tvStudyStatus = findViewById(R.id.tv_study_status);
         btnFindPath = findViewById(R.id.btn_find_path);
+        launchedFromStudyManagement = getIntent().getBooleanExtra(
+                com.example.walking_meditation.nav.Extras.EXTRA_FROM_STUDY_MANAGE,
+                false
+        );
+        applyStudyConfiguration(
+                SessionManager.hasActiveStudy(this),
+                SessionManager.getStudyParameters(this)
+        );
 
         String mapsKey = getString(R.string.google_maps_key).trim();
         if (mapsKey.isEmpty()) {
@@ -136,8 +156,10 @@ public class PathSelectionActivity extends AppCompatActivity {
                 etTotalMinutes.setError("Enter a time from 1 to 240 minutes");
                 return;
             }
-            String context = etContext.getText().toString().trim();
-            if (context.isEmpty()) {
+            String context = participatingInStudy
+                    ? "the goals defined by the current study"
+                    : etContext.getText().toString().trim();
+            if (!participatingInStudy && context.isEmpty()) {
                 etContext.setError("Enter a meditation purpose");
                 return;
             }
@@ -177,15 +199,94 @@ public class PathSelectionActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (btnFindPath != null && inFlightCall == null
-                && !getString(R.string.google_maps_key).trim().isEmpty()) {
-            setBusy(false);
+        if (btnFindPath != null && !getString(R.string.google_maps_key).trim().isEmpty()) {
+            if (inFlightCall == null) {
+                setBusy(false);
+            }
+            if (launchedFromStudyManagement && SessionManager.hasActiveStudy(this)) {
+                applyStudyConfiguration(true, SessionManager.getStudyParameters(this));
+            } else {
+                refreshStudyConfiguration();
+            }
         }
     }
 
     private void setBusy(boolean busy) {
-        btnFindPath.setEnabled(!busy);
+        routeBusy = busy;
+        updateFindPathEnabled();
         // If you have a ProgressBar, toggle it here as well.
+    }
+
+    private void updateFindPathEnabled() {
+        btnFindPath.setEnabled(!routeBusy && !studyRefreshPending);
+    }
+
+    private void refreshStudyConfiguration() {
+        if (studyRefreshPending) return;
+        studyRefreshPending = true;
+        updateFindPathEnabled();
+
+        StudyConfigClient.fetchCurrent(this, httpClient, new StudyConfigClient.Listener() {
+            @Override
+            public void onLoaded(boolean participating, @NonNull String studyId, @NonNull String parameters) {
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    studyRefreshPending = false;
+                    if (participating) {
+                        SessionManager.cacheStudyConfiguration(
+                                PathSelectionActivity.this,
+                                studyId,
+                                parameters
+                        );
+                    } else {
+                        SessionManager.clearStudyConfiguration(PathSelectionActivity.this);
+                    }
+                    applyStudyConfiguration(participating, parameters);
+                    updateFindPathEnabled();
+                });
+            }
+
+            @Override
+            public void onFailure(@NonNull String message) {
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    studyRefreshPending = false;
+                    updateFindPathEnabled();
+                    Toast.makeText(
+                            PathSelectionActivity.this,
+                            "Using cached study settings: " + message,
+                            Toast.LENGTH_SHORT
+                    ).show();
+                });
+            }
+        });
+    }
+
+    private void applyStudyConfiguration(boolean participating, @NonNull String parameters) {
+        if (participating && !participatingInStudy) {
+            contextBeforeStudy = etContext.getText().toString();
+        }
+
+        participatingInStudy = participating;
+        studyParameters = participating ? parameters : "";
+
+        if (participating) {
+            etContext.setText("");
+            etContext.setHint("Participating in study");
+            etContext.setEnabled(false);
+            etContext.setFocusable(false);
+            etContext.setAlpha(0.55f);
+            tvStudyStatus.setVisibility(View.VISIBLE);
+        } else {
+            etContext.setEnabled(true);
+            etContext.setFocusableInTouchMode(true);
+            etContext.setAlpha(1.0f);
+            etContext.setHint("For example: prepare for a stressful meeting");
+            if (!contextBeforeStudy.isEmpty() && etContext.getText().toString().isEmpty()) {
+                etContext.setText(contextBeforeStudy);
+            }
+            tvStudyStatus.setVisibility(View.GONE);
+        }
     }
 
     private void setupAutocomplete(AutoCompleteTextView textView, boolean isSource) {
@@ -461,6 +562,10 @@ public class PathSelectionActivity extends AppCompatActivity {
                                 Intent intent = new Intent(PathSelectionActivity.this, RouteOptionsActivity.class);
                                 intent.putExtra(EXTRA_ROUTE_JSON_PATH, path);
                                 intent.putExtra(com.example.walking_meditation.nav.Extras.EXTRA_CONTEXT, context);
+                                intent.putExtra(
+                                        com.example.walking_meditation.nav.Extras.EXTRA_STUDY_PARAMETERS,
+                                        participatingInStudy ? studyParameters : ""
+                                );
                                 intent.putExtra(com.example.walking_meditation.nav.Extras.EXTRA_TOTAL_TRAVEL_SECONDS, totalTravelSeconds);
                                 startActivity(intent);
                             } catch (IOException ioe) {

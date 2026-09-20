@@ -111,6 +111,7 @@ class ScriptWithParkRequest(BaseModel):
     park_time: int = Field(..., ge=0, le=14_400)
     park_to_destination_time: int = Field(..., ge=0, le=14_400)
     context: str = Field(..., min_length=1, max_length=1_000)
+    study_parameters: str = Field(default="", max_length=10_000)
 
 class ScriptWithParkResponse(BaseModel):
     script: str
@@ -120,6 +121,7 @@ class ScriptWithoutParkRequest(BaseModel):
     destination: LatLng
     total_walking_time: int = Field(..., ge=0, le=14_400)
     context: str = Field(..., min_length=1, max_length=1_000)
+    study_parameters: str = Field(default="", max_length=10_000)
 
 class ScriptWithoutParkResponse(BaseModel):
     script: str
@@ -273,7 +275,9 @@ class StudyResponse(BaseModel):
     id: UUID
     name: str
     duration: int
+    description: str
     status: str
+    script_generation_parameters: str
 
 class ConsentFormResponse(BaseModel):
     study_id: UUID
@@ -335,11 +339,19 @@ class MyStudyResponse(BaseModel):
     study_id: UUID
     name: str
     duration: int
+    description: str
     status: str
     study_group: str
     registered_at: datetime
     consented_at: datetime
     withdrawn_at: datetime | None
+
+
+class CurrentStudyScriptParametersResponse(BaseModel):
+    participating: bool
+    study_id: UUID | None = None
+    study_status: str | None = None
+    script_generation_parameters: str = ""
 
 
 class MyStudiesResponse(BaseModel):

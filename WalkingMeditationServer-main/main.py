@@ -135,7 +135,8 @@ async def generate_script_w_park(
                 payload.to_park_time,
                 payload.park_time,
                 payload.park_to_destination_time,
-                payload.context
+                payload.context,
+                payload.study_parameters,
             )
 
         return {
@@ -157,7 +158,8 @@ async def generate_script_wo_park(
                 payload.source,
                 payload.destination,
                 payload.total_walking_time,
-                payload.context
+                payload.context,
+                payload.study_parameters,
             )
 
         return {

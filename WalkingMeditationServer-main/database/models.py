@@ -168,6 +168,18 @@ class Study(Base):
     )
     name: Mapped[str] = mapped_column(Text, nullable=False)
     duration: Mapped[int] = mapped_column(nullable=False)
+    description: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        server_default=text("''"),
+    )
+    script_generation_parameters: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        server_default=text("''"),
+    )
     status: Mapped[StudyStatus] = mapped_column(
         SqlEnum(
             StudyStatus,
