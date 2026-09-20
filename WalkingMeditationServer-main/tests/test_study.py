@@ -37,6 +37,7 @@ from route.studies import (
     get_study_status,
     join_study,
     leave_study,
+    list_my_studies,
     list_studies,
     publish_study,
     set_question,
@@ -409,6 +410,77 @@ class ListStudiesTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(0, len(response.studies))
 
+class ListMyStudiesTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.session = MagicMock()
+        self.session.execute = AsyncMock()
+        self.user = User(
+            id=uuid4(),
+            email="participant@example.com",
+            password_hash="hash",
+            role=Role.PARTICIPANT,
+        )
+
+    async def test_returns_registered_studies(self):
+        study = Study(
+            id=uuid4(),
+            name="Morning walks",
+            duration=14,
+            status=StudyStatus.RECRUITING,
+        )
+        registration = StudyRegistration(
+            user_id=self.user.id,
+            study_id=study.id,
+            registered_at=datetime.now(timezone.utc),
+            consented_at=datetime.now(timezone.utc),
+            withdrawn_at=None,
+            study_group=StudyGroup.CONTROL,
+        )
+        result_mock = MagicMock()
+        result_mock.all.return_value = [(registration, study)]
+        self.session.execute.return_value = result_mock
+
+        response = await list_my_studies(self.user, self.session)
+
+        self.assertEqual(1, len(response.studies))
+        self.assertEqual(study.id, response.studies[0].study_id)
+        self.assertEqual("Morning walks", response.studies[0].name)
+        self.assertEqual("recruiting", response.studies[0].status)
+        self.assertEqual("control", response.studies[0].study_group)
+        self.assertIsNone(response.studies[0].withdrawn_at)
+
+    async def test_returns_empty_list_when_no_registrations(self):
+        result_mock = MagicMock()
+        result_mock.all.return_value = []
+        self.session.execute.return_value = result_mock
+
+        response = await list_my_studies(self.user, self.session)
+
+        self.assertEqual(0, len(response.studies))
+
+    async def test_includes_withdrawn_registrations(self):
+        study = Study(
+            id=uuid4(),
+            name="Evening walks",
+            duration=7,
+            status=StudyStatus.CLOSED,
+        )
+        registration = StudyRegistration(
+            user_id=self.user.id,
+            study_id=study.id,
+            registered_at=datetime.now(timezone.utc) - timedelta(days=10),
+            consented_at=datetime.now(timezone.utc) - timedelta(days=10),
+            withdrawn_at=datetime.now(timezone.utc) - timedelta(days=1),
+            study_group=StudyGroup.EXPERIMENTAL,
+        )
+        result_mock = MagicMock()
+        result_mock.all.return_value = [(registration, study)]
+        self.session.execute.return_value = result_mock
+
+        response = await list_my_studies(self.user, self.session)
+
+        self.assertEqual(1, len(response.studies))
+        self.assertIsNotNone(response.studies[0].withdrawn_at)
 
 class GetStudyTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
