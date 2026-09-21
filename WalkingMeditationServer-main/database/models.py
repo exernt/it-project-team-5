@@ -4,6 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import Boolean, CheckConstraint, DateTime, Text, UniqueConstraint, Uuid, func, text, ForeignKey
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -22,7 +23,13 @@ class User(Base):
     """Authentication identity stored by the server."""
 
     __tablename__ = "users"
-    __table_args__ = (UniqueConstraint("email", name="uq_users_email"),)
+    __table_args__ = (
+        UniqueConstraint("email", name="uq_users_email"),
+        CheckConstraint(
+            "age IS NULL OR (age >= 0 AND age <= 150)",
+            name="ck_users_age_range",
+        ),
+    )
 
     id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True),
@@ -31,6 +38,8 @@ class User(Base):
     )
     email: Mapped[str] = mapped_column(Text, nullable=False)
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    gender: Mapped[str | None] = mapped_column(Text, nullable=True)
+    age: Mapped[int | None] = mapped_column(nullable=True)
     role: Mapped[Role] = mapped_column(
         SqlEnum(
             Role,
@@ -133,6 +142,17 @@ class ResearcherProfile(Base):
         server_default=func.now(),
     )
 
+class StudyStatus(str, enum.Enum):
+    DRAFT = "draft"
+    RECRUITING = "recruiting"
+    ACTIVE = "active"
+    CLOSED = "closed"
+
+
+class StudyGroup(str, enum.Enum):
+    CONTROL = "control"
+    EXPERIMENTAL = "experimental"
+
 
 class Study(Base):
     """A researcher-created walking meditation study."""
@@ -149,8 +169,28 @@ class Study(Base):
     )
     name: Mapped[str] = mapped_column(Text, nullable=False)
     duration: Mapped[int] = mapped_column(nullable=False)
-
-
+    description: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        server_default=text("''"),
+    )
+    script_generation_parameters: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        server_default=text("''"),
+    )
+    status: Mapped[StudyStatus] = mapped_column(
+        SqlEnum(
+            StudyStatus,
+            name="study_status",
+            native_enum=True,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
+        server_default=text("'draft'::study_status"),
+    )
 class StudyRegistration(Base):
     """Connect a user to a study they have joined."""
 
@@ -171,6 +211,23 @@ class StudyRegistration(Base):
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
+    )
+    consented_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    withdrawn_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    study_group: Mapped[StudyGroup] = mapped_column(
+        SqlEnum(
+            StudyGroup,
+            name="study_group",
+            native_enum=True,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
     )
 
 
@@ -196,6 +253,104 @@ class StudyCreatedBy(Base):
         server_default=func.now(),
     )
 
+class ConsentForm(Base):
+    """Placeholder consent text shown to a participant before joining a study.
+
+    Content is a placeholder until the client specifies what consent should
+    actually cover — the mechanism (record that consent was given, when)
+    is real; the wording is not final.
+    """
+
+    __tablename__ = "consent_form"
+
+    study_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("study.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    body_text: Mapped[str] = mapped_column(Text, nullable=False)
+    version: Mapped[int] = mapped_column(nullable=False, server_default=text("1"))
+
+
+class Questionnaire(Base):
+    """A JSON questionnaire belonging to a study.
+
+    The payload remains intentionally unstructured while the questionnaire
+    format is being designed. IDs are allocated sequentially within a study.
+    """
+
+    __tablename__ = "questionnaires"
+    __table_args__ = (
+        CheckConstraint("id > 0", name="ck_questionnaires_id_positive"),
+    )
+
+    study_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("study.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    data: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    created_on: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+class FeedbackCategory(str, enum.Enum):
+    GENERAL = "general"
+    STUDY = "study"
+    TECHNICAL = "technical"
+
+
+class Feedback(Base):
+    """Participant-submitted feedback, optionally tied to a study."""
+
+    __tablename__ = "feedback"
+    __table_args__ = (
+        CheckConstraint(
+            "rating IS NULL OR (rating >= 1 AND rating <= 5)",
+            name="ck_feedback_rating_range",
+        ),
+        CheckConstraint(
+            "rating IS NOT NULL OR comment IS NOT NULL",
+            name="ck_feedback_not_empty",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    study_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("study.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    category: Mapped[FeedbackCategory] = mapped_column(
+        SqlEnum(
+            FeedbackCategory,
+            name="feedback_category",
+            native_enum=True,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
+    )
+    rating: Mapped[int | None] = mapped_column(nullable=True)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
 class QuestionnaireStatus(str, enum.Enum):
     DRAFT = "draft"
     PUBLISHED = "published"

@@ -126,9 +126,15 @@ The server exposes account and session endpoints under `/auth`:
 | `POST /auth/register-researcher` | Upgrade the logged-in account to a researcher account pending admin verification |
 | `POST /auth/admin/researchers/{user_id}/verify` | Verify a researcher account (admin only) |
 
-This is separate from the `APP_API_TOKEN`/`X-App-Token` mechanism described in the Android setup section above — `X-App-Token` is a single shared secret gating access to the app's own routing/script/narration endpoints, unrelated to which user is logged in. Bearer login is currently used for researcher registration, admin verification, and study creation; the routing/script/narration endpoints are not associated with a logged-in user.
+This is separate from the `APP_API_TOKEN`/`X-App-Token` mechanism described in the Android setup section above — `X-App-Token` is a single shared secret gating access to the app's own routing/script/narration endpoints. Bearer login is also used to determine whether the current participant has study-controlled meditation settings.
 
 Details, worked PowerShell examples, and manual test steps for each of these live in `READList/`.
+
+Account registration also accepts optional `gender` and `age` fields. Gender is
+a self-described string of up to 100 characters, and age must be between 0 and
+150. Existing clients may continue sending only email and password.
+
+## Studies
 
 Verified researchers can create studies with `POST /studies`. The request body
 contains a non-empty `name` and a positive integer `duration` in days. This
@@ -141,10 +147,141 @@ endpoint requires the JWT access token returned by `/auth/login`:
 }
 ```
 
+A newly created study starts in `draft` status, and a placeholder consent form
+is created automatically alongside it.
+
+The study owner can edit its name, duration, or meditation script-generation
+parameters with
+`POST /studies/{study_id}/edit`. The request names one editable column and its
+new value. The value must use the column's JSON type (`name` and
+`script_generation_parameters` are strings, while `duration` is a positive
+integer):
+
+```json
+{
+  "column": "duration",
+  "value": 21
+}
+```
+
+For example, a researcher can provide instructions that are added to every
+meditation generated for current participants:
+
+```json
+{
+  "column": "script_generation_parameters",
+  "value": "Use short sentences and emphasize gratitude throughout."
+}
+```
+
+Study IDs cannot be changed, and status changes must use the dedicated study
+lifecycle endpoints below.
+
+### Browsing studies
+
+Any logged-in user can list studies with `GET /studies`, optionally filtered
+by status, e.g. `GET /studies?status=recruiting`. A single study can be
+retrieved with `GET /studies/{study_id}`.
+
+### Study lifecycle
+
+A study starts in `draft` and is not joinable until its owner publishes it.
+The study owner moves it through its lifecycle with:
+
+- `POST /studies/{study_id}/publish` — `draft` → `recruiting`
+- `POST /studies/{study_id}/activate` — `recruiting` → `active`
+- `POST /studies/{study_id}/close` — `recruiting` or `active` → `closed`
+
+Each of these rejects the request with a conflict if the study isn't in the
+expected starting status. Only the study's owner can call these — any other
+user, including other verified researchers, is rejected.
+
+### Consent
+
+Every study has a consent form, created automatically alongside it. Any
+logged-in user can view it before deciding whether to join:
+
+`GET /studies/{study_id}/consent-form`
+
+```json
+{
+  "study_id": "00000000-0000-0000-0000-000000000001",
+  "body_text": "Placeholder consent text — to be finalized.",
+  "version": 1
+}
+```
+
+The consent text is currently a placeholder pending the actual wording; the
+`agrees_to_consent` requirement on joining (below) is enforced regardless.
+
+### Joining, leaving, and rejoining
+
 Any logged-in user can join an existing study with
 `POST /studies/{study_id}/join`. The server derives the user ID from the bearer
-access token; the request has no body. A user can register for each study only
-once.
+access token. The request confirms consent with
+`{"agrees_to_consent": true}`. Joining only succeeds while the study is
+`recruiting` or `active`; a study that hasn't been published yet, or has been
+closed, rejects the join with a conflict. A user can participate in only one
+recruiting or active study at a time. They must withdraw from that study, or
+wait until it is closed, before joining another. On first registration, the
+server assigns the participant to the smaller of the study's control and
+experimental groups, choosing control when the groups are tied.
+
+A participant can withdraw from a study they've joined with
+`POST /studies/{study_id}/leave`. This records a withdrawal timestamp rather
+than deleting the registration; leaving a study twice, or leaving one you were
+never registered for, is rejected. Sending another `join` request for the same
+study afterward reactivates the existing registration rather than creating a
+new one — the participant's original group assignment is preserved.
+
+The Android app checks `GET /studies/current-script-parameters` before route
+selection. The endpoint returns the most recently joined, non-withdrawn study
+whose status is `recruiting` or `active`. Its parameters are cached locally and
+included in subsequent meditation-generation prompts. A closed study or a
+withdrawal causes the endpoint to return `participating: false`, restoring the
+normal meditation-purpose input.
+
+### Groups and questionnaires
+
+The verified study owner can retrieve the current active groups with
+`POST /studies/{study_id}/getstatus`. Each participant entry contains the user
+ID and the optional demographics stored on that account:
+
+```json
+{
+  "name": "Two-week walking meditation",
+  "duration": 14,
+  "groups": {
+    "control": [
+      {"user_id": "00000000-0000-0000-0000-000000000001", "gender": "woman", "age": 28}
+    ],
+    "experimental": []
+  }
+}
+```
+
+The owner can move any registered user to another configured group with
+`POST /studies/{study_id}/swapgroup`:
+
+```json
+{
+  "user_id": "00000000-0000-0000-0000-000000000001",
+  "target_group": "experimental"
+}
+```
+
+The study owner can add a questionnaire with
+`POST /studies/{study_id}/setquestion`. Questionnaire IDs start at 1 and
+increment independently within each study. The temporary request format is:
+
+```json
+{
+  "title": "Weekly check-in"
+}
+```
+
+The questionnaire is stored as JSON so the payload can be expanded once its
+final format is decided.
 
 ## Server tests
 

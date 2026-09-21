@@ -11,6 +11,7 @@ from typing import Any, Optional
 from contextlib import asynccontextmanager
 
 from route.auth import router as auth_router
+from route.feedback import router as feedback_router
 from route.studies import router as studies_router
 from route.services.generate_script import generate_script_with_park, generate_script_without_park
 from route.services.get_route import generate_walk_route
@@ -77,6 +78,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.include_router(auth_router)
 app.include_router(studies_router)
+app.include_router(feedback_router)
 
 @app.get("/")
 def read_root():
@@ -135,7 +137,8 @@ async def generate_script_w_park(
                 payload.to_park_time,
                 payload.park_time,
                 payload.park_to_destination_time,
-                payload.context
+                payload.context,
+                payload.study_parameters,
             )
 
         return {
@@ -157,7 +160,8 @@ async def generate_script_wo_park(
                 payload.source,
                 payload.destination,
                 payload.total_walking_time,
-                payload.context
+                payload.context,
+                payload.study_parameters,
             )
 
         return {

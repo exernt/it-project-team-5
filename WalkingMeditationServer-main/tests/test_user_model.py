@@ -2,7 +2,7 @@ import os
 import unittest
 from uuid import UUID, uuid4
 
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import CheckConstraint, UniqueConstraint
 from sqlalchemy.exc import IntegrityError
 
 from database.core import create_configured_database
@@ -15,18 +15,36 @@ class UserModelTests(unittest.TestCase):
 
         self.assertEqual("users", table.name)
         self.assertEqual(
-            {"id", "email", "password_hash", "role", "email_verified", "created_on"},
+            {
+                "id",
+                "email",
+                "password_hash",
+                "gender",
+                "age",
+                "role",
+                "email_verified",
+                "created_on",
+            },
             set(table.columns.keys()),
         )
         self.assertTrue(table.c.id.primary_key)
         self.assertFalse(table.c.email.nullable)
         self.assertFalse(table.c.password_hash.nullable)
+        self.assertTrue(table.c.gender.nullable)
+        self.assertTrue(table.c.age.nullable)
         self.assertFalse(table.c.email_verified.nullable)
         self.assertFalse(table.c.created_on.nullable)
         self.assertTrue(
             any(
                 isinstance(constraint, UniqueConstraint)
                 and constraint.name == "uq_users_email"
+                for constraint in table.constraints
+            )
+        )
+        self.assertTrue(
+            any(
+                isinstance(constraint, CheckConstraint)
+                and constraint.name == "ck_users_age_range"
                 for constraint in table.constraints
             )
         )

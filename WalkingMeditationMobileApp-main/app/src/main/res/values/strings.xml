@@ -1,5 +1,41 @@
 <resources>
     <string name="app_name">My Application</string>
+    <string name="manage_study">Manage Study</string>
+    <string name="checking_study_status">Checking study…</string>
+    <string name="study_unenrolled_message">You currently aren\'t enrolled in a study!</string>
+    <string name="view_open_studies">View open studies</string>
+    <string name="study_listing_title">Study Listing</string>
+    <string name="loading_studies">Loading open studies…</string>
+    <string name="no_open_studies">There are no open studies right now.</string>
+    <string name="study_list_error">Unable to load studies.</string>
+    <string name="study_details_title">Study Details</string>
+    <string name="study_details_error">Unable to load study details.</string>
+    <string name="study_description_heading">Description</string>
+    <string name="study_description_empty">No description has been provided.</string>
+    <string name="back">Back</string>
+    <string name="join_study">Join</string>
+    <string name="joining_study">Joining…</string>
+    <string name="study_user_manage_title">Manage Study</string>
+    <string name="current_study_heading">Current Study</string>
+    <string name="study_remaining_duration">Remaining duration: %1$s, %2$s</string>
+    <plurals name="study_remaining_weeks">
+        <item quantity="one">%d week</item>
+        <item quantity="other">%d weeks</item>
+    </plurals>
+    <plurals name="study_remaining_days">
+        <item quantity="one">%d day</item>
+        <item quantity="other">%d days</item>
+    </plurals>
+    <string name="start_meditation">Start Meditation</string>
+    <string name="loading_study_settings">Loading study settings…</string>
+    <string name="questionnaire">Questionnaire</string>
+    <string name="leave_study">Leave Study</string>
+    <string name="leaving_study">Leaving…</string>
+    <string name="current_study_error">Unable to load your current study.</string>
+    <plurals name="study_duration_days">
+        <item quantity="one">Duration: %d day</item>
+        <item quantity="other">Duration: %d days</item>
+    </plurals>
     <!-- Strings used for fragments for navigation -->
     <string name="first_fragment_label">First Fragment</string>
     <string name="second_fragment_label">Second Fragment</string>

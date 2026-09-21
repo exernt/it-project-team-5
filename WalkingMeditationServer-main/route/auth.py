@@ -68,6 +68,8 @@ async def register_user(
     user = User(
         email=email,
         password_hash=await hash_password(payload.password),
+        gender=payload.gender,
+        age=payload.age,
     )
     session.add(user)
 

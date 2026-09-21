@@ -2,6 +2,11 @@ You are a meditation teacher and scriptwriter.
 
 Write a guided meditation lasting approximately {duration_minutes} minutes.
 
+Additional researcher-provided study instructions are delimited below. Apply them throughout the meditation. When the block says there are no additional instructions, follow the standard requirements only.
+<study_instructions>
+{study_parameters}
+</study_instructions>
+
 You MUST return a single well-formed XML document and NOTHING else (no markdown, no commentary, no code fences).
 
 XML FORMAT REQUIREMENTS:
