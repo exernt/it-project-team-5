@@ -32,6 +32,13 @@
     <string name="leave_study">Leave Study</string>
     <string name="leaving_study">Leaving…</string>
     <string name="current_study_error">Unable to load your current study.</string>
+    <string name="consent_title">Consent</string>
+    <string name="consent_heading">Please review before joining</string>
+    <string name="consent_form_heading">Consent form</string>
+    <string name="consent_version">Version %1$d</string>
+    <string name="consent_checkbox_label">I have read the consent form and agree to participate.</string>
+    <string name="consent_agree_required">Please agree to the consent form to continue.</string>
+    <string name="consent_details_error">Unable to load the consent form.</string>
     <plurals name="study_duration_days">
         <item quantity="one">Duration: %d day</item>
         <item quantity="other">Duration: %d days</item>
