@@ -28,7 +28,6 @@ from database.core import DatabaseSessionDependency
 from database.models import (
     ConsentForm,
     Feedback,
-    Questionnaire,
     Study,
     StudyCreatedBy,
     StudyGroup,
