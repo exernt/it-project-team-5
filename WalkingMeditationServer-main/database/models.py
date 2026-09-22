@@ -410,8 +410,8 @@ class StudyQuestionnaire(Base):
         DateTime(timezone=True),
         nullable=True,
     )
- 
- 
+
+
 class QuestionnaireResponse(Base):
     """A single respondent's submitted answers, scoped to a specific
     study's issuance of a questionnaire (not the questionnaire directly --
