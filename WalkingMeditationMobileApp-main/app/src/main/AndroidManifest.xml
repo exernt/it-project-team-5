@@ -62,6 +62,9 @@
             android:exported="false" />
         <activity android:name=".PathSelectionActivity"
             android:exported="false"/>
+        <activity
+            android:name=".StudyConsentActivity"
+            android:exported="false" />
 
         <!-- Google Maps / Places API Key -->
         <meta-data
