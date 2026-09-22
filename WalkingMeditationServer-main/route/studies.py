@@ -31,6 +31,7 @@ from database.models import (
     ConsentForm,
     Feedback,
     Questionnaire,
+    Role,
     Study,
     StudyCreatedBy,
     StudyGroup,
@@ -219,25 +220,30 @@ async def join_study(
     response_model=StudyListResponse,
 )
 async def list_studies(
-        _user: CurrentUserDependency,
+        user: CurrentUserDependency,
         session: DatabaseSessionDependency,
         status_filter: StudyStatus | None = Query(default=None, alias="status"),
+        owner: str | None = Query(default=None),
 ) -> StudyListResponse:
     query = select(Study)
+
+    if owner == "me":
+        if user.role != Role.RESEARCHER:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only researchers can filter studies by ownership",
+            )
+        query = query.join(StudyCreatedBy, StudyCreatedBy.study_id == Study.id).where(
+            StudyCreatedBy.researcher_id == user.id
+        )
+
     if status_filter is not None:
         query = query.where(Study.status == status_filter)
 
     studies = await session.scalars(query)
     return StudyListResponse(
         studies=[
-            StudyResponse(
-                id=s.id,
-                name=s.name,
-                duration=s.duration,
-                description=s.description or "",
-                status=s.status.value,
-                script_generation_parameters=s.script_generation_parameters or "",
-            )
+            StudyResponse(id=s.id, name=s.name, duration=s.duration, status=s.status.value)
             for s in studies
         ]
     )
