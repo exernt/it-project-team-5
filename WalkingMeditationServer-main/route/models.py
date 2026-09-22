@@ -390,3 +390,10 @@ class FeedbackResponse(BaseModel):
 
 class FeedbackListResponse(BaseModel):
     feedback: list[FeedbackResponse]
+
+class CurrentUserResponse(BaseModel):
+    user_id: UUID
+    email: str
+    role: str
+    institution: str | None = None
+    verified_at: datetime | None = None
