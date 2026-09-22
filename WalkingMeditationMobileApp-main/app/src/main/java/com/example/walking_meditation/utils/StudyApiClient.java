@@ -61,6 +61,11 @@ public final class StudyApiClient {
         void fail(@NonNull String message);
     }
 
+    public interface ConsentFormListener {
+        void onLoaded(@NonNull String bodyText, int version);
+        void onFailure(@NonNull String message);
+    }
+
     private StudyApiClient() {}
 
     public static void fetchOpenStudies(
@@ -126,11 +131,12 @@ public final class StudyApiClient {
             @NonNull Context context,
             @NonNull OkHttpClient client,
             @NonNull String studyId,
+            boolean agreesToConsent,
             @NonNull JoinListener listener
     ) {
         try {
             JSONObject payload = new JSONObject();
-            payload.put("agrees_to_consent", true);
+            payload.put("agrees_to_consent", agreesToConsent);
             executeAuthenticatedRequest(
                     context.getApplicationContext(),
                     client,
@@ -221,6 +227,33 @@ public final class StudyApiClient {
                     @Override
                     public void handle(@NonNull String responseBody) {
                         listener.onLeft();
+                    }
+
+                    @Override
+                    public void fail(@NonNull String message) {
+                        listener.onFailure(message);
+                    }
+                }
+        );
+    }
+
+    public static void fetchConsentForm(
+            @NonNull Context context,
+            @NonNull OkHttpClient client,
+            @NonNull String studyId,
+            @NonNull ConsentFormListener listener
+    ) {
+        executeAuthenticatedRequest(
+                context.getApplicationContext(),
+                client,
+                STUDIES_URL + "/" + studyId + "/consent-form",
+                null,
+                true,
+                new ResponseHandler() {
+                    @Override
+                    public void handle(@NonNull String responseBody) throws Exception {
+                        JSONObject item = new JSONObject(responseBody);
+                        listener.onLoaded(item.getString("body_text"), item.getInt("version"));
                     }
 
                     @Override
