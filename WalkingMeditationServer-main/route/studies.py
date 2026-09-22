@@ -16,8 +16,6 @@ from route.models import (
     JoinStudyRequest,
     MyStudiesResponse,
     MyStudyResponse,
-    QuestionnaireResponse,
-    SetQuestionRequest,
     StudyGroupAssignmentResponse,
     StudyListResponse,
     StudyParticipantStatusResponse,
