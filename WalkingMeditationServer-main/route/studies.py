@@ -243,7 +243,14 @@ async def list_studies(
     studies = await session.scalars(query)
     return StudyListResponse(
         studies=[
-            StudyResponse(id=s.id, name=s.name, duration=s.duration, status=s.status.value)
+            StudyResponse(
+                id=s.id,
+                name=s.name,
+                duration=s.duration,
+                description=s.description,
+                status=s.status.value,
+                script_generation_parameters=s.script_generation_parameters,
+            )
             for s in studies
         ]
     )
