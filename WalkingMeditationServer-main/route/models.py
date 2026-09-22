@@ -288,16 +288,44 @@ class JoinStudyRequest(BaseModel):
     agrees_to_consent: bool
 
 
-class SetQuestionRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    title: str
-
-
-class QuestionnaireResponse(BaseModel):
-    id: int
+class IssueQuestionnaireRequest(BaseModel):
+    questionnaire_id: UUID
+ 
+ 
+class StudyQuestionnaireResponse(BaseModel):
+    id: UUID
     study_id: UUID
-    data: dict[str, object]
+    questionnaire_id: UUID
+    issued_at: datetime
+    revoked_at: datetime | None
+ 
+ 
+class StudyQuestionnaireListResponse(BaseModel):
+    issued_questionnaires: list[StudyQuestionnaireResponse]
+ 
+ 
+class SubmitAnswersRequest(BaseModel):
+    answers: dict[str, object]
+ 
+ 
+class QuestionnaireAnswerResponse(BaseModel):
+    id: UUID
+    study_questionnaire_id: UUID
+    respondent_id: UUID | None
+    answers: dict[str, object]
+    submitted_on: datetime
+ 
+ 
+class QuestionnaireAnswerListResponse(BaseModel):
+    responses: list[QuestionnaireAnswerResponse]
+ 
+ 
+# Note on naming: QuestionnaireAnswerResponse / QuestionnaireAnswerListResponse
+# (not "QuestionnaireResponse") is deliberate -- database.models already has
+# a SQLAlchemy model called QuestionnaireResponse (the submitted-answers
+# table). study_questionnaires_route.py imports from both route.models and
+# database.models in the same file; reusing the name here would mean
+# whichever import runs second silently shadows the other.
 
 
 class StudyRegistrationResponse(BaseModel):
