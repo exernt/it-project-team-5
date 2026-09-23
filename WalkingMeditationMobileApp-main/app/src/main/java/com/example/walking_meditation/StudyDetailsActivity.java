@@ -64,7 +64,7 @@ public class StudyDetailsActivity extends AppCompatActivity {
         joinButton = findViewById(R.id.btnJoinStudy);
 
         findViewById(R.id.btnStudyBack).setOnClickListener(view -> returnToStudyList());
-        joinButton.setOnClickListener(view -> joinStudy());
+        joinButton.setOnClickListener(view -> openConsent());
 
         Intent intent = getIntent();
         String requestedStudyId = intent.getStringExtra(EXTRA_STUDY_ID);
@@ -107,36 +107,16 @@ public class StudyDetailsActivity extends AppCompatActivity {
         });
     }
 
-    private void joinStudy() {
+    private void openConsent() {
         if (studyId.isEmpty()) {
             return;
         }
-        joinButton.setEnabled(false);
-        joinButton.setText(R.string.joining_study);
-        StudyApiClient.joinStudy(this, httpClient, studyId, new StudyApiClient.JoinListener() {
-            @Override
-            public void onJoined() {
-                runOnUiThread(() -> {
-                    SessionManager.clearStudyConfiguration(StudyDetailsActivity.this);
-                    startActivity(new Intent(
-                            StudyDetailsActivity.this,
-                            StudyUserManageActivity.class
-                    ));
-                    finish();
-                });
-            }
-
-            @Override
-            public void onFailure(@NonNull String error) {
-                runOnUiThread(() -> {
-                    joinButton.setEnabled(true);
-                    joinButton.setText(R.string.join_study);
-                    Toast.makeText(StudyDetailsActivity.this, error, Toast.LENGTH_LONG).show();
-                });
-            }
-        });
+        startActivity(StudyConsentActivity.createIntent(
+                this,
+                studyId,
+                nameView.getText().toString()
+        ));
     }
-
     private void returnToStudyList() {
         Intent intent = new Intent(this, StudyViewListActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);

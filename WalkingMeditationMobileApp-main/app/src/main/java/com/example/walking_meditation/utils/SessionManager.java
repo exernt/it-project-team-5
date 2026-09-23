@@ -13,6 +13,8 @@ public final class SessionManager {
     private static final String STUDY_ACTIVE = "study_active";
     private static final String STUDY_ID = "study_id";
     private static final String STUDY_PARAMETERS = "study_script_parameters";
+    private static final String USER_ROLE = "user_role";
+    private static final String RESEARCHER_VERIFIED = "researcher_verified";
 
     private SessionManager() {}
 
@@ -73,5 +75,26 @@ public final class SessionManager {
     @NonNull
     public static String getStudyParameters(@NonNull Context context) {
         return preferences(context).getString(STUDY_PARAMETERS, "");
+    }
+    
+    public static void saveUserInfo(
+            @NonNull Context context,
+            @NonNull String role,
+            boolean researcherVerified
+    ) {
+        preferences(context).edit()
+                .putString(USER_ROLE, role)
+                .putBoolean(RESEARCHER_VERIFIED, researcherVerified)
+                .apply();
+    }
+
+    @NonNull
+    public static String getUserRole(@NonNull Context context) {
+        return preferences(context).getString(USER_ROLE, "");
+    }
+
+    public static boolean isVerifiedResearcher(@NonNull Context context) {
+        return "researcher".equals(getUserRole(context))
+                && preferences(context).getBoolean(RESEARCHER_VERIFIED, false);
     }
 }

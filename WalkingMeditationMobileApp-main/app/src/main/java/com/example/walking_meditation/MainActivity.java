@@ -2,6 +2,7 @@ package com.example.walking_meditation;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
 
@@ -15,7 +16,7 @@ import okhttp3.OkHttpClient;
 
 public class MainActivity extends AppCompatActivity {
 
-    private Button btnExplore, btnStudy;
+    private Button btnExplore, btnResearcherDashboard, btnStudy;
     private final OkHttpClient httpClient = new OkHttpClient();
 
     @Override
@@ -24,7 +25,16 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         btnExplore = findViewById(R.id.btnExplore);
+        btnResearcherDashboard = findViewById(R.id.btnResearcherDashboard);
         btnStudy = findViewById(R.id.btnStudy);
+
+        if (SessionManager.isVerifiedResearcher(this)) {
+            btnResearcherDashboard.setVisibility(View.VISIBLE);
+            btnResearcherDashboard.setOnClickListener(view -> {
+                Intent intent = new Intent(MainActivity.this, ResearcherStudyListActivity.class);
+                startActivity(intent);
+            });
+        }
 
         btnExplore.setOnClickListener(view -> {
             Intent intent = new Intent(MainActivity.this, PathSelectionActivity.class);

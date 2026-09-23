@@ -28,6 +28,7 @@ from database.core import DatabaseSessionDependency
 from database.models import (
     ConsentForm,
     Feedback,
+    Role,
     Study,
     StudyCreatedBy,
     StudyGroup,
@@ -216,11 +217,23 @@ async def join_study(
     response_model=StudyListResponse,
 )
 async def list_studies(
-        _user: CurrentUserDependency,
+        user: CurrentUserDependency,
         session: DatabaseSessionDependency,
         status_filter: StudyStatus | None = Query(default=None, alias="status"),
+        owner: str | None = Query(default=None),
 ) -> StudyListResponse:
     query = select(Study)
+
+    if owner == "me":
+        if user.role != Role.RESEARCHER:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only researchers can filter studies by ownership",
+            )
+        query = query.join(StudyCreatedBy, StudyCreatedBy.study_id == Study.id).where(
+            StudyCreatedBy.researcher_id == user.id
+        )
+
     if status_filter is not None:
         query = query.where(Study.status == status_filter)
 
@@ -231,9 +244,9 @@ async def list_studies(
                 id=s.id,
                 name=s.name,
                 duration=s.duration,
-                description=s.description or "",
+                description=s.description,
                 status=s.status.value,
-                script_generation_parameters=s.script_generation_parameters or "",
+                script_generation_parameters=s.script_generation_parameters,
             )
             for s in studies
         ]

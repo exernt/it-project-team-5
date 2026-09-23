@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.sql import func
 
 from route.models import (
+    CurrentUserResponse,
     RegisterRequest,
     RegisterResponse,
     PasswordResetRequest,
@@ -332,4 +333,29 @@ async def verify_researcher(
         institution=profile.institution,
         verified_at=profile.verified_at,
         role=user.role.value,
+    )
+
+@router.get(
+    "/me",
+    response_model=CurrentUserResponse,
+)
+async def get_current_user_info(
+        user: CurrentUserDependency,
+        session: DatabaseSessionDependency,
+) -> CurrentUserResponse:
+    institution = None
+    verified_at = None
+
+    if user.role == Role.RESEARCHER:
+        profile = await session.get(ResearcherProfile, user.id)
+        if profile is not None:
+            institution = profile.institution
+            verified_at = profile.verified_at
+
+    return CurrentUserResponse(
+        user_id=user.id,
+        email=user.email,
+        role=user.role.value,
+        institution=institution,
+        verified_at=verified_at,
     )

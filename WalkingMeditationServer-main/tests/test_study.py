@@ -377,8 +377,8 @@ class ListStudiesFilterTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_no_filter_returns_all_studies(self):
         studies = [
-            Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.DRAFT),
-            Study(id=uuid4(), name="Evening walks", duration=7, status=StudyStatus.RECRUITING),
+            Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.DRAFT, description="", script_generation_parameters=""),
+            Study(id=uuid4(), name="Evening walks", duration=7, status=StudyStatus.RECRUITING, description="", script_generation_parameters=""),
         ]
         self.session.scalars.return_value = studies
 
@@ -388,7 +388,7 @@ class ListStudiesFilterTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_filter_by_recruiting_only_matches_recruiting(self):
         recruiting_only = [
-            Study(id=uuid4(), name="Evening walks", duration=7, status=StudyStatus.RECRUITING),
+            Study(id=uuid4(), name="Evening walks", duration=7, status=StudyStatus.RECRUITING, description="", script_generation_parameters=""),
         ]
         self.session.scalars.return_value = recruiting_only
 
@@ -428,12 +428,15 @@ class ListStudiesTests(unittest.IsolatedAsyncioTestCase):
                 duration=14,
                 description="A two-week morning walking study.",
                 status=StudyStatus.RECRUITING,
+                script_generation_parameters="",
             ),
             Study(
                 id=uuid4(),
                 name="Evening walks",
                 duration=7,
+                description="",
                 status=StudyStatus.RECRUITING,
+                script_generation_parameters="",
             ),
         ]
         self.session.scalars.return_value = studies
@@ -1291,7 +1294,55 @@ class ListStudyFeedbackTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(4, response.feedback[0].rating)
         self.assertEqual("study", response.feedback[0].category)
 
+class ListStudiesOwnerFilterTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.session = MagicMock()
+        self.session.scalars = AsyncMock()
+        self.researcher = User(
+            id=uuid4(),
+            email="researcher@example.com",
+            password_hash="hash",
+            role=Role.RESEARCHER,
+        )
+        self.participant = User(
+            id=uuid4(),
+            email="participant@example.com",
+            password_hash="hash",
+            role=Role.PARTICIPANT,
+        )
 
+    async def test_owner_me_returns_researchers_studies(self):
+        owned_study = Study(id=uuid4(), name="My study", duration=14, status=StudyStatus.DRAFT, description="", script_generation_parameters="")
+        self.session.scalars.return_value = [owned_study]
+
+        response = await list_studies(
+            self.researcher, self.session, status_filter=None, owner="me"
+        )
+
+        self.assertEqual(1, len(response.studies))
+        self.assertEqual("My study", response.studies[0].name)
+
+    async def test_participant_cannot_use_owner_me(self):
+        with self.assertRaises(HTTPException) as raised:
+            await list_studies(
+                self.participant, self.session, status_filter=None, owner="me"
+            )
+
+        self.assertEqual(403, raised.exception.status_code)
+        self.session.scalars.assert_not_awaited()
+
+    async def test_no_owner_filter_returns_everything_for_any_role(self):
+        studies = [
+            Study(id=uuid4(), name="Study A", duration=7, status=StudyStatus.RECRUITING, description="", script_generation_parameters=""),
+            Study(id=uuid4(), name="Study B", duration=14, status=StudyStatus.DRAFT, description="", script_generation_parameters=""),
+        ]
+        self.session.scalars.return_value = studies
+
+        response = await list_studies(
+            self.participant, self.session, status_filter=None, owner=None
+        )
+
+        self.assertEqual(2, len(response.studies))
 
 if __name__ == "__main__":
     unittest.main()
