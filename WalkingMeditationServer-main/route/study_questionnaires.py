@@ -112,6 +112,7 @@ async def issue_questionnaire(
             id=uuid4(),
             study_id=study_id,
             questionnaire_id=payload.questionnaire_id,
+            issued_at=datetime.now(timezone.utc),
         )
         session.add(issuance)
         await session.commit()
