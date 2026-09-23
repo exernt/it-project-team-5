@@ -106,6 +106,13 @@
                 android:visibility="gone" />
 
             <Button
+                android:id="@+id/btnResearcherDetailRoster"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/field_height"
+                android:layout_marginTop="@dimen/space_12"
+                android:text="@string/view_roster" />
+
+            <Button
                 android:id="@+id/btnResearcherDetailBack"
                 android:layout_width="match_parent"
                 android:layout_height="@dimen/field_height"
