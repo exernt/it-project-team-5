@@ -65,6 +65,18 @@
         <activity
             android:name=".StudyConsentActivity"
             android:exported="false" />
+        <activity
+            android:name=".ResearcherStudyListActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ResearcherStudyDetailActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ResearcherCreateStudyActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ResearcherRosterActivity"
+            android:exported="false" />
 
         <!-- Google Maps / Places API Key -->
         <meta-data

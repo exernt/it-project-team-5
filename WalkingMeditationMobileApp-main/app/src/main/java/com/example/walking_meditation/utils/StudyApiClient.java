@@ -263,6 +263,162 @@ public final class StudyApiClient {
                 }
         );
     }
+    public static void fetchOwnedStudies(
+            @NonNull Context context,
+            @NonNull OkHttpClient client,
+            @NonNull StudyListListener listener
+    ) {
+        executeAuthenticatedRequest(
+                context.getApplicationContext(),
+                client,
+                STUDIES_URL + "?owner=me",
+                null,
+                true,
+                new ResponseHandler() {
+                    @Override
+                    public void handle(@NonNull String responseBody) throws Exception {
+                        JSONArray items = new JSONObject(responseBody).getJSONArray("studies");
+                        List<Study> owned = new ArrayList<>();
+                        for (int index = 0; index < items.length(); index++) {
+                            owned.add(parseStudy(items.getJSONObject(index)));
+                        }
+                        listener.onLoaded(owned);
+                    }
+
+                    @Override
+                    public void fail(@NonNull String message) {
+                        listener.onFailure(message);
+                    }
+                }
+        );
+    }
+    public static void editStudy(
+            @NonNull Context context,
+            @NonNull OkHttpClient client,
+            @NonNull String studyId,
+            @NonNull String column,
+            @NonNull Object value,
+            @NonNull StudyListener listener
+    ) {
+        try {
+            JSONObject payload = new JSONObject();
+            payload.put("column", column);
+            payload.put("value", value);
+            executeAuthenticatedRequest(
+                    context.getApplicationContext(),
+                    client,
+                    STUDIES_URL + "/" + studyId + "/edit",
+                    payload.toString(),
+                    true,
+                    new ResponseHandler() {
+                        @Override
+                        public void handle(@NonNull String responseBody) throws Exception {
+                            listener.onLoaded(parseStudy(new JSONObject(responseBody)));
+                        }
+
+                        @Override
+                        public void fail(@NonNull String message) {
+                            listener.onFailure(message);
+                        }
+                    }
+            );
+        } catch (Exception e) {
+            listener.onFailure("Unable to prepare the edit request");
+        }
+    }
+
+    public interface LifecycleListener {
+        void onUpdated(@NonNull Study study);
+        void onFailure(@NonNull String message);
+    }
+
+    private static void postLifecycleAction(
+            @NonNull Context context,
+            @NonNull OkHttpClient client,
+            @NonNull String studyId,
+            @NonNull String action,
+            @NonNull LifecycleListener listener
+    ) {
+        executeAuthenticatedRequest(
+                context.getApplicationContext(),
+                client,
+                STUDIES_URL + "/" + studyId + "/" + action,
+                "{}",
+                true,
+                new ResponseHandler() {
+                    @Override
+                    public void handle(@NonNull String responseBody) throws Exception {
+                        listener.onUpdated(parseStudy(new JSONObject(responseBody)));
+                    }
+
+                    @Override
+                    public void fail(@NonNull String message) {
+                        listener.onFailure(message);
+                    }
+                }
+        );
+    }
+
+    public static void publishStudy(
+            @NonNull Context context,
+            @NonNull OkHttpClient client,
+            @NonNull String studyId,
+            @NonNull LifecycleListener listener
+    ) {
+        postLifecycleAction(context, client, studyId, "publish", listener);
+    }
+
+    public static void activateStudy(
+            @NonNull Context context,
+            @NonNull OkHttpClient client,
+            @NonNull String studyId,
+            @NonNull LifecycleListener listener
+    ) {
+        postLifecycleAction(context, client, studyId, "activate", listener);
+    }
+
+    public static void closeStudy(
+            @NonNull Context context,
+            @NonNull OkHttpClient client,
+            @NonNull String studyId,
+            @NonNull LifecycleListener listener
+    ) {
+        postLifecycleAction(context, client, studyId, "close", listener);
+    }
+
+    public static void createStudy(
+            @NonNull Context context,
+            @NonNull OkHttpClient client,
+            @NonNull String name,
+            int duration,
+            @NonNull StudyListener listener
+    ) {
+        try {
+            JSONObject payload = new JSONObject();
+            payload.put("name", name);
+            payload.put("duration", duration);
+            executeAuthenticatedRequest(
+                    context.getApplicationContext(),
+                    client,
+                    STUDIES_URL,
+                    payload.toString(),
+                    true,
+                    new ResponseHandler() {
+                        @Override
+                        public void handle(@NonNull String responseBody) throws Exception {
+                            listener.onLoaded(parseStudy(new JSONObject(responseBody)));
+                        }
+
+                        @Override
+                        public void fail(@NonNull String message) {
+                            listener.onFailure(message);
+                        }
+                    }
+            );
+        } catch (Exception e) {
+            listener.onFailure("Unable to prepare the create request");
+        }
+    }
 
     @NonNull
     private static Study parseStudy(@NonNull JSONObject item) throws Exception {
@@ -395,6 +551,115 @@ public final class StudyApiClient {
             });
         } catch (Exception e) {
             handler.fail(e.getMessage() == null ? "Unable to refresh session" : e.getMessage());
+        }
+    }
+    public static final class ParticipantInfo {
+        public final String userId;
+        public final String gender;
+        public final Integer age;
+
+        public ParticipantInfo(@NonNull String userId, @Nullable String gender, @Nullable Integer age) {
+            this.userId = userId;
+            this.gender = gender;
+            this.age = age;
+        }
+    }
+
+    public interface StudyStatusListener {
+        void onLoaded(
+                @NonNull String name,
+                int duration,
+                @NonNull List<ParticipantInfo> control,
+                @NonNull List<ParticipantInfo> experimental
+        );
+        void onFailure(@NonNull String message);
+    }
+
+    public interface SwapGroupListener {
+        void onSwapped();
+        void onFailure(@NonNull String message);
+    }
+
+    public static void fetchStudyStatus(
+            @NonNull Context context,
+            @NonNull OkHttpClient client,
+            @NonNull String studyId,
+            @NonNull StudyStatusListener listener
+    ) {
+        executeAuthenticatedRequest(
+                context.getApplicationContext(),
+                client,
+                STUDIES_URL + "/" + studyId + "/getstatus",
+                "{}",
+                true,
+                new ResponseHandler() {
+                    @Override
+                    public void handle(@NonNull String responseBody) throws Exception {
+                        JSONObject body = new JSONObject(responseBody);
+                        JSONObject groups = body.getJSONObject("groups");
+                        listener.onLoaded(
+                                body.getString("name"),
+                                body.getInt("duration"),
+                                parseParticipants(groups.optJSONArray("control")),
+                                parseParticipants(groups.optJSONArray("experimental"))
+                        );
+                    }
+
+                    @Override
+                    public void fail(@NonNull String message) {
+                        listener.onFailure(message);
+                    }
+                }
+        );
+    }
+
+    @NonNull
+    private static List<ParticipantInfo> parseParticipants(@Nullable JSONArray items) throws Exception {
+        List<ParticipantInfo> participants = new ArrayList<>();
+        if (items == null) {
+            return participants;
+        }
+        for (int index = 0; index < items.length(); index++) {
+            JSONObject item = items.getJSONObject(index);
+            String gender = item.isNull("gender") ? null : item.getString("gender");
+            Integer age = item.isNull("age") ? null : item.getInt("age");
+            participants.add(new ParticipantInfo(item.getString("user_id"), gender, age));
+        }
+        return participants;
+    }
+
+    public static void swapGroup(
+            @NonNull Context context,
+            @NonNull OkHttpClient client,
+            @NonNull String studyId,
+            @NonNull String userId,
+            @NonNull String targetGroup,
+            @NonNull SwapGroupListener listener
+    ) {
+        try {
+            JSONObject payload = new JSONObject();
+            payload.put("user_id", userId);
+            payload.put("target_group", targetGroup);
+            executeAuthenticatedRequest(
+                    context.getApplicationContext(),
+                    client,
+                    STUDIES_URL + "/" + studyId + "/swapgroup",
+                    payload.toString(),
+                    true,
+                    new ResponseHandler() {
+                        @Override
+                        public void handle(@NonNull String responseBody) {
+                            listener.onSwapped();
+                        }
+
+                        @Override
+                        public void fail(@NonNull String message) {
+                            listener.onFailure(message);
+                        }
+                    }
+            );
+        } catch (Exception e) {
+            listener.onFailure("Unable to prepare the swap request");
         }
     }
 }
