@@ -1,5 +1,6 @@
 package com.example.walking_meditation;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -31,6 +32,10 @@ public class ResearcherStudyListActivity extends AppCompatActivity {
         progress = findViewById(R.id.researcherStudyListProgress);
         message = findViewById(R.id.researcherStudyListMessage);
         studyContainer = findViewById(R.id.researcherStudyListContainer);
+
+        findViewById(R.id.btnNewStudy).setOnClickListener(view -> startActivity(
+                new Intent(this, ResearcherCreateStudyActivity.class)
+        ));
 
         loadOwnedStudies();
     }
