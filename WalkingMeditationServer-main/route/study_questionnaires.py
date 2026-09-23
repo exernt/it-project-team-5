@@ -42,7 +42,7 @@ from database.models import (
 )
 
 # Adjust to wherever validate_response ends up living.
-from questionnaire import validate_response
+from questionnaire.questionnaire import validate_response
 
 
 router = APIRouter(prefix="/studies/{study_id}/questionnaires", tags=["study-questionnaires"])
