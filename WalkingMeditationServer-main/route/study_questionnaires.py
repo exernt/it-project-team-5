@@ -21,6 +21,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from route.dependencies import CurrentUserDependency, StudyOwnerDependency
 from route.models import (
@@ -41,7 +42,7 @@ from database.models import (
 )
 
 # Adjust to wherever validate_response ends up living.
-from questionnaire.questionnaire import validate_response
+from questionnaire import validate_response
 
 
 router = APIRouter(prefix="/studies/{study_id}/questionnaires", tags=["study-questionnaires"])
@@ -75,6 +76,14 @@ def _to_response(issuance: StudyQuestionnaire) -> StudyQuestionnaireResponse:
     )
 
 
+def _reactivate(issuance: StudyQuestionnaire) -> None:
+    """Clear revoked_at and refresh issued_at on an existing row -- shared
+    by both the normal reissue path and the concurrent-insert race path
+    below, since they're the same operation triggered two different ways."""
+    issuance.revoked_at = None
+    issuance.issued_at = datetime.now(timezone.utc)
+
+
 # ---------------------------------------------------------------------------
 # Issuance
 # ---------------------------------------------------------------------------
@@ -103,8 +112,10 @@ async def issue_questionnaire(
     ).scalar_one_or_none()
 
     if existing is not None:
-        existing.revoked_at = None
-        existing.issued_at = datetime.now(timezone.utc)
+        # Reactivate (Option (a)): same row, same id, so every existing
+        # response and every URL a client already has for this issuance
+        # stays valid.
+        _reactivate(existing)
         await session.commit()
         issuance = existing
     else:
@@ -115,7 +126,31 @@ async def issue_questionnaire(
             issued_at=datetime.now(timezone.utc),
         )
         session.add(issuance)
-        await session.commit()
+        try:
+            await session.commit()
+        except IntegrityError:
+            # Two concurrent requests both saw "no existing row" and both
+            # tried to insert one -- the UniqueConstraint on
+            # (study_id, questionnaire_id) let exactly one of them win.
+            # Re-issuing an already-issued pair is meant to be a harmless
+            # reactivation, not a conflict (unlike, e.g., join_study's
+            # duplicate registration case) -- so pick up the winner's row
+            # and reactivate it, rather than surfacing a 409 for what was
+            # only ever a timing accident.
+            await session.rollback()
+            existing = (
+                await session.execute(
+                    select(StudyQuestionnaire).where(
+                        StudyQuestionnaire.study_id == study_id,
+                        StudyQuestionnaire.questionnaire_id == payload.questionnaire_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if existing is None:
+                raise  # genuinely unexpected -- not the race we anticipated
+            _reactivate(existing)
+            await session.commit()
+            issuance = existing
 
     return _to_response(issuance)
 
