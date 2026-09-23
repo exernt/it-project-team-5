@@ -205,7 +205,8 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app",
         host="127.0.0.1",
-        port=8000,
+        port=8443,
         reload=True,
-        reload_excludes=[os.path.join("env", "*")],
+        ssl_certfile="certs/cert.pem",
+        ssl_keyfile="certs/key.pem",
     )

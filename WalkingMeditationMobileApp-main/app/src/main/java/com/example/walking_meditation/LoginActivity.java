@@ -72,7 +72,7 @@ public class LoginActivity extends AppCompatActivity {
         RequestBody body = RequestBody.create(jsonString, jsonMediaType);
 
         Request request = new Request.Builder()
-                .url(BuildConfig.SERVER_BASE_URL + "/auth/login")
+                .url("https://your-api-endpoint.com/login") // placeholder
                 .post(body)
                 .build();
 

@@ -77,6 +77,18 @@
         <activity
             android:name=".ResearcherRosterActivity"
             android:exported="false" />
+        <activity
+            android:name=".PathSelectionActivity"
+            android:exported="false" />
+        <activity
+            android:name=".EmailAuthenticationActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ForgotPasswordActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ResetPasswordActivity"
+            android:exported="false" />
 
         <!-- Google Maps / Places API Key -->
         <meta-data

@@ -14,6 +14,10 @@ gson = "2.13.1"
 activity = "1.8.0"
 recyclerview = "1.4.0"
 playServicesLocation = "21.3.0"
+annotation = "1.6.0"
+activityKtx = "1.8.0"
+lifecycleLivedataKtx = "2.6.1"
+lifecycleViewmodelKtx = "2.6.1"
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -30,6 +34,10 @@ gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
 activity = { group = "androidx.activity", name = "activity", version.ref = "activity" }
 recyclerview = { group = "androidx.recyclerview", name = "recyclerview", version.ref = "recyclerview" }
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
+annotation = { group = "androidx.annotation", name = "annotation", version.ref = "annotation" }
+activity-ktx = { group = "androidx.activity", name = "activity-ktx", version.ref = "activityKtx" }
+lifecycle-livedata-ktx = { group = "androidx.lifecycle", name = "lifecycle-livedata-ktx", version.ref = "lifecycleLivedataKtx" }
+lifecycle-viewmodel-ktx = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-ktx", version.ref = "lifecycleViewmodelKtx" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
