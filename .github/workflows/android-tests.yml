@@ -18,9 +18,6 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Run Android unit tests
         working-directory: WalkingMeditationMobileApp-main
         run: ./gradlew test
