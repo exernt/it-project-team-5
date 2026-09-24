@@ -96,6 +96,13 @@
             android:textColor="@color/white" />
 
         <Button
+            android:id="@+id/btnStudyFeedback"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/field_height"
+            android:layout_marginTop="@dimen/space_8"
+            android:text="@string/give_feedback" />
+
+        <Button
             android:id="@+id/btnLeaveStudy"
             android:layout_width="wrap_content"
             android:layout_height="@dimen/field_height"

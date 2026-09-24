@@ -46,6 +46,13 @@
             android:layout_height="wrap_content"
             android:text="@string/manage_study"/>
 
+        <Button
+            android:id="@+id/btnFeedback"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/give_feedback"/>
+
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
