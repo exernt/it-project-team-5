@@ -16,7 +16,7 @@ import okhttp3.OkHttpClient;
 
 public class MainActivity extends AppCompatActivity {
 
-    private Button btnExplore, btnResearcherDashboard, btnStudy;
+    private Button btnExplore, btnResearcherDashboard, btnStudy, btnFeedback;
     private final OkHttpClient httpClient = new OkHttpClient();
 
     @Override
@@ -27,6 +27,7 @@ public class MainActivity extends AppCompatActivity {
         btnExplore = findViewById(R.id.btnExplore);
         btnResearcherDashboard = findViewById(R.id.btnResearcherDashboard);
         btnStudy = findViewById(R.id.btnStudy);
+        btnFeedback = findViewById(R.id.btnFeedback);
 
         if (SessionManager.isVerifiedResearcher(this)) {
             btnResearcherDashboard.setVisibility(View.VISIBLE);
@@ -42,6 +43,10 @@ public class MainActivity extends AppCompatActivity {
         });
 
         btnStudy.setOnClickListener(view -> openStudyManagement());
+
+        btnFeedback.setOnClickListener(view ->
+                startActivity(new Intent(MainActivity.this, FeedbackActivity.class))
+        );
     }
 
     private void openStudyManagement() {
