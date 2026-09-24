@@ -13,4 +13,6 @@ public final class Extras {
     public static final String EXTRA_AUDIO_PATHS = "audio_paths";
     public static final String EXTRA_AUDIO_LATITUDES = "audio_latitudes";
     public static final String EXTRA_AUDIO_LONGITUDES = "audio_longitudes";
+    public static final String EXTRA_STUDY_ID = "study_id";
+    public static final String EXTRA_STUDY_NAME = "study_name";
 }
