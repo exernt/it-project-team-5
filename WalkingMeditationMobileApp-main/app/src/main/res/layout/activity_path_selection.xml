@@ -58,7 +58,17 @@
             android:hint="For example: prepare for a stressful meeting"
             android:inputType="textCapSentences|textMultiLine"
             android:maxLength="1000"
-            android:layout_marginBottom="@dimen/space_36" />
+            android:layout_marginBottom="@dimen/space_8" />
+
+        <TextView
+            android:id="@+id/tv_study_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/space_36"
+            android:text="Currently participating in study"
+            android:textColor="@color/hint_grey"
+            android:textSize="13sp"
+            android:visibility="gone" />
 
         <Button
             android:id="@+id/btn_find_path"

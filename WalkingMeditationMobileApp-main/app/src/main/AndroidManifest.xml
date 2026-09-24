@@ -39,6 +39,19 @@
         </activity>
 
         <activity
+            android:name=".StudyUnenrolledActivity"
+            android:exported="false" />
+        <activity
+            android:name=".StudyViewListActivity"
+            android:exported="false" />
+        <activity
+            android:name=".StudyDetailsActivity"
+            android:exported="false" />
+        <activity
+            android:name=".StudyUserManageActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".MeditationPlaybackActivity"
             android:exported="false" />
         <activity
@@ -49,6 +62,21 @@
             android:exported="false" />
         <activity android:name=".PathSelectionActivity"
             android:exported="false"/>
+        <activity
+            android:name=".StudyConsentActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ResearcherStudyListActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ResearcherStudyDetailActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ResearcherCreateStudyActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ResearcherRosterActivity"
+            android:exported="false" />
 
         <!-- Google Maps / Places API Key -->
         <meta-data

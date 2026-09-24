@@ -16,4 +16,7 @@
     <color name="hint_grey">#777777</color>
     <color name="input_stroke">#D6E4F0</color>
     <color name="input_fill">#FFFFFF</color>
+    <color name="light_grey_border">#D3D3D3</color>
+    <color name="disabled_grey">#BDBDBD</color>
+    <color name="leave_red">#C62828</color>
 </resources>

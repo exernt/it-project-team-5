@@ -40,6 +40,7 @@ import static com.example.walking_meditation.nav.Extras.EXTRA_ROUTE_JSON_PATH;
 import static com.example.walking_meditation.nav.Extras.EXTRA_CONTEXT;
 import static com.example.walking_meditation.nav.Extras.EXTRA_ROUTE_POLYLINES;
 import static com.example.walking_meditation.nav.Extras.EXTRA_SCRIPT_JSON_PATH;
+import static com.example.walking_meditation.nav.Extras.EXTRA_STUDY_PARAMETERS;
 
 import com.example.walking_meditation.utils.CacheFiles;
 
@@ -76,6 +77,7 @@ public class RouteOptionsActivity extends AppCompatActivity implements RouteOpti
     private volatile boolean isLoading = false;
     private Call inFlightCall;
     private String meditationContext;
+    private String studyParameters;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -90,6 +92,8 @@ public class RouteOptionsActivity extends AppCompatActivity implements RouteOpti
         if (meditationContext == null || meditationContext.trim().isEmpty()) {
             meditationContext = "general wellbeing";
         }
+        studyParameters = getIntent().getStringExtra(EXTRA_STUDY_PARAMETERS);
+        if (studyParameters == null) studyParameters = "";
 
         // Read file path (instead of huge JSON string extra)
         String path = getIntent().getStringExtra(EXTRA_ROUTE_JSON_PATH);
@@ -232,6 +236,7 @@ public class RouteOptionsActivity extends AppCompatActivity implements RouteOpti
             payload.put("destination", dst);
             payload.put("total_walking_time", totalWalkingTime);
             payload.put("context", context);
+            payload.put("study_parameters", studyParameters);
 
             ArrayList<String> polylines = new ArrayList<>();
             if (option.polyline != null && !option.polyline.isEmpty()) polylines.add(option.polyline);
@@ -263,6 +268,7 @@ public class RouteOptionsActivity extends AppCompatActivity implements RouteOpti
             payload.put("destination", dst);
             payload.put("park", park);
             payload.put("context", context);
+            payload.put("study_parameters", studyParameters);
 
             payload.put("to_park_time", parkItem.to_park_s);
             payload.put("park_time", parkItem.slack_s);

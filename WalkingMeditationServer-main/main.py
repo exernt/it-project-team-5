@@ -1,6 +1,5 @@
 import warnings
 import os
-import uvicorn
 import asyncio
 import logging
 import secrets
@@ -11,11 +10,15 @@ from typing import Any, Optional
 from contextlib import asynccontextmanager
 
 from route.auth import router as auth_router
+from route.feedback import router as feedback_router
+from route.questionnaires import router as questionnaires_router
+from route.studies import router as studies_router
+from route.study_questionnaires import router as study_questionnaires_router
 from route.services.generate_script import generate_script_with_park, generate_script_without_park
 from route.services.get_route import generate_walk_route
 from route.models import WalkRouteRequest, WalkRouteResponse, ScriptWithParkRequest, ScriptWithParkResponse
 from route.models import ScriptWithoutParkRequest, ScriptWithoutParkResponse, TTSRequest
-from route.persistence.database import create_configured_database
+from database.core import create_configured_database
 from route.utils.utils import _ensure_ffmpeg
 
 logger = logging.getLogger(__name__)
@@ -75,6 +78,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(auth_router)
+app.include_router(studies_router)
+app.include_router(questionnaires_router)
+app.include_router(study_questionnaires_router)
+app.include_router(feedback_router)
 
 @app.get("/")
 def read_root():
@@ -133,7 +140,8 @@ async def generate_script_w_park(
                 payload.to_park_time,
                 payload.park_time,
                 payload.park_to_destination_time,
-                payload.context
+                payload.context,
+                payload.study_parameters,
             )
 
         return {
@@ -155,7 +163,8 @@ async def generate_script_wo_park(
                 payload.source,
                 payload.destination,
                 payload.total_walking_time,
-                payload.context
+                payload.context,
+                payload.study_parameters,
             )
 
         return {
@@ -196,6 +205,8 @@ async def text_to_speech_endpoint(
 
 
 if __name__ == "__main__":
+    import uvicorn
+
     uvicorn.run(
         "main:app",
         host="127.0.0.1",

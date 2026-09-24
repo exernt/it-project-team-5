@@ -1,16 +1,26 @@
 from typing import List, Literal, Tuple
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 from datetime import datetime
+from uuid import UUID
 
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=1_024)
+    gender: str | None = Field(default=None, min_length=1, max_length=100)
+    age: int | None = Field(default=None, ge=0, le=150)
 
     @field_validator("email", mode="before")
     @classmethod
     def normalize_email(cls, value: object) -> object:
         if isinstance(value, str):
             return value.strip().casefold()
+        return value
+
+    @field_validator("gender", mode="before")
+    @classmethod
+    def normalize_gender(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
         return value
 
 
@@ -101,6 +111,7 @@ class ScriptWithParkRequest(BaseModel):
     park_time: int = Field(..., ge=0, le=14_400)
     park_to_destination_time: int = Field(..., ge=0, le=14_400)
     context: str = Field(..., min_length=1, max_length=1_000)
+    study_parameters: str = Field(default="", max_length=10_000)
 
 class ScriptWithParkResponse(BaseModel):
     script: str
@@ -110,6 +121,7 @@ class ScriptWithoutParkRequest(BaseModel):
     destination: LatLng
     total_walking_time: int = Field(..., ge=0, le=14_400)
     context: str = Field(..., min_length=1, max_length=1_000)
+    study_parameters: str = Field(default="", max_length=10_000)
 
 class ScriptWithoutParkResponse(BaseModel):
     script: str
@@ -238,3 +250,209 @@ class ResearcherProfileResponse(BaseModel):
     institution: str | None
     verified_at: datetime | None
     role: str
+
+
+class CreateStudyRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    duration: int = Field(..., gt=0, description="Study duration in days")
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+
+class EditStudyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    column: str
+    value: object
+
+
+class StudyResponse(BaseModel):
+    id: UUID
+    name: str
+    duration: int
+    description: str
+    status: str
+    script_generation_parameters: str
+
+class ConsentFormResponse(BaseModel):
+    study_id: UUID
+    body_text: str
+    version: int
+
+class JoinStudyRequest(BaseModel):
+    agrees_to_consent: bool
+
+
+class CreateQuestionnaireRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    definition: dict[str, object]
+
+
+class QuestionnaireDefinitionResponse(BaseModel):
+    id: UUID
+    title: str
+    researcher_id: UUID | None
+    status: str
+    definition: dict[str, object]
+    created_on: datetime
+
+
+class QuestionnaireDefinitionListResponse(BaseModel):
+    questionnaires: list[QuestionnaireDefinitionResponse]
+
+
+class IssueQuestionnaireRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    questionnaire_id: UUID
+
+
+class StudyQuestionnaireResponse(BaseModel):
+    id: UUID
+    study_id: UUID
+    questionnaire_id: UUID
+    round_number: int
+    title: str
+    issued_at: datetime
+    revoked_at: datetime | None
+    has_responded: bool | None = None
+
+
+class StudyQuestionnaireListResponse(BaseModel):
+    issued_questionnaires: list[StudyQuestionnaireResponse]
+
+
+class StudyQuestionnaireDetailResponse(StudyQuestionnaireResponse):
+    definition: dict[str, object]
+
+
+class SubmitAnswersRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    answers: dict[str, object]
+
+
+class QuestionnaireAnswerResponse(BaseModel):
+    id: UUID
+    study_questionnaire_id: UUID
+    respondent_id: UUID | None
+    answers: dict[str, object]
+    submitted_on: datetime
+
+
+class QuestionnaireAnswerListResponse(BaseModel):
+    responses: list[QuestionnaireAnswerResponse]
+
+
+# Note on naming: QuestionnaireAnswerResponse / QuestionnaireAnswerListResponse
+# (not "QuestionnaireResponse") is deliberate -- database.models already has
+# a SQLAlchemy model called QuestionnaireResponse (the submitted-answers
+# table). study_questionnaires.py imports from both route.models and
+# database.models in the same file; reusing the name here would mean
+# whichever import runs second silently shadows the other.
+
+
+class StudyRegistrationResponse(BaseModel):
+    user_id: UUID
+    study_id: UUID
+    registered_at: datetime
+    consented_at: datetime
+    withdrawn_at: datetime | None
+
+
+class StudyParticipantStatusResponse(BaseModel):
+    user_id: UUID
+    gender: str | None
+    age: int | None
+
+
+class StudyStatusResponse(BaseModel):
+    name: str
+    duration: int
+    groups: dict[str, list[StudyParticipantStatusResponse]]
+
+
+class SwapStudyGroupRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: UUID
+    target_group: str
+
+
+class StudyGroupAssignmentResponse(BaseModel):
+    study_id: UUID
+    user_id: UUID
+    group: str
+
+class StudyListResponse(BaseModel):
+    studies: list[StudyResponse]
+
+class MyStudyResponse(BaseModel):
+    study_id: UUID
+    name: str
+    duration: int
+    description: str
+    status: str
+    study_group: str
+    registered_at: datetime
+    consented_at: datetime
+    withdrawn_at: datetime | None
+    open_questionnaires: list[StudyQuestionnaireResponse] = Field(default_factory=list)
+
+
+class CurrentStudyScriptParametersResponse(BaseModel):
+    participating: bool
+    study_id: UUID | None = None
+    study_status: str | None = None
+    script_generation_parameters: str = ""
+
+
+class MyStudiesResponse(BaseModel):
+    studies: list[MyStudyResponse]
+
+class SubmitFeedbackRequest(BaseModel):
+    study_id: UUID | None = None
+    category: str
+    rating: int | None = Field(default=None, ge=1, le=5)
+    comment: str | None = None
+
+    @field_validator("category")
+    @classmethod
+    def validate_category(cls, value: str) -> str:
+        allowed = {"general", "study", "technical"}
+        if value not in allowed:
+            raise ValueError(f"category must be one of {sorted(allowed)}")
+        return value
+
+    @model_validator(mode="after")
+    def require_rating_or_comment(self) -> "SubmitFeedbackRequest":
+        if self.rating is None and self.comment is None:
+            raise ValueError("Feedback must include a rating, a comment, or both")
+        return self
+
+
+class FeedbackResponse(BaseModel):
+    id: UUID
+    user_id: UUID
+    study_id: UUID | None
+    category: str
+    rating: int | None
+    comment: str | None
+    created_at: datetime
+
+
+class FeedbackListResponse(BaseModel):
+    feedback: list[FeedbackResponse]
+
+class CurrentUserResponse(BaseModel):
+    user_id: UUID
+    email: str
+    role: str
+    institution: str | None = None
+    verified_at: datetime | None = None

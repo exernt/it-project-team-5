@@ -6,10 +6,10 @@ from uuid import uuid4
 import jwt
 from fastapi import HTTPException
 
-from route.auth import login, logout
+from route.auth import get_current_user_info, login, logout
 from route.dependencies import get_current_user
 from route.models import LoginRequest, LogoutRequest
-from route.persistence.orm_models import RefreshToken, User
+from database.models import RefreshToken, ResearcherProfile, Role, User
 from route.services.tokens import create_access_token
 
 
@@ -128,6 +128,64 @@ class GetCurrentUserTests(unittest.IsolatedAsyncioTestCase):
             await get_current_user(credentials, self.session)
 
         self.assertEqual(401, raised.exception.status_code)
+
+class GetCurrentUserInfoTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.session = MagicMock()
+        self.session.get = AsyncMock()
+
+    async def test_participant_has_no_researcher_fields(self):
+        user = User(
+            id=uuid4(),
+            email="bob@example.com",
+            password_hash="hash",
+            role=Role.PARTICIPANT,
+        )
+
+        response = await get_current_user_info(user, self.session)
+
+        self.assertEqual("participant", response.role)
+        self.assertIsNone(response.institution)
+        self.assertIsNone(response.verified_at)
+        self.session.get.assert_not_awaited()
+
+    async def test_verified_researcher_includes_profile(self):
+        user = User(
+            id=uuid4(),
+            email="alice@example.com",
+            password_hash="hash",
+            role=Role.RESEARCHER,
+        )
+        profile = ResearcherProfile(
+            user_id=user.id,
+            institution="University of Melbourne",
+            verified_at=datetime.now(timezone.utc),
+        )
+        self.session.get.return_value = profile
+
+        response = await get_current_user_info(user, self.session)
+
+        self.assertEqual("researcher", response.role)
+        self.assertEqual("University of Melbourne", response.institution)
+        self.assertIsNotNone(response.verified_at)
+
+    async def test_unverified_researcher_has_null_verified_at(self):
+        user = User(
+            id=uuid4(),
+            email="dave@example.com",
+            password_hash="hash",
+            role=Role.RESEARCHER,
+        )
+        profile = ResearcherProfile(
+            user_id=user.id,
+            institution="Somewhere",
+            verified_at=None,
+        )
+        self.session.get.return_value = profile
+
+        response = await get_current_user_info(user, self.session)
+
+        self.assertIsNone(response.verified_at)
 
 
 if __name__ == "__main__":

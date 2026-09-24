@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from route.auth import register_researcher, verify_researcher
 from route.dependencies import require_role
 from route.models import RegisterResearcherRequest
-from route.persistence.orm_models import ResearcherProfile, Role, User
+from database.models import ResearcherProfile, Role, User
 
 
 class RegisterResearcherTests(unittest.IsolatedAsyncioTestCase):

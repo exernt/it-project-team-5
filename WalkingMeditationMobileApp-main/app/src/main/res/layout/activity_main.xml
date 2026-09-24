@@ -33,10 +33,18 @@
             android:layout_marginBottom="16dp"/>
 
         <Button
+            android:id="@+id/btnResearcherDashboard"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:text="@string/researcher_dashboard"
+            android:visibility="gone" />
+
+        <Button
             android:id="@+id/btnStudy"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Let's Do the Study"/>
+            android:text="@string/manage_study"/>
 
     </LinearLayout>
 

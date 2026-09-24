@@ -1,0 +1,31 @@
+name: Server Unit Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    env:
+      JWT_SECRET_KEY: test-only-secret-for-github-actions
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install test dependencies
+        working-directory: WalkingMeditationServer-main
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-test.txt
+
+      - name: Run unit tests
+        working-directory: WalkingMeditationServer-main
+        run: python -m pytest

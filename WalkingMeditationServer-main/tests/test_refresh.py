@@ -7,7 +7,7 @@ from fastapi import HTTPException
 
 from route.auth import refresh
 from route.models import RefreshRequest
-from route.persistence.orm_models import RefreshToken
+from database.models import RefreshToken
 
 
 class RefreshTests(unittest.IsolatedAsyncioTestCase):

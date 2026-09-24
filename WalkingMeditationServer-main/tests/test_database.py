@@ -10,7 +10,7 @@ from route.config import (
     database_pool_size,
     database_url,
 )
-from route.persistence.database import Database, create_configured_database, get_database
+from database.core import Database, create_configured_database, get_database
 
 
 class DatabaseConfigTests(unittest.TestCase):
@@ -49,7 +49,7 @@ class DatabaseConfigTests(unittest.TestCase):
 
 
 class DatabaseRuntimeTests(unittest.IsolatedAsyncioTestCase):
-    @patch("route.persistence.database.create_async_engine")
+    @patch("database.core.create_async_engine")
     def test_database_requires_the_async_postgresql_driver(self, create_engine):
         with self.assertRaisesRegex(ValueError, "postgresql\\+asyncpg"):
             Database("sqlite+aiosqlite:///test.db")

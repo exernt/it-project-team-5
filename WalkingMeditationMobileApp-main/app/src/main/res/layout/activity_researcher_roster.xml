@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:paddingStart="@dimen/screen_padding_horizontal"
+    android:paddingTop="@dimen/space_24"
+    android:paddingEnd="@dimen/screen_padding_horizontal"
+    android:paddingBottom="@dimen/space_24">
+
+    <TextView
+        android:id="@+id/rosterStudyName"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="start"
+        android:textColor="@color/black"
+        android:textSize="24sp"
+        android:textStyle="bold" />
+
+    <ProgressBar
+        android:id="@+id/rosterProgress"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="@dimen/space_24" />
+
+    <TextView
+        android:id="@+id/rosterMessage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_24"
+        android:gravity="center"
+        android:textColor="@color/hint_grey"
+        android:textSize="16sp"
+        android:visibility="gone" />
+
+    <ScrollView
+        android:id="@+id/rosterContent"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="@dimen/space_12"
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/group_control"
+                android:textColor="@color/sky_blue_dark"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:id="@+id/rosterControlContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_8"
+                android:orientation="vertical" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_24"
+                android:text="@string/group_experimental"
+                android:textColor="@color/sky_blue_dark"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:id="@+id/rosterExperimentalContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_8"
+                android:orientation="vertical" />
+
+        </LinearLayout>
+
+    </ScrollView>
+
+    <Button
+        android:id="@+id/btnRosterBack"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/field_height"
+        android:layout_marginTop="@dimen/space_12"
+        android:text="@string/back" />
+
+</LinearLayout>

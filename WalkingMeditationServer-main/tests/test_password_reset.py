@@ -7,7 +7,7 @@ from fastapi import HTTPException
 
 from route.auth import confirm_password_reset, request_password_reset
 from route.models import PasswordResetConfirmRequest, PasswordResetRequest
-from route.persistence.orm_models import PasswordResetToken
+from database.models import PasswordResetToken
 
 
 class RequestPasswordResetTests(unittest.IsolatedAsyncioTestCase):

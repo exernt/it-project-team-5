@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.sql import func
 
 from route.models import (
+    CurrentUserResponse,
     RegisterRequest,
     RegisterResponse,
     PasswordResetRequest,
@@ -21,8 +22,8 @@ from route.models import (
     RegisterResearcherRequest,
     ResearcherProfileResponse,
 )
-from route.persistence.database import DatabaseSessionDependency
-from route.persistence.orm_models import User, PasswordResetToken, RefreshToken, ResearcherProfile, Role
+from database.core import DatabaseSessionDependency
+from database.models import User, PasswordResetToken, RefreshToken, ResearcherProfile, Role
 from route.services.passwords import hash_password, verify_password
 from route.services.password_reset import (
     generate_reset_token,
@@ -68,6 +69,8 @@ async def register_user(
     user = User(
         email=email,
         password_hash=await hash_password(payload.password),
+        gender=payload.gender,
+        age=payload.age,
     )
     session.add(user)
 
@@ -330,4 +333,29 @@ async def verify_researcher(
         institution=profile.institution,
         verified_at=profile.verified_at,
         role=user.role.value,
+    )
+
+@router.get(
+    "/me",
+    response_model=CurrentUserResponse,
+)
+async def get_current_user_info(
+        user: CurrentUserDependency,
+        session: DatabaseSessionDependency,
+) -> CurrentUserResponse:
+    institution = None
+    verified_at = None
+
+    if user.role == Role.RESEARCHER:
+        profile = await session.get(ResearcherProfile, user.id)
+        if profile is not None:
+            institution = profile.institution
+            verified_at = profile.verified_at
+
+    return CurrentUserResponse(
+        user_id=user.id,
+        email=user.email,
+        role=user.role.value,
+        institution=institution,
+        verified_at=verified_at,
     )
