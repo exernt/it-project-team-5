@@ -170,24 +170,33 @@ Only verified researchers can use definition-management endpoints, and list or
 retrieval results are restricted to definitions owned by the current
 researcher.
 
+The owner may replace a draft's complete definition with
+`PUT /questionnaires/{questionnaire_id}` using the same request body as
+creation. This is full replacement rather than a partial merge. The response
+contains the complete canonical questionnaire stored by the server so the
+caller can confirm the accepted definition. Published and archived
+questionnaires are immutable; editing either returns HTTP 409.
+
 ## Lifecycle and participant flow
 
 1. A verified researcher creates a draft with `POST /questionnaires`.
-2. The owner publishes the validated definition with
+2. While it remains a draft, the owner may replace its definition with
+   `PUT /questionnaires/{questionnaire_id}`.
+3. The owner publishes the validated definition with
    `POST /questionnaires/{questionnaire_id}/publish`.
-3. The owner of a recruiting or active study creates a new round with
+4. The owner of a recruiting or active study creates a new round with
    `POST /studies/{study_id}/questionnaires` and body
    `{"questionnaire_id": "<uuid>"}`.
-4. `GET /studies/mine` includes each study's unrevoked rounds in
+5. `GET /studies/mine` includes each study's unrevoked rounds in
    `open_questionnaires`. Each summary contains the issuance `id`, definition
    `questionnaire_id`, `round_number`, `title`, timestamps, and the current
    participant's `has_responded` flag.
-5. An active participant can refresh the same information with
+6. An active participant can refresh the same information with
    `GET /studies/{study_id}/questionnaires` and fetch displayable content with
    `GET /studies/{study_id}/questionnaires/{issuance_id}`.
-6. The participant submits once with
+7. The participant submits once with
    `POST /studies/{study_id}/questionnaires/{issuance_id}/responses`.
-7. The study owner may close that round with
+8. The study owner may close that round with
    `POST /studies/{study_id}/questionnaires/{issuance_id}/revoke` and retrieve
    its answers with
    `GET /studies/{study_id}/questionnaires/{issuance_id}/responses`.

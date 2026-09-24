@@ -103,6 +103,37 @@ async def get_questionnaire(
     return _to_response(questionnaire)
 
 
+@router.put("/{questionnaire_id}", response_model=QuestionnaireDefinitionResponse)
+async def replace_questionnaire(
+    questionnaire_id: UUID,
+    payload: CreateQuestionnaireRequest,
+    researcher: VerifiedResearcherDependency,
+    session: DatabaseSessionDependency,
+) -> QuestionnaireDefinitionResponse:
+    questionnaire = await _get_owned_questionnaire(questionnaire_id, researcher, session)
+    if questionnaire.status != QuestionnaireStatus.DRAFT:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only draft questionnaires can be edited",
+        )
+
+    try:
+        validate_questionnaire(payload.definition)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+
+    definition = dict(payload.definition)
+    definition["title"] = str(definition["title"]).strip()
+    questionnaire.title = definition["title"]
+    questionnaire.definition = definition
+    await session.commit()
+    await session.refresh(questionnaire)
+    return _to_response(questionnaire)
+
+
 @router.post("/{questionnaire_id}/publish", response_model=QuestionnaireDefinitionResponse)
 async def publish_questionnaire(
     questionnaire_id: UUID,

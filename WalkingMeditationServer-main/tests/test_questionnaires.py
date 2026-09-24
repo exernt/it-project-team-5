@@ -12,6 +12,7 @@ from route.questionnaires import (
     get_questionnaire,
     list_questionnaires,
     publish_questionnaire,
+    replace_questionnaire,
 )
 
 
@@ -41,6 +42,7 @@ class QuestionnaireDefinitionEndpointTests(unittest.IsolatedAsyncioTestCase):
         self.session.get = AsyncMock()
         self.session.execute = AsyncMock()
         self.session.commit = AsyncMock()
+        self.session.refresh = AsyncMock()
         self.researcher = User(
             id=uuid4(),
             email="researcher@example.com",
@@ -124,6 +126,91 @@ class QuestionnaireDefinitionEndpointTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(QuestionnaireStatus.PUBLISHED, questionnaire.status)
         self.assertEqual("published", response.status)
+
+    async def test_owner_can_replace_entire_draft_definition(self):
+        questionnaire = Questionnaire(
+            id=uuid4(),
+            title="Old title",
+            researcher_id=self.researcher.id,
+            status=QuestionnaireStatus.DRAFT,
+            definition={**DEFINITION, "title": "Old title"},
+            created_on=datetime.now(timezone.utc),
+        )
+        self.session.get.return_value = questionnaire
+        replacement = {
+            "title": " Revised check-in ",
+            "questions": [
+                {
+                    "id": "notes",
+                    "type": "text",
+                    "prompt": "What changed?",
+                    "required": True,
+                }
+            ],
+        }
+
+        response = await replace_questionnaire(
+            questionnaire.id,
+            CreateQuestionnaireRequest(definition=replacement),
+            self.researcher,
+            self.session,
+        )
+
+        self.assertEqual("Revised check-in", questionnaire.title)
+        self.assertEqual("Revised check-in", questionnaire.definition["title"])
+        self.assertEqual(replacement["questions"], questionnaire.definition["questions"])
+        self.assertEqual(questionnaire.definition, response.definition)
+        self.session.commit.assert_awaited_once()
+        self.session.refresh.assert_awaited_once_with(questionnaire)
+
+    async def test_published_questionnaire_cannot_be_replaced(self):
+        questionnaire = Questionnaire(
+            id=uuid4(),
+            title="Published",
+            researcher_id=self.researcher.id,
+            status=QuestionnaireStatus.PUBLISHED,
+            definition={**DEFINITION, "title": "Published"},
+            created_on=datetime.now(timezone.utc),
+        )
+        self.session.get.return_value = questionnaire
+
+        with self.assertRaises(HTTPException) as raised:
+            await replace_questionnaire(
+                questionnaire.id,
+                CreateQuestionnaireRequest(definition=DEFINITION),
+                self.researcher,
+                self.session,
+            )
+
+        self.assertEqual(409, raised.exception.status_code)
+        self.session.commit.assert_not_awaited()
+
+    async def test_invalid_replacement_leaves_draft_unchanged(self):
+        original_definition = {**DEFINITION, "title": "Original"}
+        questionnaire = Questionnaire(
+            id=uuid4(),
+            title="Original",
+            researcher_id=self.researcher.id,
+            status=QuestionnaireStatus.DRAFT,
+            definition=original_definition,
+            created_on=datetime.now(timezone.utc),
+        )
+        self.session.get.return_value = questionnaire
+
+        with self.assertRaises(HTTPException) as raised:
+            await replace_questionnaire(
+                questionnaire.id,
+                CreateQuestionnaireRequest(
+                    definition={"title": "Invalid", "questions": []}
+                ),
+                self.researcher,
+                self.session,
+            )
+
+        self.assertEqual(422, raised.exception.status_code)
+        self.assertEqual("Original", questionnaire.title)
+        self.assertEqual(original_definition, questionnaire.definition)
+        self.session.commit.assert_not_awaited()
 
 
 if __name__ == "__main__":

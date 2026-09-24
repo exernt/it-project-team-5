@@ -274,7 +274,9 @@ Questionnaires are reusable researcher-owned definitions. A verified researcher
 creates a draft with `POST /questionnaires`, then publishes it with
 `POST /questionnaires/{questionnaire_id}/publish`. Researchers can list their
 own definitions with `GET /questionnaires` and retrieve one with
-`GET /questionnaires/{questionnaire_id}`.
+`GET /questionnaires/{questionnaire_id}`. Before publication, the owner can
+replace the complete draft definition with
+`PUT /questionnaires/{questionnaire_id}`. Published definitions are immutable.
 
 A study owner opens a new questionnaire round for participants with
 `POST /studies/{study_id}/questionnaires`:
