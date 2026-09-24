@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ProgressBar
+        android:id="@+id/feedbackProgress"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <ScrollView
+        android:id="@+id/feedbackScroll"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="@dimen/screen_padding_horizontal">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/feedback_heading"
+                android:textColor="@color/black"
+                android:textSize="26sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/feedbackContext"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_8"
+                android:text="@string/feedback_context_general"
+                android:textColor="@color/hint_grey"
+                android:textSize="15sp" />
+
+            <TextView
+                style="@style/App.Label"
+                android:layout_marginTop="@dimen/space_24"
+                android:text="@string/feedback_category_label" />
+
+            <RadioGroup
+                android:id="@+id/feedbackCategoryGroup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <RadioButton
+                    android:id="@+id/categoryGeneral"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:text="@string/feedback_category_general" />
+
+                <RadioButton
+                    android:id="@+id/categoryStudy"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/feedback_category_study" />
+
+                <RadioButton
+                    android:id="@+id/categoryTechnical"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/feedback_category_technical" />
+
+            </RadioGroup>
+
+            <TextView
+                style="@style/App.Label"
+                android:layout_marginTop="@dimen/space_24"
+                android:text="@string/feedback_rating_label" />
+
+            <RatingBar
+                android:id="@+id/feedbackRating"
+                style="?android:attr/ratingBarStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="start"
+                android:numStars="5"
+                android:stepSize="1"
+                android:rating="0" />
+
+            <TextView
+                style="@style/App.Label"
+                android:layout_marginTop="@dimen/space_24"
+                android:text="@string/feedback_comment_label" />
+
+            <EditText
+                android:id="@+id/feedbackComment"
+                style="@style/App.RoundedInput"
+                android:layout_height="120dp"
+                android:gravity="top|start"
+                android:hint="@string/feedback_comment_hint"
+                android:inputType="textMultiLine|textCapSentences"
+                android:autofillHints="" />
+
+            <TextView
+                android:id="@+id/feedbackMessage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_12"
+                android:textColor="@color/leave_red"
+                android:textSize="14sp"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/btnSubmitFeedback"
+                style="@style/App.PrimaryButton"
+                android:layout_marginTop="@dimen/space_24"
+                android:layout_marginBottom="@dimen/space_32"
+                android:text="@string/feedback_submit" />
+
+        </LinearLayout>
+
+    </ScrollView>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

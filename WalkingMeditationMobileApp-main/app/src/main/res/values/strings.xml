@@ -75,6 +75,23 @@
     <string name="next">Next</string>
     <string name="previous">Previous</string>
 
+    <string name="give_feedback">Give Feedback</string>
+    <string name="feedback_heading">Feedback</string>
+    <string name="feedback_context_general">Share general feedback about the app for our research team.</string>
+    <string name="feedback_context_study">Feedback for study: %1$s</string>
+    <string name="feedback_context_study_unnamed">Feedback for your current study</string>
+    <string name="feedback_category_label">Category</string>
+    <string name="feedback_category_general">General</string>
+    <string name="feedback_category_study">This study</string>
+    <string name="feedback_category_technical">Technical issue</string>
+    <string name="feedback_rating_label">Rating (optional)</string>
+    <string name="feedback_comment_label">Comments (optional)</string>
+    <string name="feedback_comment_hint">Tell us what\'s working well or what could be better…</string>
+    <string name="feedback_missing_input">Please add a rating, a comment, or both.</string>
+    <string name="feedback_submit">Submit Feedback</string>
+    <string name="feedback_submitting">Submitting…</string>
+    <string name="feedback_thanks">Thanks for your feedback!</string>
+
     <string name="lorem_ipsum">
         Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nam in scelerisque sem. Mauris
         volutpat, dolor id interdum ullamcorper, risus dolor egestas lectus, sit amet mattis purus
