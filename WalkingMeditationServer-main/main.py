@@ -1,6 +1,5 @@
 import warnings
 import os
-import uvicorn
 import asyncio
 import logging
 import secrets
@@ -206,6 +205,8 @@ async def text_to_speech_endpoint(
 
 
 if __name__ == "__main__":
+    import uvicorn
+
     uvicorn.run(
         "main:app",
         host="127.0.0.1",
