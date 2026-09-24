@@ -367,21 +367,22 @@ class Questionnaire(Base):
     )
 
 class StudyQuestionnaire(Base):
-    """Records that a researcher has issued a questionnaire to a study.
- 
-    Soft-deletable: revoking sets revoked_at rather than deleting the row,
-    so existing responses stay linked to real history. Re-issuing an
-    already-issued pair (whether currently active or previously revoked)
-    reactivates this same row -- clears revoked_at, refreshes issued_at --
-    rather than inserting a duplicate. The UniqueConstraint below is what
-    makes "the same row" well-defined; route logic must query for an
-    existing row on this (study_id, questionnaire_id) pair before deciding
-    whether to insert or update.
+    """One issuance round of a questionnaire to a study.
+
+    A questionnaire can be issued to the same study more than once.  The
+    natural key is therefore (study_id, questionnaire_id, round_number),
+    while ``id`` remains the convenient API/database primary key.  Revoking
+    a round sets revoked_at so its responses remain available as history.
     """
  
     __tablename__ = "study_questionnaires"
     __table_args__ = (
-        UniqueConstraint("study_id", "questionnaire_id", name="uq_study_questionnaire"),
+        UniqueConstraint(
+            "study_id",
+            "questionnaire_id",
+            "round_number",
+            name="uq_study_questionnaire_round",
+        ),
     )
  
     id: Mapped[UUID] = mapped_column(
@@ -401,6 +402,7 @@ class StudyQuestionnaire(Base):
         nullable=False,
         index=True,
     )
+    round_number: Mapped[int] = mapped_column(nullable=False)
     issued_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -422,6 +424,13 @@ class QuestionnaireResponse(Base):
     """
  
     __tablename__ = "questionnaire_responses"
+    __table_args__ = (
+        UniqueConstraint(
+            "study_questionnaire_id",
+            "respondent_id",
+            name="uq_questionnaire_response_respondent_round",
+        ),
+    )
  
     id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True),

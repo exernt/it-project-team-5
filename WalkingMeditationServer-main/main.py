@@ -12,7 +12,9 @@ from contextlib import asynccontextmanager
 
 from route.auth import router as auth_router
 from route.feedback import router as feedback_router
+from route.questionnaires import router as questionnaires_router
 from route.studies import router as studies_router
+from route.study_questionnaires import router as study_questionnaires_router
 from route.services.generate_script import generate_script_with_park, generate_script_without_park
 from route.services.get_route import generate_walk_route
 from route.models import WalkRouteRequest, WalkRouteResponse, ScriptWithParkRequest, ScriptWithParkResponse
@@ -78,6 +80,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.include_router(auth_router)
 app.include_router(studies_router)
+app.include_router(questionnaires_router)
+app.include_router(study_questionnaires_router)
 app.include_router(feedback_router)
 
 @app.get("/")

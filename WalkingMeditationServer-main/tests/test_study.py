@@ -19,11 +19,13 @@ from database.models import (
     Feedback,
     FeedbackCategory,
     Questionnaire,
+    QuestionnaireStatus,
     ResearcherProfile,
     Role,
     Study,
     StudyCreatedBy,
     StudyGroup,
+    StudyQuestionnaire,
     StudyRegistration,
     StudyStatus,
     User,
@@ -487,7 +489,9 @@ class ListMyStudiesTests(unittest.IsolatedAsyncioTestCase):
         )
         result_mock = MagicMock()
         result_mock.all.return_value = [(registration, study)]
-        self.session.execute.return_value = result_mock
+        questionnaire_result = MagicMock()
+        questionnaire_result.all.return_value = []
+        self.session.execute.side_effect = [result_mock, questionnaire_result]
 
         response = await list_my_studies(self.user, self.session)
 
@@ -510,6 +514,49 @@ class ListMyStudiesTests(unittest.IsolatedAsyncioTestCase):
         response = await list_my_studies(self.user, self.session)
 
         self.assertEqual(0, len(response.studies))
+
+    async def test_includes_open_questionnaire_rounds(self):
+        study = Study(
+            id=uuid4(),
+            name="Morning walks",
+            duration=14,
+            status=StudyStatus.ACTIVE,
+        )
+        registration = StudyRegistration(
+            user_id=self.user.id,
+            study_id=study.id,
+            registered_at=datetime.now(timezone.utc),
+            consented_at=datetime.now(timezone.utc),
+            withdrawn_at=None,
+            study_group=StudyGroup.CONTROL,
+        )
+        questionnaire = Questionnaire(
+            id=uuid4(),
+            title="Weekly check-in",
+            researcher_id=uuid4(),
+            status=QuestionnaireStatus.PUBLISHED,
+            definition={"title": "Weekly check-in", "questions": []},
+            created_on=datetime.now(timezone.utc),
+        )
+        issuance = StudyQuestionnaire(
+            id=uuid4(),
+            study_id=study.id,
+            questionnaire_id=questionnaire.id,
+            round_number=2,
+            issued_at=datetime.now(timezone.utc),
+            revoked_at=None,
+        )
+        registrations_result = MagicMock()
+        registrations_result.all.return_value = [(registration, study)]
+        questionnaires_result = MagicMock()
+        questionnaires_result.all.return_value = [(issuance, questionnaire, None)]
+        self.session.execute.side_effect = [registrations_result, questionnaires_result]
+
+        response = await list_my_studies(self.user, self.session)
+
+        self.assertEqual(1, len(response.studies[0].open_questionnaires))
+        self.assertEqual(2, response.studies[0].open_questionnaires[0].round_number)
+        self.assertFalse(response.studies[0].open_questionnaires[0].has_responded)
 
     async def test_includes_withdrawn_registrations(self):
         study = Study(

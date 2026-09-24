@@ -111,13 +111,7 @@ class SingleChoiceHandler(QuestionHandler):
     without needing a separate question type for it."""
 
     def validate_definition(self, question: dict, scales: dict) -> None:
-        if "options" not in question:
-            raise ValueError(f"{question['id']}: single_choice requires 'options'")
-        for option in question["options"]:
-            if isinstance(option, dict) and "label" not in option:
-                raise ValueError(
-                    f"{question['id']}: structured option missing 'label': {option}"
-                )
+        _validate_options(question)
 
     def collect_answer(self, question: dict, scales: dict) -> dict:
         print(f"\n{question['prompt']}")
@@ -146,13 +140,7 @@ class MultipleChoiceHandler(QuestionHandler):
     per selected option rather than to the question as a whole."""
 
     def validate_definition(self, question: dict, scales: dict) -> None:
-        if "options" not in question:
-            raise ValueError(f"{question['id']}: multiple_choice requires 'options'")
-        for option in question["options"]:
-            if isinstance(option, dict) and "label" not in option:
-                raise ValueError(
-                    f"{question['id']}: structured option missing 'label': {option}"
-                )
+        _validate_options(question)
 
     def collect_answer(self, question: dict, scales: dict) -> list[dict]:
         print(f"\n{question['prompt']}")
@@ -199,6 +187,41 @@ class RatingHandler(QuestionHandler):
             raise ValueError(
                 f"{question['id']}: scale_ref '{scale_ref}' not found in 'scales'"
             )
+
+        scale = scales[scale_ref]
+        if not isinstance(scale, dict):
+            raise ValueError(f"{question['id']}: referenced scale must be an object")
+        if "options" in scale:
+            options = scale["options"]
+            if not isinstance(options, list) or not options:
+                raise ValueError(f"{question['id']}: rating scale options must be a non-empty list")
+            values: set[int] = set()
+            for option in options:
+                if not isinstance(option, dict) or "value" not in option or "label" not in option:
+                    raise ValueError(
+                        f"{question['id']}: each rating option requires 'value' and 'label'"
+                    )
+                value = option["value"]
+                if not isinstance(value, int) or isinstance(value, bool):
+                    raise ValueError(f"{question['id']}: rating option values must be integers")
+                if not isinstance(option["label"], str) or not option["label"].strip():
+                    raise ValueError(f"{question['id']}: rating option labels must be non-empty strings")
+                if value in values:
+                    raise ValueError(f"{question['id']}: duplicate rating option value {value}")
+                values.add(value)
+        else:
+            minimum = scale.get("min")
+            maximum = scale.get("max")
+            if (
+                not isinstance(minimum, int)
+                or isinstance(minimum, bool)
+                or not isinstance(maximum, int)
+                or isinstance(maximum, bool)
+                or minimum > maximum
+            ):
+                raise ValueError(
+                    f"{question['id']}: rating scale requires integer 'min' and 'max' with min <= max"
+                )
 
     def collect_answer(self, question: dict, scales: dict) -> int:
         scale = scales[question["scale_ref"]]
@@ -249,19 +272,74 @@ def load_questionnaire(path: str) -> dict:
         return json.load(f)
 
 
+def _validate_options(question: dict) -> None:
+    options = question.get("options")
+    if not isinstance(options, list) or not options:
+        raise ValueError(f"{question['id']}: choice question requires a non-empty 'options' list")
+
+    values: set[object] = set()
+    for option in options:
+        if isinstance(option, str):
+            if not option.strip():
+                raise ValueError(f"{question['id']}: option strings must not be empty")
+            value: object = option
+        elif isinstance(option, dict):
+            label = option.get("label")
+            if not isinstance(label, str) or not label.strip():
+                raise ValueError(f"{question['id']}: structured option requires a non-empty 'label'")
+            if "allow_free_text" in option and not isinstance(option["allow_free_text"], bool):
+                raise ValueError(f"{question['id']}: 'allow_free_text' must be a boolean")
+            value = option.get("value", label)
+            if not isinstance(value, (str, int, float, bool)):
+                raise ValueError(f"{question['id']}: option 'value' must be a JSON scalar")
+        else:
+            raise ValueError(f"{question['id']}: options must be strings or objects")
+
+        if value in values:
+            raise ValueError(f"{question['id']}: duplicate option value {value!r}")
+        values.add(value)
+
+
 def validate_questionnaire(questionnaire: dict) -> None:
     """Validate structure before use. Distinguishes two failure modes:
     - bad data (a type that isn't a recognised QuestionType at all)
     - an unimplemented feature (a recognised type with no handler yet)
     """
+    if not isinstance(questionnaire, dict):
+        raise ValueError("Questionnaire definition must be a JSON object")
     if "title" not in questionnaire or "questions" not in questionnaire:
         raise ValueError("Questionnaire missing 'title' or 'questions'")
 
-    scales = questionnaire.get("scales", {})
+    if not isinstance(questionnaire["title"], str) or not questionnaire["title"].strip():
+        raise ValueError("Questionnaire 'title' must be a non-empty string")
 
-    for question in questionnaire["questions"]:
+    questions = questionnaire["questions"]
+    if not isinstance(questions, list) or not questions:
+        raise ValueError("Questionnaire 'questions' must be a non-empty list")
+
+    scales = questionnaire.get("scales", {})
+    if not isinstance(scales, dict):
+        raise ValueError("Questionnaire 'scales' must be an object")
+
+    question_ids: set[str] = set()
+    for question in questions:
+        if not isinstance(question, dict):
+            raise ValueError("Each question must be a JSON object")
         if "id" not in question or "type" not in question:
             raise ValueError(f"Question missing 'id' or 'type': {question}")
+
+        question_id = question["id"]
+        if not isinstance(question_id, str) or not question_id.strip():
+            raise ValueError("Question 'id' must be a non-empty string")
+        if question_id in question_ids:
+            raise ValueError(f"Duplicate question id: {question_id!r}")
+        question_ids.add(question_id)
+
+        prompt = question.get("prompt")
+        if not isinstance(prompt, str) or not prompt.strip():
+            raise ValueError(f"{question_id}: 'prompt' must be a non-empty string")
+        if "required" in question and not isinstance(question["required"], bool):
+            raise ValueError(f"{question_id}: 'required' must be a boolean")
 
         try:
             q_type = QuestionType(question["type"])

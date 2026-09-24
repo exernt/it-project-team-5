@@ -1,26 +1,10 @@
-"""
-route/study_questionnaires.py
-
-Schemas now come from route.models, matching every other router's
-convention (CreateStudyRequest/StudyResponse, JoinStudyRequest/
-StudyRegistrationResponse, etc.) rather than being defined inline here.
-
-See route.models for the naming note on why these are
-QuestionnaireAnswerResponse/-ListResponse rather than reusing
-"QuestionnaireResponse" -- that name already belongs to a SQLAlchemy
-model this file also imports.
-
-submit_response now also checks the study's own status (mirroring how
-join_study gates on StudyStatus) -- a response shouldn't be accepted for
-a study that's still draft or has already closed, the same way joining
-isn't allowed in those states.
-"""
+"""Study questionnaire issuance rounds and participant responses."""
 
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import and_, func, select
 from sqlalchemy.exc import IntegrityError
 
 from route.dependencies import CurrentUserDependency, StudyOwnerDependency
@@ -28,6 +12,7 @@ from route.models import (
     IssueQuestionnaireRequest,
     QuestionnaireAnswerListResponse,
     QuestionnaireAnswerResponse,
+    StudyQuestionnaireDetailResponse,
     StudyQuestionnaireListResponse,
     StudyQuestionnaireResponse,
     SubmitAnswersRequest,
@@ -36,12 +21,14 @@ from database.core import DatabaseSessionDependency
 from database.models import (
     Questionnaire,
     QuestionnaireResponse,
+    QuestionnaireStatus,
     Study,
+    StudyCreatedBy,
     StudyQuestionnaire,
+    StudyRegistration,
     StudyStatus,
 )
 
-# Adjust to wherever validate_response ends up living.
 from questionnaire.questionnaire import validate_response
 
 
@@ -66,22 +53,41 @@ async def _get_issuance(
     return issuance
 
 
-def _to_response(issuance: StudyQuestionnaire) -> StudyQuestionnaireResponse:
+def _to_response(
+    issuance: StudyQuestionnaire,
+    questionnaire: Questionnaire,
+    has_responded: bool | None = None,
+) -> StudyQuestionnaireResponse:
     return StudyQuestionnaireResponse(
         id=issuance.id,
         study_id=issuance.study_id,
         questionnaire_id=issuance.questionnaire_id,
+        round_number=issuance.round_number,
+        title=questionnaire.title,
         issued_at=issuance.issued_at,
         revoked_at=issuance.revoked_at,
+        has_responded=has_responded,
     )
 
 
-def _reactivate(issuance: StudyQuestionnaire) -> None:
-    """Clear revoked_at and refresh issued_at on an existing row -- shared
-    by both the normal reissue path and the concurrent-insert race path
-    below, since they're the same operation triggered two different ways."""
-    issuance.revoked_at = None
-    issuance.issued_at = datetime.now(timezone.utc)
+async def _require_study_access(
+    session: DatabaseSessionDependency,
+    study_id: UUID,
+    user_id: UUID,
+) -> str:
+    """Return owner/participant access, rejecting unrelated users."""
+    registration = await session.get(StudyRegistration, (user_id, study_id))
+    if registration is not None and registration.withdrawn_at is None:
+        return "participant"
+
+    ownership = await session.get(StudyCreatedBy, study_id)
+    if ownership is not None and ownership.researcher_id == user_id:
+        return "owner"
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="You are not an active participant in or owner of this study",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -92,7 +98,7 @@ def _reactivate(issuance: StudyQuestionnaire) -> None:
 async def issue_questionnaire(
     study_id: UUID,
     payload: IssueQuestionnaireRequest,
-    study: StudyOwnerDependency,
+    owner: StudyOwnerDependency,
     session: DatabaseSessionDependency,
 ) -> StudyQuestionnaireResponse:
     questionnaire = await session.get(Questionnaire, payload.questionnaire_id)
@@ -101,73 +107,123 @@ async def issue_questionnaire(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Questionnaire not found",
         )
-
-    existing = (
-        await session.execute(
-            select(StudyQuestionnaire).where(
-                StudyQuestionnaire.study_id == study_id,
-                StudyQuestionnaire.questionnaire_id == payload.questionnaire_id,
-            )
+    if questionnaire.researcher_id != owner.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not own this questionnaire",
         )
-    ).scalar_one_or_none()
-
-    if existing is not None:
-        # Reactivate (Option (a)): same row, same id, so every existing
-        # response and every URL a client already has for this issuance
-        # stays valid.
-        _reactivate(existing)
-        await session.commit()
-        issuance = existing
-    else:
-        issuance = StudyQuestionnaire(
-            id=uuid4(),
-            study_id=study_id,
-            questionnaire_id=payload.questionnaire_id,
-            issued_at=datetime.now(timezone.utc),
+    if questionnaire.status != QuestionnaireStatus.PUBLISHED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only published questionnaires can be issued",
         )
-        session.add(issuance)
-        try:
-            await session.commit()
-        except IntegrityError:
-            # Two concurrent requests both saw "no existing row" and both
-            # tried to insert one -- the UniqueConstraint on
-            # (study_id, questionnaire_id) let exactly one of them win.
-            # Re-issuing an already-issued pair is meant to be a harmless
-            # reactivation, not a conflict (unlike, e.g., join_study's
-            # duplicate registration case) -- so pick up the winner's row
-            # and reactivate it, rather than surfacing a 409 for what was
-            # only ever a timing accident.
-            await session.rollback()
-            existing = (
-                await session.execute(
-                    select(StudyQuestionnaire).where(
-                        StudyQuestionnaire.study_id == study_id,
-                        StudyQuestionnaire.questionnaire_id == payload.questionnaire_id,
-                    )
-                )
-            ).scalar_one_or_none()
-            if existing is None:
-                raise  # genuinely unexpected -- not the race we anticipated
-            _reactivate(existing)
-            await session.commit()
-            issuance = existing
 
-    return _to_response(issuance)
+    study_row = await session.get(Study, study_id)
+    if study_row.status not in (StudyStatus.RECRUITING, StudyStatus.ACTIVE):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Questionnaires can only be issued to recruiting or active studies",
+        )
+
+    # Lock the study while allocating the next round number. This serializes
+    # simultaneous issuance requests for this study and prevents both from
+    # choosing the same (study, questionnaire, round) natural key.
+    await session.execute(
+        select(Study.id).where(Study.id == study_id).with_for_update()
+    )
+    current_round = await session.scalar(
+        select(func.max(StudyQuestionnaire.round_number)).where(
+            StudyQuestionnaire.study_id == study_id,
+            StudyQuestionnaire.questionnaire_id == payload.questionnaire_id,
+        )
+    )
+    issuance = StudyQuestionnaire(
+        id=uuid4(),
+        study_id=study_id,
+        questionnaire_id=payload.questionnaire_id,
+        round_number=(current_round or 0) + 1,
+        issued_at=datetime.now(timezone.utc),
+    )
+    session.add(issuance)
+    await session.commit()
+
+    return _to_response(issuance, questionnaire)
 
 
 @router.get("", response_model=StudyQuestionnaireListResponse)
 async def list_issued_questionnaires(
     study_id: UUID,
-    _user: CurrentUserDependency,
+    user: CurrentUserDependency,
     session: DatabaseSessionDependency,
 ) -> StudyQuestionnaireListResponse:
+    access = await _require_study_access(session, study_id, user.id)
+    conditions = [StudyQuestionnaire.study_id == study_id]
+    if access == "participant":
+        conditions.extend(
+            [
+                StudyQuestionnaire.revoked_at.is_(None),
+                Questionnaire.status == QuestionnaireStatus.PUBLISHED,
+                Study.status.in_((StudyStatus.RECRUITING, StudyStatus.ACTIVE)),
+            ]
+        )
+
     result = await session.execute(
-        select(StudyQuestionnaire).where(StudyQuestionnaire.study_id == study_id)
+        select(StudyQuestionnaire, Questionnaire, QuestionnaireResponse.id)
+        .join(Questionnaire, Questionnaire.id == StudyQuestionnaire.questionnaire_id)
+        .join(Study, Study.id == StudyQuestionnaire.study_id)
+        .outerjoin(
+            QuestionnaireResponse,
+            and_(
+                QuestionnaireResponse.study_questionnaire_id == StudyQuestionnaire.id,
+                QuestionnaireResponse.respondent_id == user.id,
+            ),
+        )
+        .where(*conditions)
+        .order_by(StudyQuestionnaire.issued_at.desc())
     )
-    issuances = result.scalars().all()
 
     return StudyQuestionnaireListResponse(
-        issued_questionnaires=[_to_response(i) for i in issuances]
+        issued_questionnaires=[
+            _to_response(issuance, questionnaire, response_id is not None)
+            for issuance, questionnaire, response_id in result.all()
+        ]
+    )
+
+
+@router.get(
+    "/{study_questionnaire_id}",
+    response_model=StudyQuestionnaireDetailResponse,
+)
+async def get_issued_questionnaire(
+    study_id: UUID,
+    study_questionnaire_id: UUID,
+    user: CurrentUserDependency,
+    session: DatabaseSessionDependency,
+) -> StudyQuestionnaireDetailResponse:
+    access = await _require_study_access(session, study_id, user.id)
+    issuance = await _get_issuance(session, study_id, study_questionnaire_id)
+    questionnaire = await session.get(Questionnaire, issuance.questionnaire_id)
+    study_row = await session.get(Study, study_id)
+    if access == "participant" and (
+        issuance.revoked_at is not None
+        or questionnaire.status != QuestionnaireStatus.PUBLISHED
+        or study_row.status not in (StudyStatus.RECRUITING, StudyStatus.ACTIVE)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No open questionnaire round with this id",
+        )
+
+    response_id = await session.scalar(
+        select(QuestionnaireResponse.id).where(
+            QuestionnaireResponse.study_questionnaire_id == issuance.id,
+            QuestionnaireResponse.respondent_id == user.id,
+        )
+    )
+    summary = _to_response(issuance, questionnaire, response_id is not None)
+    return StudyQuestionnaireDetailResponse(
+        **summary.model_dump(),
+        definition=questionnaire.definition,
     )
 
 
@@ -189,7 +245,8 @@ async def revoke_questionnaire(
     issuance.revoked_at = datetime.now(timezone.utc)
     await session.commit()
 
-    return _to_response(issuance)
+    questionnaire = await session.get(Questionnaire, issuance.questionnaire_id)
+    return _to_response(issuance, questionnaire)
 
 
 # ---------------------------------------------------------------------------
@@ -210,6 +267,13 @@ async def submit_response(
 ) -> QuestionnaireAnswerResponse:
     issuance = await _get_issuance(session, study_id, study_questionnaire_id)
 
+    registration = await session.get(StudyRegistration, (user.id, study_id))
+    if registration is None or registration.withdrawn_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only active participants in this study can submit questionnaire responses",
+        )
+
     if issuance.revoked_at is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -226,6 +290,24 @@ async def submit_response(
         )
 
     questionnaire = await session.get(Questionnaire, issuance.questionnaire_id)
+    if questionnaire.status != QuestionnaireStatus.PUBLISHED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This questionnaire is not published",
+        )
+
+    existing_response_id = await session.scalar(
+        select(QuestionnaireResponse.id).where(
+            QuestionnaireResponse.study_questionnaire_id == issuance.id,
+            QuestionnaireResponse.respondent_id == user.id,
+        )
+    )
+    if existing_response_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You have already responded to this questionnaire round",
+        )
+
     try:
         validate_response(questionnaire.definition, payload.answers)
     except ValueError as e:
@@ -242,7 +324,14 @@ async def submit_response(
         submitted_on=datetime.now(timezone.utc),
     )
     session.add(response)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You have already responded to this questionnaire round",
+        ) from exc
 
     return QuestionnaireAnswerResponse(
         id=response.id,
