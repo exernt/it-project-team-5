@@ -91,6 +91,13 @@
     <string name="feedback_submit">Submit Feedback</string>
     <string name="feedback_submitting">Submitting…</string>
     <string name="feedback_thanks">Thanks for your feedback!</string>
+    <string name="view_feedback">View Feedback</string>
+    <string name="researcher_feedback_general_title">General Feedback</string>
+    <string name="researcher_feedback_empty">No feedback yet.</string>
+    <string name="researcher_feedback_error">Unable to load feedback.</string>
+    <string name="researcher_feedback_header">%1$s · %2$s</string>
+    <string name="researcher_feedback_rating">%1$d / 5</string>
+    <string name="researcher_feedback_no_rating">No rating</string>
 
     <string name="lorem_ipsum">
         Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nam in scelerisque sem. Mauris
