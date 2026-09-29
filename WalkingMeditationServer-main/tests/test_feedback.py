@@ -1,12 +1,13 @@
 import unittest
 from unittest.mock import AsyncMock, MagicMock
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import HTTPException
 from pydantic import ValidationError
 
 from database.models import Feedback, FeedbackCategory, Role, Study, User
-from route.feedback import submit_feedback
+from route.feedback import list_general_feedback, submit_feedback
 from route.models import SubmitFeedbackRequest
 
 
@@ -73,6 +74,36 @@ class SubmitFeedbackTests(unittest.IsolatedAsyncioTestCase):
     def test_rejects_feedback_with_neither_rating_nor_comment(self):
         with self.assertRaises(ValidationError):
             SubmitFeedbackRequest(category="general")
+
+
+class ListGeneralFeedbackTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.session = MagicMock()
+        self.session.scalars = AsyncMock()
+        self.researcher = User(
+            id=uuid4(),
+            email="researcher@example.com",
+            password_hash="hash",
+            role=Role.RESEARCHER,
+        )
+
+    async def test_returns_feedback_without_study(self):
+        feedback_item = Feedback(
+            id=uuid4(),
+            user_id=uuid4(),
+            study_id=None,
+            category=FeedbackCategory.GENERAL,
+            rating=5,
+            comment="Loved the app",
+            created_at=datetime.now(timezone.utc),
+        )
+        self.session.scalars.return_value = [feedback_item]
+
+        response = await list_general_feedback(self.researcher, self.session)
+
+        self.assertEqual(1, len(response.feedback))
+        self.assertIsNone(response.feedback[0].study_id)
+        self.assertEqual(5, response.feedback[0].rating)
 
 
 if __name__ == "__main__":
