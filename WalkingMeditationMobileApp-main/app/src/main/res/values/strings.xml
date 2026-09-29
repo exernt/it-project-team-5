@@ -95,6 +95,15 @@
     <string name="researcher_feedback_general_title">General Feedback</string>
     <string name="researcher_feedback_empty">No feedback yet.</string>
     <string name="researcher_feedback_error">Unable to load feedback.</string>
+
+    <string name="admin_dashboard_heading">Admin Dashboard</string>
+    <string name="admin_pending_researchers_heading">Pending Researcher Approvals</string>
+    <string name="admin_pending_researchers_empty">No pending researcher registrations.</string>
+    <string name="admin_pending_researchers_error">Unable to load pending researchers.</string>
+    <string name="admin_pending_requested_on">Requested %1$s</string>
+    <string name="admin_approve_researcher">Approve</string>
+    <string name="admin_approving">Approving…</string>
+    <string name="admin_approved_researcher">Approved %1$s</string>
     <string name="researcher_feedback_header">%1$s · %2$s</string>
     <string name="researcher_feedback_rating">%1$d / 5</string>
     <string name="researcher_feedback_no_rating">No rating</string>
