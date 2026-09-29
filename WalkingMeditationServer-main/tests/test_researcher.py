@@ -1,10 +1,11 @@
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import HTTPException
 
-from route.auth import register_researcher, verify_researcher
+from route.auth import list_pending_researchers, register_researcher, verify_researcher
 from route.dependencies import require_role
 from route.models import RegisterResearcherRequest
 from database.models import ResearcherProfile, Role, User
@@ -65,6 +66,40 @@ class VerifyResearcherTests(unittest.IsolatedAsyncioTestCase):
             await verify_researcher(uuid4(), self.session)
 
         self.assertEqual(404, raised.exception.status_code)
+
+
+class ListPendingResearchersTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.session = MagicMock()
+        self.session.execute = AsyncMock()
+
+    async def test_returns_unverified_profiles_with_email(self):
+        user_id = uuid4()
+        profile = ResearcherProfile(
+            user_id=user_id,
+            institution="Example Uni",
+            verified_at=None,
+            created_on=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+        execute_result = MagicMock()
+        execute_result.all.return_value = [(profile, "alice@example.com")]
+        self.session.execute.return_value = execute_result
+
+        response = await list_pending_researchers(self.session)
+
+        self.assertEqual(1, len(response.researchers))
+        self.assertEqual(user_id, response.researchers[0].user_id)
+        self.assertEqual("alice@example.com", response.researchers[0].email)
+        self.assertEqual("Example Uni", response.researchers[0].institution)
+
+    async def test_returns_empty_list_when_none_pending(self):
+        execute_result = MagicMock()
+        execute_result.all.return_value = []
+        self.session.execute.return_value = execute_result
+
+        response = await list_pending_researchers(self.session)
+
+        self.assertEqual([], response.researchers)
 
 
 class RequireRoleTests(unittest.IsolatedAsyncioTestCase):
