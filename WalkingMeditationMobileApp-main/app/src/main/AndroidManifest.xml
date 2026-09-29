@@ -83,6 +83,9 @@
         <activity
             android:name=".FeedbackActivity"
             android:exported="false" />
+        <activity
+            android:name=".ResearcherFeedbackActivity"
+            android:exported="false" />
 
         <!-- Google Maps / Places API Key -->
         <meta-data
