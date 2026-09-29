@@ -76,7 +76,7 @@ public final class SessionManager {
     public static String getStudyParameters(@NonNull Context context) {
         return preferences(context).getString(STUDY_PARAMETERS, "");
     }
-    
+
     public static void saveUserInfo(
             @NonNull Context context,
             @NonNull String role,
@@ -96,5 +96,9 @@ public final class SessionManager {
     public static boolean isVerifiedResearcher(@NonNull Context context) {
         return "researcher".equals(getUserRole(context))
                 && preferences(context).getBoolean(RESEARCHER_VERIFIED, false);
+    }
+
+    public static boolean isAdmin(@NonNull Context context) {
+        return "admin".equals(getUserRole(context));
     }
 }

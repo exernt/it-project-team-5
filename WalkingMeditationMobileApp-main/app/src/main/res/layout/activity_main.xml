@@ -53,6 +53,14 @@
             android:layout_marginTop="16dp"
             android:text="@string/give_feedback"/>
 
+        <Button
+            android:id="@+id/btnAdminDashboard"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/admin_dashboard_heading"
+            android:visibility="gone"/>
+
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
