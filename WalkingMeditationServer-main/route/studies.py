@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 
 from route.dependencies import CurrentUserDependency, StudyOwnerDependency, VerifiedResearcherDependency
 from route.models import (
@@ -16,13 +16,12 @@ from route.models import (
     JoinStudyRequest,
     MyStudiesResponse,
     MyStudyResponse,
-    QuestionnaireResponse,
-    SetQuestionRequest,
     StudyGroupAssignmentResponse,
     StudyListResponse,
     StudyParticipantStatusResponse,
     StudyRegistrationResponse,
     StudyResponse,
+    StudyQuestionnaireResponse,
     StudyStatusResponse,
     SwapStudyGroupRequest,
 )
@@ -31,10 +30,13 @@ from database.models import (
     ConsentForm,
     Feedback,
     Questionnaire,
+    QuestionnaireResponse,
+    QuestionnaireStatus,
     Role,
     Study,
     StudyCreatedBy,
     StudyGroup,
+    StudyQuestionnaire,
     StudyRegistration,
     StudyStatus,
     User,
@@ -269,6 +271,46 @@ async def list_my_studies(
         .where(StudyRegistration.user_id == user.id)
     )
 
+    registrations = result.all()
+    active_study_ids = [
+        study.id
+        for registration, study in registrations
+        if registration.withdrawn_at is None
+        and study.status in (StudyStatus.RECRUITING, StudyStatus.ACTIVE)
+    ]
+    open_by_study: dict[UUID, list[StudyQuestionnaireResponse]] = {}
+    if active_study_ids:
+        questionnaire_result = await session.execute(
+            select(StudyQuestionnaire, Questionnaire, QuestionnaireResponse.id)
+            .join(Questionnaire, Questionnaire.id == StudyQuestionnaire.questionnaire_id)
+            .outerjoin(
+                QuestionnaireResponse,
+                and_(
+                    QuestionnaireResponse.study_questionnaire_id == StudyQuestionnaire.id,
+                    QuestionnaireResponse.respondent_id == user.id,
+                ),
+            )
+            .where(
+                StudyQuestionnaire.study_id.in_(active_study_ids),
+                StudyQuestionnaire.revoked_at.is_(None),
+                Questionnaire.status == QuestionnaireStatus.PUBLISHED,
+            )
+            .order_by(StudyQuestionnaire.issued_at.desc())
+        )
+        for issuance, questionnaire, response_id in questionnaire_result.all():
+            open_by_study.setdefault(issuance.study_id, []).append(
+                StudyQuestionnaireResponse(
+                    id=issuance.id,
+                    study_id=issuance.study_id,
+                    questionnaire_id=issuance.questionnaire_id,
+                    round_number=issuance.round_number,
+                    title=questionnaire.title,
+                    issued_at=issuance.issued_at,
+                    revoked_at=issuance.revoked_at,
+                    has_responded=response_id is not None,
+                )
+            )
+
     return MyStudiesResponse(
         studies=[
             MyStudyResponse(
@@ -281,8 +323,9 @@ async def list_my_studies(
                 registered_at=registration.registered_at,
                 consented_at=registration.consented_at,
                 withdrawn_at=registration.withdrawn_at,
+                open_questionnaires=open_by_study.get(study.id, []),
             )
-            for registration, study in result.all()
+            for registration, study in registrations
         ]
     )
 
@@ -598,44 +641,6 @@ async def close_study(
         description=study.description or "",
         status=study.status.value,
         script_generation_parameters=study.script_generation_parameters or "",
-    )
-
-
-@router.post(
-    "/{study_id}/setquestion",
-    response_model=QuestionnaireResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-async def set_question(
-        study_id: UUID,
-        payload: SetQuestionRequest,
-        _owner: StudyOwnerDependency,
-        session: DatabaseSessionDependency,
-) -> QuestionnaireResponse:
-    # Serialize ID allocation for each study so concurrent requests cannot
-    # calculate the same next value.
-    await session.execute(
-        select(Study.id)
-        .where(Study.id == study_id)
-        .with_for_update()
-    )
-    current_max_id = await session.scalar(
-        select(func.max(Questionnaire.id)).where(
-            Questionnaire.study_id == study_id
-        )
-    )
-    questionnaire = Questionnaire(
-        study_id=study_id,
-        id=(current_max_id or 0) + 1,
-        data=payload.model_dump(mode="json"),
-    )
-    session.add(questionnaire)
-    await session.commit()
-
-    return QuestionnaireResponse(
-        id=questionnaire.id,
-        study_id=questionnaire.study_id,
-        data=questionnaire.data,
     )
 
 @router.get(
