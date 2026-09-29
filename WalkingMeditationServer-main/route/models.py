@@ -251,7 +251,15 @@ class ResearcherProfileResponse(BaseModel):
     verified_at: datetime | None
     role: str
 
+class PendingResearcherResponse(BaseModel):
+    user_id: UUID
+    email: str
+    institution: str | None
+    requested_at: datetime
 
+
+class PendingResearchersListResponse(BaseModel):
+    researchers: list[PendingResearcherResponse]
 class CreateStudyRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     duration: int = Field(..., gt=0, description="Study duration in days")

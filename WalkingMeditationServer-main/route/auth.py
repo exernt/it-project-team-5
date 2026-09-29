@@ -21,6 +21,8 @@ from route.models import (
     RefreshResponse,
     RegisterResearcherRequest,
     ResearcherProfileResponse,
+    PendingResearcherResponse,
+    PendingResearchersListResponse,
 )
 from database.core import DatabaseSessionDependency
 from database.models import User, PasswordResetToken, RefreshToken, ResearcherProfile, Role
@@ -307,6 +309,36 @@ async def register_researcher(
         verified_at=profile.verified_at,
         role=user.role.value,
     )
+
+@router.get(
+    "/admin/researchers/pending",
+    response_model=PendingResearchersListResponse,
+    dependencies=[Depends(require_role(Role.ADMIN))],
+)
+async def list_pending_researchers(
+        session: DatabaseSessionDependency,
+) -> PendingResearchersListResponse:
+    """List researcher registrations still awaiting admin approval, so an
+    admin can review and verify them from the app instead of the database."""
+    result = await session.execute(
+        select(ResearcherProfile, User.email)
+        .join(User, User.id == ResearcherProfile.user_id)
+        .where(ResearcherProfile.verified_at.is_(None))
+        .order_by(ResearcherProfile.created_on.asc())
+    )
+
+    return PendingResearchersListResponse(
+        researchers=[
+            PendingResearcherResponse(
+                user_id=profile.user_id,
+                email=email,
+                institution=profile.institution,
+                requested_at=profile.created_on,
+            )
+            for profile, email in result.all()
+        ]
+    )
+
 
 @router.post(
     "/admin/researchers/{user_id}/verify",
