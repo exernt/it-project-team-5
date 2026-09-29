@@ -113,6 +113,13 @@
                 android:text="@string/view_roster" />
 
             <Button
+                android:id="@+id/btnResearcherDetailFeedback"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/field_height"
+                android:layout_marginTop="@dimen/space_12"
+                android:text="@string/view_feedback" />
+
+            <Button
                 android:id="@+id/btnResearcherDetailBack"
                 android:layout_width="match_parent"
                 android:layout_height="@dimen/field_height"

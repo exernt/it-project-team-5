@@ -27,6 +27,13 @@
         android:text="@string/new_study"
         android:textColor="@color/white" />
 
+    <Button
+        android:id="@+id/btnGeneralFeedback"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_8"
+        android:text="@string/researcher_feedback_general_title" />
+
     <ProgressBar
         android:id="@+id/researcherStudyListProgress"
         android:layout_width="wrap_content"
