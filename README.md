@@ -270,18 +270,39 @@ The owner can move any registered user to another configured group with
 }
 ```
 
-The study owner can add a questionnaire with
-`POST /studies/{study_id}/setquestion`. Questionnaire IDs start at 1 and
-increment independently within each study. The temporary request format is:
+Questionnaires are reusable researcher-owned definitions. A verified researcher
+creates a draft with `POST /questionnaires`, then publishes it with
+`POST /questionnaires/{questionnaire_id}/publish`. Researchers can list their
+own definitions with `GET /questionnaires` and retrieve one with
+`GET /questionnaires/{questionnaire_id}`. Before publication, the owner can
+replace the complete draft definition with
+`PUT /questionnaires/{questionnaire_id}`. Published definitions are immutable.
+
+A study owner opens a new questionnaire round for participants with
+`POST /studies/{study_id}/questionnaires`:
 
 ```json
 {
-  "title": "Weekly check-in"
+  "questionnaire_id": "00000000-0000-0000-0000-000000000001"
 }
 ```
 
-The questionnaire is stored as JSON so the payload can be expanded once its
-final format is decided.
+The questionnaire must be published, owned by the same researcher as the
+study, and the study must be recruiting or active. Every call creates a new
+round number for that `(study, questionnaire)` pair, allowing the same
+questionnaire to be sent repeatedly without mixing response sets.
+
+`GET /studies/mine` includes an `open_questionnaires` array for each current
+study. Participants may also list open rounds with
+`GET /studies/{study_id}/questionnaires`, then retrieve a round's complete
+definition with `GET /studies/{study_id}/questionnaires/{issuance_id}`. Answers
+are submitted once per participant per round to
+`POST /studies/{study_id}/questionnaires/{issuance_id}/responses`.
+
+Only active participants in the named study can retrieve participant-facing
+questionnaires or submit answers. Study owners can revoke a round and retrieve
+its responses. See [`questionnaire.md`](questionnaire.md) for the questionnaire
+JSON and answer formats, lifecycle, and endpoint examples.
 
 ## Server tests
 

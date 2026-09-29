@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlalchemy import Boolean, CheckConstraint, DateTime, Text, UniqueConstraint, Uuid, func, text, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.dialects.postgresql import JSONB
 
 from database.core import Base
 
@@ -270,32 +271,6 @@ class ConsentForm(Base):
     body_text: Mapped[str] = mapped_column(Text, nullable=False)
     version: Mapped[int] = mapped_column(nullable=False, server_default=text("1"))
 
-
-class Questionnaire(Base):
-    """A JSON questionnaire belonging to a study.
-
-    The payload remains intentionally unstructured while the questionnaire
-    format is being designed. IDs are allocated sequentially within a study.
-    """
-
-    __tablename__ = "questionnaires"
-    __table_args__ = (
-        CheckConstraint("id > 0", name="ck_questionnaires_id_positive"),
-    )
-
-    study_id: Mapped[UUID] = mapped_column(
-        Uuid(as_uuid=True),
-        ForeignKey("study.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    id: Mapped[int] = mapped_column(primary_key=True)
-    data: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
-    created_on: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-    )
-
 class FeedbackCategory(str, enum.Enum):
     GENERAL = "general"
     STUDY = "study"
@@ -346,6 +321,136 @@ class Feedback(Base):
     rating: Mapped[int | None] = mapped_column(nullable=True)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+class QuestionnaireStatus(str, enum.Enum):
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    ARCHIVED = "archived"
+ 
+ 
+class Questionnaire(Base):
+    """A questionnaire definition, owned by a researcher, independent of
+    any study it may later be issued to. UNCHANGED from the prior model."""
+ 
+    __tablename__ = "questionnaires"
+ 
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    researcher_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    status: Mapped[QuestionnaireStatus] = mapped_column(
+        SqlEnum(
+            QuestionnaireStatus,
+            name="questionnaire_status",
+            native_enum=True,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
+        server_default=text("'draft'::questionnaire_status"),
+    )
+    definition: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    created_on: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+class StudyQuestionnaire(Base):
+    """One issuance round of a questionnaire to a study.
+
+    A questionnaire can be issued to the same study more than once.  The
+    natural key is therefore (study_id, questionnaire_id, round_number),
+    while ``id`` remains the convenient API/database primary key.  Revoking
+    a round sets revoked_at so its responses remain available as history.
+    """
+ 
+    __tablename__ = "study_questionnaires"
+    __table_args__ = (
+        UniqueConstraint(
+            "study_id",
+            "questionnaire_id",
+            "round_number",
+            name="uq_study_questionnaire_round",
+        ),
+    )
+ 
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    study_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("study.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    questionnaire_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("questionnaires.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    round_number: Mapped[int] = mapped_column(nullable=False)
+    issued_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+
+class QuestionnaireResponse(Base):
+    """A single respondent's submitted answers, scoped to a specific
+    study's issuance of a questionnaire (not the questionnaire directly --
+    see StudyQuestionnaire). study_id and questionnaire_id are intentionally
+    NOT stored here; both are derived by joining through
+    study_questionnaire_id, so a response can't exist for a pairing that
+    was never actually issued.
+    """
+ 
+    __tablename__ = "questionnaire_responses"
+    __table_args__ = (
+        UniqueConstraint(
+            "study_questionnaire_id",
+            "respondent_id",
+            name="uq_questionnaire_response_respondent_round",
+        ),
+    )
+ 
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    study_questionnaire_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("study_questionnaires.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    respondent_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    answers: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    submitted_on: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
