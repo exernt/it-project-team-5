@@ -75,6 +75,11 @@ public class ResearcherStudyDetailActivity extends AppCompatActivity {
         findViewById(R.id.btnResearcherDetailRoster).setOnClickListener(view ->
                 startActivity(ResearcherRosterActivity.createIntent(this, studyId))
         );
+        findViewById(R.id.btnResearcherDetailFeedback).setOnClickListener(view ->
+                startActivity(ResearcherFeedbackActivity.createIntentForStudy(
+                        this, studyId, nameField.getText().toString()
+                ))
+        );
     }
 
     private void loadStudy() {
