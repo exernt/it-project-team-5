@@ -210,7 +210,7 @@ public final class UserApiClient {
     }
 
     @NonNull
-    private static String registerErrorMessage(@NonNull String responseBody, int statusCode) {
+    static String registerErrorMessage(@NonNull String responseBody, int statusCode) {
         try {
             String detail = new JSONObject(responseBody).optString("detail", "");
             if (!detail.isEmpty()) {
