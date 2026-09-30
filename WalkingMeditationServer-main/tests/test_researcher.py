@@ -40,6 +40,16 @@ class RegisterResearcherTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(409, raised.exception.status_code)
 
+    async def test_creates_profile_without_institution(self):
+        user = User(id=uuid4(), email="alice@example.com", password_hash="hash", role=Role.PARTICIPANT)
+        self.session.get.return_value = None
+        payload = RegisterResearcherRequest(institution=None)
+
+        response = await register_researcher(payload, user, self.session)
+
+        self.assertEqual(Role.RESEARCHER, user.role)
+        self.assertIsNone(response.institution)
+
 
 class VerifyResearcherTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
@@ -66,6 +76,18 @@ class VerifyResearcherTests(unittest.IsolatedAsyncioTestCase):
             await verify_researcher(uuid4(), self.session)
 
         self.assertEqual(404, raised.exception.status_code)
+
+    async def test_reverifying_already_verified_profile_is_idempotent(self):
+        user_id = uuid4()
+        original_verified_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        profile = ResearcherProfile(user_id=user_id, institution="Example Uni", verified_at=original_verified_at)
+        user = User(id=user_id, email="alice@example.com", password_hash="hash", role=Role.RESEARCHER)
+        self.session.get.side_effect = [profile, user]
+
+        response = await verify_researcher(user_id, self.session)
+
+        self.assertIsNotNone(response.verified_at)
+        self.assertGreaterEqual(response.verified_at, original_verified_at)
 
 
 class ListPendingResearchersTests(unittest.IsolatedAsyncioTestCase):
