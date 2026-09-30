@@ -61,6 +61,14 @@
             android:text="@string/admin_dashboard_heading"
             android:visibility="gone"/>
 
+        <Button
+            android:id="@+id/btnBecomeResearcher"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/become_researcher"
+            android:visibility="gone"/>
+
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -16,7 +16,7 @@ import okhttp3.OkHttpClient;
 
 public class MainActivity extends AppCompatActivity {
 
-    private Button btnExplore, btnResearcherDashboard, btnStudy, btnFeedback, btnAdminDashboard;
+    private Button btnExplore, btnResearcherDashboard, btnStudy, btnFeedback, btnAdminDashboard, btnBecomeResearcher;
     private final OkHttpClient httpClient = new OkHttpClient();
 
     @Override
@@ -29,6 +29,7 @@ public class MainActivity extends AppCompatActivity {
         btnStudy = findViewById(R.id.btnStudy);
         btnFeedback = findViewById(R.id.btnFeedback);
         btnAdminDashboard = findViewById(R.id.btnAdminDashboard);
+        btnBecomeResearcher = findViewById(R.id.btnBecomeResearcher);
 
         if (SessionManager.isVerifiedResearcher(this)) {
             btnResearcherDashboard.setVisibility(View.VISIBLE);
@@ -42,6 +43,13 @@ public class MainActivity extends AppCompatActivity {
             btnAdminDashboard.setVisibility(View.VISIBLE);
             btnAdminDashboard.setOnClickListener(view ->
                     startActivity(new Intent(MainActivity.this, AdminDashboardActivity.class))
+            );
+        }
+
+        if (!SessionManager.isAdmin(this) && !"researcher".equals(SessionManager.getUserRole(this))) {
+            btnBecomeResearcher.setVisibility(View.VISIBLE);
+            btnBecomeResearcher.setOnClickListener(view ->
+                    startActivity(new Intent(MainActivity.this, BecomeResearcherActivity.class))
             );
         }
 
