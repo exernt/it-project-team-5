@@ -137,6 +137,8 @@ class ParkPlace(BaseModel):
     name: str
     lat: float
     lon: float
+    primary_type: str | None = None
+    types: List[str] = Field(default_factory=list)
     
 
 class ParkDetourResult(BaseModel):

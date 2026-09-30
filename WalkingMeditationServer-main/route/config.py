@@ -63,6 +63,18 @@ def google_maps_api_key() -> str:
     return key
 
 
+def park_fallback_enabled() -> bool:
+    """Whether route search may fall back from city parks to generic parks."""
+    value = os.getenv("ENABLE_PARK_FALLBACK", "false").strip().casefold()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off", ""}:
+        return False
+    raise ValueError(
+        "ENABLE_PARK_FALLBACK must be one of true/false, 1/0, yes/no, or on/off"
+    )
+
+
 def openai_api_key()->str:
     key = os.getenv("OPENAI_API_KEY")
     if not key:

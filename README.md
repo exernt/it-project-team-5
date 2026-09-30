@@ -101,6 +101,7 @@ See `READList/Procedure.md` for the full set of database commands (inspecting mi
 | Variable | Purpose |
 |---|---|
 | `GOOGLE_MAPS_API_KEY` | Google Routes/Places/Elevation/Weather access |
+| `ENABLE_PARK_FALLBACK` | Defaults to `false`; set to `true` to supplement `city_park` results with generic `park` results |
 | `OPENAI_API_KEY` | Meditation script generation |
 | `APP_API_TOKEN` | Optional shared secret checked against the mobile app's `X-App-Token` header (see [Authentication](#authentication) below) |
 | `DATABASE_URL` | PostgreSQL connection string (defaults match the local Docker Compose setup) |
@@ -314,19 +315,64 @@ $env:PYTHONPATH = (Resolve-Path .).Path
 python -m unittest discover -s tests -v
 ```
 
-## End-to-end check (for final tests)
+## Manual route-generation check
 
-With a configured server already running and reachable from the Android app:
+Live Google integration is intentionally tested manually; automated tests use
+mock clients and do not require an API key or consume Maps quota.
 
-1. Configure `MAPS_API_KEY`, `SERVER_BASE_URL`, and, when required,
-   `SERVER_ACCESS_TOKEN`.
-2. Launch the app and choose **Explore**.
-3. Select source and destination suggestions, enter the available time and a
-   meditation purpose, and request routes.
-4. Choose the direct route or a park route to generate the meditation.
-5. Download narration audio with the floating download button.
-6. When the download completes, start playback and walk along the selected
-   route.
+### Preparation
 
-Live integration checks require the corresponding service credentials and TTS
-model dependencies.
+1. In Google Cloud, enable **Maps SDK for Android**, **Places API (New)**, and
+   **Routes API**. Enable Elevation and Weather as well if testing the current
+   script generator.
+2. Use an Android-restricted key for the app (package name and debug/release
+   SHA-1 certificate restrictions) and a separate server-side key restricted
+   to the APIs called by the server.
+3. Set `GOOGLE_MAPS_API_KEY` and `ENABLE_PARK_FALLBACK=false` in the server
+   `.env`, then start FastAPI. Set the Android `MAPS_API_KEY`,
+   `SERVER_BASE_URL`, and, when required, `SERVER_ACCESS_TOKEN` Gradle
+   properties as described above.
+4. Use an Android emulator with a configured location, or a physical device
+   that can reach the server. A physical device should use a reachable HTTPS
+   endpoint; the debug emulator can use `http://10.0.2.2:8000`.
+
+### Main flow
+
+1. Launch the app, choose **Explore**, and grant location permission. Confirm
+   that the map centres on the device location without filling the Source
+   field automatically.
+2. Press **Use current location**. Confirm that Source becomes “Current
+   location” and a start marker appears.
+3. Search for a destination, choose a Places suggestion, and confirm that its
+   marker appears and the map frames both endpoints. Also verify that manually
+   editing the selected text invalidates the old marker until another
+   suggestion is selected.
+4. Enter a time limit and meditation purpose, then press **Generate routes**.
+   Confirm that the button displays **Loading...** and cannot be submitted
+   twice.
+5. Confirm that no more than three park-constrained route cards are displayed;
+   the direct non-park baseline must not appear.
+6. Tap each card. Confirm that the selected card is highlighted, its route and
+   park marker are displayed on the map, and **Select Route** becomes enabled.
+7. Press **Back**. Confirm that the source, destination, time, purpose, and map
+   markers remain populated. Generate the routes again and also verify Android
+   system Back from the result state.
+8. Select a route and press **Select Route**. Confirm the button displays
+   **Loading...** and the next screen displays the server response. `{}` and an
+   empty response are valid for this temporary screen.
+
+### Failure and configuration cases
+
+1. Deny location permission. Confirm autocomplete remains usable and **Use
+   current location** explains that permission is required.
+2. Choose endpoints whose direct walking time exceeds a very short limit.
+   Confirm the app reports that the direct walk exceeds the limit and remains
+   on the input state.
+3. Choose a route corridor with no qualifying city-park route. Confirm the app
+   reports that no urban-park route fits rather than offering the baseline.
+4. Stop the server and retry route generation, then script generation. Confirm
+   each error leaves the current inputs or selected route available for retry.
+5. Test fallback disabled, then set `ENABLE_PARK_FALLBACK=true`, restart the
+   server, and repeat the same search. With fallback disabled, returned parks
+   must have `primary_type` `city_park`; with it enabled, generic `park`
+   candidates may supplement those results.

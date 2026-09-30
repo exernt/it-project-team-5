@@ -60,6 +60,9 @@
         <activity
             android:name=".RouteOptionsActivity"
             android:exported="false" />
+        <activity
+            android:name=".ScriptResultActivity"
+            android:exported="false" />
         <activity android:name=".PathSelectionActivity"
             android:exported="false"/>
         <activity

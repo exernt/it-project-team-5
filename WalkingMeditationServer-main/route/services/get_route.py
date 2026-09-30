@@ -86,12 +86,14 @@ async def generate_walk_route(
         evaluated = await asyncio.gather(*(eval_one(p) for p in parks))
         results = [r for r in evaluated if r is not None]
 
-        results.sort(key=lambda r: (-r.slack_s, r.added_s, r.detour_s))
+        # The time limit is a hard ceiling; prefer feasible routes that make
+        # useful use of it. Each result already represents a different park.
+        results.sort(key=lambda r: (r.slack_s, r.added_s, r.detour_s))
 
         return WalkRouteResponse(
             origin=source,
             destination=destination,
             total_travel_time=total_travel_time,
             baseline=baseline,
-            parks=results,
+            parks=results[:3],
         )

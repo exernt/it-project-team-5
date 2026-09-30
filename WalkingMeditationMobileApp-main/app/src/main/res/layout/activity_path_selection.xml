@@ -2,19 +2,21 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/white">
+    android:background="@color/white"
+    android:fillViewport="true">
 
     <LinearLayout
-        style="@style/App.ScreenContainer">
+        style="@style/App.ScreenContainer"
+        android:paddingBottom="@dimen/space_24">
 
         <ImageView
             android:id="@+id/img_logo"
             android:layout_width="@dimen/logo_size"
             android:layout_height="@dimen/logo_size"
-            android:layout_marginBottom="@dimen/space_32"
-            android:src="@mipmap/ic_launcher"
+            android:layout_marginBottom="@dimen/space_24"
             android:contentDescription="App Logo"
-            android:scaleType="fitCenter" />
+            android:scaleType="fitCenter"
+            android:src="@mipmap/ic_launcher" />
 
         <TextView
             style="@style/App.Label"
@@ -23,8 +25,15 @@
         <AutoCompleteTextView
             android:id="@+id/et_source"
             style="@style/App.RoundedInput"
-            android:hint="Enter source"
-            android:layout_marginBottom="@dimen/space_24" />
+            android:hint="Search for a starting point"
+            android:layout_marginBottom="@dimen/space_8" />
+
+        <Button
+            android:id="@+id/btn_use_current_location"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/space_24"
+            android:text="Use current location" />
 
         <TextView
             style="@style/App.Label"
@@ -33,48 +42,98 @@
         <AutoCompleteTextView
             android:id="@+id/et_destination"
             style="@style/App.RoundedInput"
-            android:hint="Enter destination"
-            android:layout_marginBottom="@dimen/space_24" />
+            android:hint="Search for a destination"
+            android:layout_marginBottom="@dimen/space_12" />
 
-        <TextView
-            style="@style/App.Label"
-            android:text="Available time (minutes)" />
+        <com.google.android.gms.maps.MapView
+            android:id="@+id/route_map"
+            android:layout_width="match_parent"
+            android:layout_height="220dp"
+            android:contentDescription="Selected locations and route map" />
 
-        <EditText
-            android:id="@+id/et_total_minutes"
-            style="@style/App.RoundedInput"
-            android:hint="60"
-            android:inputType="number"
-            android:maxLength="3"
-            android:layout_marginBottom="@dimen/space_24" />
-
-        <TextView
-            style="@style/App.Label"
-            android:text="Meditation purpose" />
-
-        <EditText
-            android:id="@+id/et_context"
-            style="@style/App.RoundedInput"
-            android:hint="For example: prepare for a stressful meeting"
-            android:inputType="textCapSentences|textMultiLine"
-            android:maxLength="1000"
-            android:layout_marginBottom="@dimen/space_8" />
-
-        <TextView
-            android:id="@+id/tv_study_status"
+        <LinearLayout
+            android:id="@+id/input_controls"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="@dimen/space_36"
-            android:text="Currently participating in study"
-            android:textColor="@color/hint_grey"
-            android:textSize="13sp"
-            android:visibility="gone" />
+            android:layout_marginTop="@dimen/space_24"
+            android:orientation="vertical">
 
-        <Button
-            android:id="@+id/btn_find_path"
-            style="@style/App.PrimaryButton"
-            android:text="Find Path" />
+            <TextView
+                style="@style/App.Label"
+                android:text="Available time (minutes)" />
 
+            <EditText
+                android:id="@+id/et_total_minutes"
+                style="@style/App.RoundedInput"
+                android:hint="60"
+                android:inputType="number"
+                android:maxLength="3"
+                android:layout_marginBottom="@dimen/space_24" />
+
+            <TextView
+                style="@style/App.Label"
+                android:text="Meditation purpose" />
+
+            <EditText
+                android:id="@+id/et_context"
+                style="@style/App.RoundedInput"
+                android:hint="For example: prepare for a stressful meeting"
+                android:inputType="textCapSentences|textMultiLine"
+                android:maxLength="1000"
+                android:layout_marginBottom="@dimen/space_8" />
+
+            <TextView
+                android:id="@+id/tv_study_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="@dimen/space_24"
+                android:text="Currently participating in study"
+                android:textColor="@color/hint_grey"
+                android:textSize="13sp"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/btn_find_path"
+                style="@style/App.PrimaryButton"
+                android:text="Generate routes" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/results_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_24"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/tv_routes_header"
+                style="@style/App.Label"
+                android:layout_width="match_parent"
+                android:text="Choose a route"
+                android:textAlignment="center"
+                android:textSize="18sp" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rv_route_options"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_8"
+                android:nestedScrollingEnabled="false" />
+
+            <Button
+                android:id="@+id/btn_select_route"
+                style="@style/App.PrimaryButton"
+                android:layout_marginTop="@dimen/space_12"
+                android:enabled="false"
+                android:text="Select Route" />
+
+            <Button
+                android:id="@+id/btn_back_to_search"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_8"
+                android:text="Back" />
+        </LinearLayout>
     </LinearLayout>
-
 </ScrollView>

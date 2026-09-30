@@ -22,6 +22,7 @@ public class RouteOptionsAdapter extends RecyclerView.Adapter<RouteOptionsAdapte
 
     private final List<RouteOption> items;
     private final OnRouteClickListener listener;
+    private int selectedPosition = RecyclerView.NO_POSITION;
 
     public RouteOptionsAdapter(List<RouteOption> items, OnRouteClickListener listener) {
         this.items = items;
@@ -41,6 +42,7 @@ public class RouteOptionsAdapter extends RecyclerView.Adapter<RouteOptionsAdapte
         RouteOption opt = items.get(position);
 
         holder.tvTitle.setText(opt.title);
+        holder.itemView.setSelected(position == selectedPosition);
 
         // Duration line
         String durationText = formatDuration(opt.durationSeconds);
@@ -53,12 +55,24 @@ public class RouteOptionsAdapter extends RecyclerView.Adapter<RouteOptionsAdapte
             holder.tvExtra.setText("Baseline route (no detour)");
         }
 
-        holder.itemView.setOnClickListener(v -> listener.onRouteClicked(opt));
+        holder.itemView.setOnClickListener(v -> {
+            int previous = selectedPosition;
+            selectedPosition = holder.getBindingAdapterPosition();
+            if (previous != RecyclerView.NO_POSITION) notifyItemChanged(previous);
+            if (selectedPosition != RecyclerView.NO_POSITION) notifyItemChanged(selectedPosition);
+            listener.onRouteClicked(opt);
+        });
     }
 
     @Override
     public int getItemCount() {
         return items.size();
+    }
+
+    public void clearSelection() {
+        int previous = selectedPosition;
+        selectedPosition = RecyclerView.NO_POSITION;
+        if (previous != RecyclerView.NO_POSITION) notifyItemChanged(previous);
     }
 
     static class VH extends RecyclerView.ViewHolder {
