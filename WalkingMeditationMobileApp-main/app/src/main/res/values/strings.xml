@@ -104,6 +104,15 @@
     <string name="admin_approve_researcher">Approve</string>
     <string name="admin_approving">Approving…</string>
     <string name="admin_approved_researcher">Approved %1$s</string>
+
+    <string name="become_researcher">Become a Researcher</string>
+    <string name="become_researcher_heading">Become a Researcher</string>
+    <string name="become_researcher_explanation">Request researcher access to create and run studies. An admin will need to approve your request before you can use the researcher dashboard.</string>
+    <string name="become_researcher_institution_label">Institution (optional)</string>
+    <string name="become_researcher_institution_hint">e.g. University of Example</string>
+    <string name="become_researcher_submit">Request Researcher Access</string>
+    <string name="become_researcher_submitting">Submitting…</string>
+    <string name="become_researcher_success">Request submitted! An admin will review it soon.</string>
     <string name="researcher_feedback_header">%1$s · %2$s</string>
     <string name="researcher_feedback_rating">%1$d / 5</string>
     <string name="researcher_feedback_no_rating">No rating</string>
