@@ -16,7 +16,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication"
-        android:usesCleartextTraffic="false"
+        android:usesCleartextTraffic="true"
         tools:targetApi="31" >
 
         <activity
@@ -46,7 +46,16 @@
             android:exported="false" />
         <activity
             android:name=".StudyDetailsActivity"
-            android:exported="false" />
+            android:exported="true" >
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:pathPattern="/study/join" />
+                <data android:scheme="http" android:pathPattern="/study/join" />
+                <data android:scheme="walkingmeditation" android:host="study" android:path="/join" />
+            </intent-filter>
+        </activity>
         <activity
             android:name=".StudyUserManageActivity"
             android:exported="false" />
@@ -67,6 +76,12 @@
             android:exported="false" />
         <activity
             android:name=".ResearcherStudyListActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ResearcherLoginActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ResearcherSignUpActivity"
             android:exported="false" />
         <activity
             android:name=".ResearcherStudyDetailActivity"

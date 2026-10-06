@@ -12,7 +12,6 @@ from route.models import (
     CreateStudyRequest,
     EditStudyRequest,
     JoinStudyRequest,
-    SetQuestionRequest,
     SwapStudyGroupRequest,
 )
 from database.models import (
@@ -20,11 +19,13 @@ from database.models import (
     Feedback,
     FeedbackCategory,
     Questionnaire,
+    QuestionnaireStatus,
     ResearcherProfile,
     Role,
     Study,
     StudyCreatedBy,
     StudyGroup,
+    StudyQuestionnaire,
     StudyRegistration,
     StudyStatus,
     User,
@@ -44,7 +45,6 @@ from route.studies import (
     list_studies,
     list_study_feedback,
     publish_study,
-    set_question,
     swap_study_group,
 )
 
@@ -489,7 +489,9 @@ class ListMyStudiesTests(unittest.IsolatedAsyncioTestCase):
         )
         result_mock = MagicMock()
         result_mock.all.return_value = [(registration, study)]
-        self.session.execute.return_value = result_mock
+        questionnaire_result = MagicMock()
+        questionnaire_result.all.return_value = []
+        self.session.execute.side_effect = [result_mock, questionnaire_result]
 
         response = await list_my_studies(self.user, self.session)
 
@@ -512,6 +514,49 @@ class ListMyStudiesTests(unittest.IsolatedAsyncioTestCase):
         response = await list_my_studies(self.user, self.session)
 
         self.assertEqual(0, len(response.studies))
+
+    async def test_includes_open_questionnaire_rounds(self):
+        study = Study(
+            id=uuid4(),
+            name="Morning walks",
+            duration=14,
+            status=StudyStatus.ACTIVE,
+        )
+        registration = StudyRegistration(
+            user_id=self.user.id,
+            study_id=study.id,
+            registered_at=datetime.now(timezone.utc),
+            consented_at=datetime.now(timezone.utc),
+            withdrawn_at=None,
+            study_group=StudyGroup.CONTROL,
+        )
+        questionnaire = Questionnaire(
+            id=uuid4(),
+            title="Weekly check-in",
+            researcher_id=uuid4(),
+            status=QuestionnaireStatus.PUBLISHED,
+            definition={"title": "Weekly check-in", "questions": []},
+            created_on=datetime.now(timezone.utc),
+        )
+        issuance = StudyQuestionnaire(
+            id=uuid4(),
+            study_id=study.id,
+            questionnaire_id=questionnaire.id,
+            round_number=2,
+            issued_at=datetime.now(timezone.utc),
+            revoked_at=None,
+        )
+        registrations_result = MagicMock()
+        registrations_result.all.return_value = [(registration, study)]
+        questionnaires_result = MagicMock()
+        questionnaires_result.all.return_value = [(issuance, questionnaire, None)]
+        self.session.execute.side_effect = [registrations_result, questionnaires_result]
+
+        response = await list_my_studies(self.user, self.session)
+
+        self.assertEqual(1, len(response.studies[0].open_questionnaires))
+        self.assertEqual(2, response.studies[0].open_questionnaires[0].round_number)
+        self.assertFalse(response.studies[0].open_questionnaires[0].has_responded)
 
     async def test_includes_withdrawn_registrations(self):
         study = Study(
@@ -1212,56 +1257,6 @@ class RejoinStudyTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(409, raised.exception.status_code)
-
-
-class SetQuestionTests(unittest.IsolatedAsyncioTestCase):
-    def setUp(self):
-        self.session = MagicMock()
-        self.session.execute = AsyncMock()
-        self.session.scalar = AsyncMock()
-        self.session.commit = AsyncMock()
-        self.study_id = uuid4()
-        self.owner = User(
-            id=uuid4(),
-            email="researcher@example.com",
-            password_hash="hash",
-            role=Role.RESEARCHER,
-        )
-
-    async def test_stores_questionnaire_json_with_first_id(self):
-        self.session.scalar.return_value = None
-
-        response = await set_question(
-            self.study_id,
-            SetQuestionRequest(title="Weekly check-in"),
-            self.owner,
-            self.session,
-        )
-
-        questionnaire = self.session.add.call_args.args[0]
-        self.assertIsInstance(questionnaire, Questionnaire)
-        self.assertEqual(1, questionnaire.id)
-        self.assertEqual(self.study_id, questionnaire.study_id)
-        self.assertEqual({"title": "Weekly check-in"}, questionnaire.data)
-        self.assertEqual(questionnaire.data, response.data)
-        self.session.execute.assert_awaited_once()
-        self.session.commit.assert_awaited_once()
-
-    async def test_increments_id_within_study(self):
-        self.session.scalar.return_value = 2
-
-        response = await set_question(
-            self.study_id,
-            SetQuestionRequest(title="Follow-up"),
-            self.owner,
-            self.session,
-        )
-
-        self.assertEqual(3, response.id)
-
-    def test_rejects_fields_other_than_title(self):
-        with self.assertRaises(ValidationError):
-            SetQuestionRequest(title="Check-in", questions=[])
 
 class ListStudyFeedbackTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):

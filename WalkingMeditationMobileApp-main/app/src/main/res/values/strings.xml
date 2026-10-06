@@ -52,6 +52,7 @@
     <string name="activate_study">Activate</string>
     <string name="close_study">Close study</string>
     <string name="study_updated">Study updated.</string>
+    <string name="logout">Log Out</string>
     <string name="create_study_title">New Study</string>
     <string name="create_study_button">Create study</string>
     <string name="new_study">+ New Study</string>
@@ -65,6 +66,7 @@
     <string name="move_to_control">Move to control</string>
     <string name="move_to_experimental">Move to experimental</string>
     <string name="view_roster">View Participants</string>
+    <string name="share_invite_link">Share Invite Link</string>
     <plurals name="study_duration_days">
         <item quantity="one">Duration: %d day</item>
         <item quantity="other">Duration: %d days</item>

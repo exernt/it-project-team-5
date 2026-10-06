@@ -288,16 +288,74 @@ class JoinStudyRequest(BaseModel):
     agrees_to_consent: bool
 
 
-class SetQuestionRequest(BaseModel):
+class CreateQuestionnaireRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    definition: dict[str, object]
+
+
+class QuestionnaireDefinitionResponse(BaseModel):
+    id: UUID
     title: str
+    researcher_id: UUID | None
+    status: str
+    definition: dict[str, object]
+    created_on: datetime
 
 
-class QuestionnaireResponse(BaseModel):
-    id: int
+class QuestionnaireDefinitionListResponse(BaseModel):
+    questionnaires: list[QuestionnaireDefinitionResponse]
+
+
+class IssueQuestionnaireRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    questionnaire_id: UUID
+
+
+class StudyQuestionnaireResponse(BaseModel):
+    id: UUID
     study_id: UUID
-    data: dict[str, object]
+    questionnaire_id: UUID
+    round_number: int
+    title: str
+    issued_at: datetime
+    revoked_at: datetime | None
+    has_responded: bool | None = None
+
+
+class StudyQuestionnaireListResponse(BaseModel):
+    issued_questionnaires: list[StudyQuestionnaireResponse]
+
+
+class StudyQuestionnaireDetailResponse(StudyQuestionnaireResponse):
+    definition: dict[str, object]
+
+
+class SubmitAnswersRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    answers: dict[str, object]
+
+
+class QuestionnaireAnswerResponse(BaseModel):
+    id: UUID
+    study_questionnaire_id: UUID
+    respondent_id: UUID | None
+    answers: dict[str, object]
+    submitted_on: datetime
+
+
+class QuestionnaireAnswerListResponse(BaseModel):
+    responses: list[QuestionnaireAnswerResponse]
+
+
+# Note on naming: QuestionnaireAnswerResponse / QuestionnaireAnswerListResponse
+# (not "QuestionnaireResponse") is deliberate -- database.models already has
+# a SQLAlchemy model called QuestionnaireResponse (the submitted-answers
+# table). study_questionnaires.py imports from both route.models and
+# database.models in the same file; reusing the name here would mean
+# whichever import runs second silently shadows the other.
 
 
 class StudyRegistrationResponse(BaseModel):
@@ -345,6 +403,7 @@ class MyStudyResponse(BaseModel):
     registered_at: datetime
     consented_at: datetime
     withdrawn_at: datetime | None
+    open_questionnaires: list[StudyQuestionnaireResponse] = Field(default_factory=list)
 
 
 class CurrentStudyScriptParametersResponse(BaseModel):

@@ -31,6 +31,7 @@ public class LoginActivity extends AppCompatActivity {
 
         btnLogin = findViewById(R.id.btnLogin);
         btnSignUp = findViewById(R.id.btnSignUp);
+        Button btnForgotPassword = findViewById(R.id.btnForgotPassword);
 
         emailField = findViewById(R.id.emailField);
         passwordField = findViewById(R.id.passwordField);
@@ -54,6 +55,17 @@ public class LoginActivity extends AppCompatActivity {
             }
         });
 
+        btnForgotPassword.setOnClickListener(view -> {
+            Intent intent = new Intent(LoginActivity.this, ForgotPasswordActivity.class);
+            startActivity(intent);
+        });
+
+        Button btnResearcherLoginNav = findViewById(R.id.btnResearcherLoginNav);
+        btnResearcherLoginNav.setOnClickListener(view -> {
+            Intent intent = new Intent(LoginActivity.this, ResearcherLoginActivity.class);
+            startActivity(intent);
+        });
+
     }
     private void performLogin(String email, String password) {
         OkHttpClient client = new OkHttpClient();
@@ -72,7 +84,7 @@ public class LoginActivity extends AppCompatActivity {
         RequestBody body = RequestBody.create(jsonString, jsonMediaType);
 
         Request request = new Request.Builder()
-                .url("https://your-api-endpoint.com/login") // placeholder
+                .url(BuildConfig.SERVER_BASE_URL + "/auth/login")
                 .post(body)
                 .build();
 

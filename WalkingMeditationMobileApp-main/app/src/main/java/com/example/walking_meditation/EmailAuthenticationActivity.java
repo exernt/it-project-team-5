@@ -6,9 +6,9 @@ import android.widget.AutoCompleteTextView;
 import android.widget.Button;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
-import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
@@ -41,49 +41,55 @@ public class EmailAuthenticationActivity extends AppCompatActivity {
         btnVerify.setOnClickListener(v -> {
             String code = codeInput.getText().toString().trim();
             if (!code.isEmpty()) {
-                verifyCode(code);
+                Intent intent = new Intent(EmailAuthenticationActivity.this, ResetPasswordActivity.class);
+                intent.putExtra("reset_token", code);
+                startActivity(intent);
+                finish();
             } else {
-                codeInput.setError("Enter verification code");
+                codeInput.setError("Enter verification code / token");
             }
         });
 
+        if (btnResend != null) {
+            btnResend.setOnClickListener(v -> resendResetRequest());
+        }
     }
 
-    private String generatedCode;
+    private void resendResetRequest() {
+        if (userEmail == null || userEmail.isEmpty()) {
+            Toast.makeText(this, "Email not available", Toast.LENGTH_SHORT).show();
+            return;
+        }
 
-    private String generateVerificationCode() {
-        java.util.Random random = new java.util.Random();
-        int code = 100000 + random.nextInt(900000);
-        return String.valueOf(code);
-    }
-
-    private void sendCode(String targetEmail) {
-        generatedCode = generateVerificationCode();
-
-        String subject = "Your Verification Code";
-        String message = "Hello,\n\nYour walking meditation verification code is: " + generatedCode;
-
-        android.net.Uri uri = android.net.Uri.parse("mailto:" + targetEmail);
-        Intent intent = new Intent(Intent.ACTION_SENDTO, uri);
-        intent.putExtra(Intent.EXTRA_SUBJECT, subject);
-        intent.putExtra(Intent.EXTRA_TEXT, message);
-
+        OkHttpClient client = new OkHttpClient();
+        JSONObject json = new JSONObject();
         try {
-            startActivity(Intent.createChooser(intent, "Send verification email via:"));
-        } catch (android.content.ActivityNotFoundException ex) {
-            Toast.makeText(this, "No email apps installed.", Toast.LENGTH_SHORT).show();
+            json.put("email", userEmail);
+        } catch (Exception e) {
+            return;
         }
-    }
 
-    private void verifyCode(String code) {
-        if (generatedCode != null && code.equals(generatedCode)) {
-            Intent intent = new Intent(this, ResetPasswordActivity.class);
-            intent.putExtra("email", userEmail);
-            intent.putExtra("reset_token", code);
-            startActivity(intent);
-            finish();
-        } else {
-            codeInput.setError("Incorrect verification code");
-        }
+        RequestBody body = RequestBody.create(json.toString(), MediaType.get("application/json; charset=utf-8"));
+        Request request = new Request.Builder()
+                .url(BuildConfig.SERVER_BASE_URL + "/auth/password-reset/request")
+                .post(body)
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                runOnUiThread(() -> Toast.makeText(EmailAuthenticationActivity.this, "Failed to resend code", Toast.LENGTH_SHORT).show());
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
+                response.close();
+                runOnUiThread(() -> Toast.makeText(
+                        EmailAuthenticationActivity.this,
+                        "If registered, a new reset code has been sent.",
+                        Toast.LENGTH_LONG
+                ).show());
+            }
+        });
     }
 }
