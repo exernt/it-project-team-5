@@ -3,6 +3,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 from route.clients.openai_client import GeneratedText, GenerationUsage
+from route.errors import OpenaiAPIError
 from route.models import LatLng, StepSegment
 from route.services.generate_script import (
     _route_context,
@@ -40,24 +41,30 @@ def _segment(index: int, instruction: str = "Turn right onto Test St") -> StepSe
     )
 
 
+# Long enough to satisfy the word targets used in these tests.
+_FILLER = " ".join(["calm"] * 700)
+
+
 def _generated_json(
         focused_segment_ids: list[str],
         closing_segment_ids: list[str] | None = None,
+        pad: bool = True,
 ) -> str:
     closing_segment_ids = closing_segment_ids or []
+    extra = f" {_FILLER}" if pad else ""
     return json.dumps(
         {
             "focused_attention": {
-                "opening_narration": "Focused opening.",
+                "opening_narration": f"Focused opening.{extra}",
                 "segment_narrations": {
                     segment_id: f"Narration for {segment_id}."
                     for segment_id in focused_segment_ids
                 },
                 "closing_narration": "Focused closing.",
             },
-            "compassion_meditation": {"narration": "Compassion narration."},
+            "compassion_meditation": {"narration": f"Compassion narration.{extra}"},
             "closing_meditation": {
-                "opening_narration": "Closing opening.",
+                "opening_narration": f"Closing opening.{extra}",
                 "segment_narrations": {
                     segment_id: f"Narration for {segment_id}."
                     for segment_id in closing_segment_ids
@@ -299,7 +306,7 @@ class RouteContextAndValidationTests(unittest.TestCase):
 
     def test_word_count_shortfalls_flags_only_short_sections(self):
         long_text = " ".join(["word"] * 100)
-        narrations = json.loads(_generated_json(["a"]))
+        narrations = json.loads(_generated_json(["a"], pad=False))
         narrations["focused_attention"]["opening_narration"] = long_text
         narrations["closing_meditation"]["opening_narration"] = long_text
 
@@ -309,8 +316,144 @@ class RouteContextAndValidationTests(unittest.TestCase):
         self.assertIn("compassion_meditation", shortfalls[0])
 
     def test_word_count_shortfalls_ignores_zero_minimums(self):
-        narrations = json.loads(_generated_json(["a"]))
+        narrations = json.loads(_generated_json(["a"], pad=False))
         self.assertEqual([], _word_count_shortfalls(narrations, 0, 0, 0))
+
+
+class RetryAndFallbackTests(unittest.IsolatedAsyncioTestCase):
+    async def _generate(self, generate_text_mock, elevation_mock, weather_mock):
+        weather_mock.return_value = {}
+        elevation_mock.return_value = [_segment(1)]
+        return await generate_script_without_park(
+            LatLng(lat=-37.81, lon=144.96),
+            LatLng(lat=-37.80, lon=144.97),
+            600,
+            "general wellbeing",
+        )
+
+    @patch("route.services.generate_script.generate_text", new_callable=AsyncMock)
+    @patch(
+        "route.services.generate_script.build_route_elevation_segments",
+        new_callable=AsyncMock,
+    )
+    @patch("route.services.generate_script.current_weather_lookup")
+    async def test_retries_once_when_output_is_too_short(
+            self, weather_mock, elevation_mock, generate_text_mock
+    ):
+        generate_text_mock.side_effect = [
+            GeneratedText(
+                text=_generated_json(["source_to_destination_1"], pad=False),
+                usage=_usage(),
+            ),
+            GeneratedText(
+                text=_generated_json(["source_to_destination_1"]),
+                usage=_usage(),
+            ),
+        ]
+
+        result = await self._generate(generate_text_mock, elevation_mock, weather_mock)
+
+        self.assertEqual(2, generate_text_mock.await_count)
+        self.assertIn("previous response", generate_text_mock.await_args_list[1].args[0])
+        self.assertNotIn("previous response", generate_text_mock.await_args_list[0].args[0])
+        self.assertFalse(result.script.fallback)
+        self.assertEqual(300, result.usage.total_tokens)
+        self.assertEqual(0.00007, result.usage.cost_usd)
+
+    @patch("route.services.generate_script.generate_text", new_callable=AsyncMock)
+    @patch(
+        "route.services.generate_script.build_route_elevation_segments",
+        new_callable=AsyncMock,
+    )
+    @patch("route.services.generate_script.current_weather_lookup")
+    async def test_accepts_short_but_valid_output_after_retry(
+            self, weather_mock, elevation_mock, generate_text_mock
+    ):
+        generate_text_mock.return_value = GeneratedText(
+            text=_generated_json(["source_to_destination_1"], pad=False),
+            usage=_usage(),
+        )
+
+        result = await self._generate(generate_text_mock, elevation_mock, weather_mock)
+
+        self.assertEqual(2, generate_text_mock.await_count)
+        self.assertFalse(result.script.fallback)
+        self.assertEqual(
+            "Narration for source_to_destination_1.",
+            result.script.sections[0].route_segments[0].narration,
+        )
+
+    @patch("route.services.generate_script.generate_text", new_callable=AsyncMock)
+    @patch(
+        "route.services.generate_script.build_route_elevation_segments",
+        new_callable=AsyncMock,
+    )
+    @patch("route.services.generate_script.current_weather_lookup")
+    async def test_falls_back_when_output_stays_invalid(
+            self, weather_mock, elevation_mock, generate_text_mock
+    ):
+        generate_text_mock.side_effect = [
+            GeneratedText(text="not json", usage=_usage()),
+            GeneratedText(text="{}", usage=_usage()),
+        ]
+
+        result = await self._generate(generate_text_mock, elevation_mock, weather_mock)
+
+        self.assertEqual(2, generate_text_mock.await_count)
+        script = result.script
+        self.assertTrue(script.fallback)
+        segment = script.sections[0].route_segments[0]
+        self.assertEqual("source_to_destination_1", segment.id)
+        self.assertIn("Test St", segment.narration)
+        self.assertEqual(0.00007, result.usage.cost_usd)
+
+    @patch("route.services.generate_script.generate_text", new_callable=AsyncMock)
+    @patch(
+        "route.services.generate_script.build_route_elevation_segments",
+        new_callable=AsyncMock,
+    )
+    @patch("route.services.generate_script.current_weather_lookup")
+    async def test_falls_back_when_openai_is_unavailable(
+            self, weather_mock, elevation_mock, generate_text_mock
+    ):
+        generate_text_mock.side_effect = OpenaiAPIError("down")
+
+        result = await self._generate(generate_text_mock, elevation_mock, weather_mock)
+
+        self.assertEqual(1, generate_text_mock.await_count)
+        self.assertTrue(result.script.fallback)
+        self.assertEqual("fallback", result.usage.model)
+        self.assertEqual(0.0, result.usage.cost_usd)
+        self.assertEqual(3, len(result.script.sections))
+
+    @patch("route.services.generate_script.generate_text", new_callable=AsyncMock)
+    @patch(
+        "route.services.generate_script.build_route_elevation_segments",
+        new_callable=AsyncMock,
+    )
+    @patch("route.services.generate_script.current_weather_lookup")
+    async def test_park_script_falls_back_with_both_legs(
+            self, weather_mock, elevation_mock, generate_text_mock
+    ):
+        weather_mock.return_value = {}
+        elevation_mock.side_effect = [[_segment(1)], [_segment(1)]]
+        generate_text_mock.side_effect = OpenaiAPIError("down")
+
+        result = await generate_script_with_park(
+            LatLng(lat=-37.81, lon=144.96),
+            LatLng(lat=-37.80, lon=144.97),
+            LatLng(lat=-37.805, lon=144.965),
+            300,
+            300,
+            300,
+            "mindfulness",
+        )
+
+        self.assertTrue(result.script.fallback)
+        self.assertEqual(
+            "park_to_destination_1",
+            result.script.sections[2].route_segments[0].id,
+        )
 
 
 if __name__ == "__main__":
