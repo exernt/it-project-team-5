@@ -101,7 +101,7 @@ See `READList/Procedure.md` for the full set of database commands (inspecting mi
 | Variable | Purpose |
 |---|---|
 | `GOOGLE_MAPS_API_KEY` | Google Routes/Places/Elevation/Weather access |
-| `ENABLE_PARK_FALLBACK` | Defaults to `false`; set to `true` to supplement `city_park` results with generic `park` results |
+| `ENABLE_PARK_FALLBACK` | Defaults to `false`; set to `true` to supplement `city_park` and `garden` results with generic `park` results |
 | `OPENAI_API_KEY` | Meditation script generation |
 | `APP_API_TOKEN` | Optional shared secret checked against the mobile app's `X-App-Token` header (see [Authentication](#authentication) below) |
 | `DATABASE_URL` | PostgreSQL connection string (defaults match the local Docker Compose setup) |
@@ -368,11 +368,12 @@ mock clients and do not require an API key or consume Maps quota.
 2. Choose endpoints whose direct walking time exceeds a very short limit.
    Confirm the app reports that the direct walk exceeds the limit and remains
    on the input state.
-3. Choose a route corridor with no qualifying city-park route. Confirm the app
-   reports that no urban-park route fits rather than offering the baseline.
+3. Choose a route corridor with no qualifying city-park or garden route.
+   Confirm the app reports that no urban-park route fits rather than offering
+   the baseline.
 4. Stop the server and retry route generation, then script generation. Confirm
    each error leaves the current inputs or selected route available for retry.
 5. Test fallback disabled, then set `ENABLE_PARK_FALLBACK=true`, restart the
-   server, and repeat the same search. With fallback disabled, returned parks
-   must have `primary_type` `city_park`; with it enabled, generic `park`
-   candidates may supplement those results.
+   server, and repeat the same search. With fallback disabled, returned places
+   must have `primary_type` `city_park` or `garden`; with it enabled, generic
+   `park` candidates may supplement those results.

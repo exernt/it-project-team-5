@@ -333,8 +333,7 @@ public class RouteOptionsActivity extends AppCompatActivity implements RouteOpti
                     }
 
                     try {
-                        // respBody is JSON from your backend (may be large)
-                        // Save entire JSON to cache and pass file path to ScriptActivity
+                        // Save the complete JSON response for the temporary inspection screen.
                         String scriptPath = CacheFiles.writeText(
                                 RouteOptionsActivity.this,
                                 "scripts",
@@ -343,9 +342,8 @@ public class RouteOptionsActivity extends AppCompatActivity implements RouteOpti
                                 respBody
                                 );
 
-                        Intent intent = new Intent(RouteOptionsActivity.this, ScriptActivity.class);
+                        Intent intent = new Intent(RouteOptionsActivity.this, ScriptResultActivity.class);
                         intent.putExtra(EXTRA_SCRIPT_JSON_PATH, scriptPath);
-                        intent.putStringArrayListExtra(EXTRA_ROUTE_POLYLINES, routePolylines);
                         startActivity(intent);
 
                     } catch (IOException ioe) {

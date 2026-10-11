@@ -64,7 +64,7 @@ def google_maps_api_key() -> str:
 
 
 def park_fallback_enabled() -> bool:
-    """Whether route search may fall back from city parks to generic parks."""
+    """Whether route search may supplement city parks and gardens with generic parks."""
     value = os.getenv("ENABLE_PARK_FALLBACK", "false").strip().casefold()
     if value in {"1", "true", "yes", "on"}:
         return True
@@ -97,9 +97,9 @@ def render_template(template: str, **kwargs) -> str:
     
 def get_script_generation_prompt(meditation_style:str ) -> str:
     if meditation_style == "WITHOUT_PARK":
-        return load_template(PROMPT_FOLDER / "without_park.txt")
+        return load_template(PROMPT_FOLDER / "without_park_narration.txt")
     else:
-        return load_template(PROMPT_FOLDER / "with_park_xml.txt")
+        return load_template(PROMPT_FOLDER / "with_park_narration.txt")
 
 def jwt_secret_key() -> str:
     key = os.getenv("JWT_SECRET_KEY", "").strip()

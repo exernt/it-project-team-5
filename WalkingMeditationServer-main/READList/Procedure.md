@@ -42,7 +42,7 @@ OPENAI_API_KEY= ""
 GIT_PERSONAL_ACCESS_TOKEN = ""
 ```
 `ENABLE_PARK_FALLBACK` is disabled by default. Set it to `true` to allow
-generic `park` Places results in addition to `city_park` results.
+generic `park` Places results in addition to `city_park` and `garden` results.
 
 make sure to add env to gitignore
 
