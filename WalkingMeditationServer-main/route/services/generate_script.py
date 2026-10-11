@@ -2,13 +2,22 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Sequence
 
+import httpx
+
+from route.clients.google_nearby import search_nearby_features
 from route.clients.google_weather import current_weather_lookup
 from route.clients.openai_client import GenerationUsage, generate_text
-from route.config import get_script_generation_prompt, render_template
+from route.config import (
+    PROMPT_VERSION,
+    get_script_generation_prompt,
+    nearby_context_enabled,
+    render_template,
+)
 from route.models import (
     LatLng,
     MeditationScript,
@@ -24,6 +33,13 @@ from route.models import (
 from route.persistence.script_storage import save_script_text
 from route.services.enrich_elevation import build_route_elevation_segments
 from route.utils.route_hint import extract_street_hint
+
+logger = logging.getLogger(__name__)
+
+# A section may fall this far below its requested minimum before we log a warning.
+WORD_COUNT_TOLERANCE = 0.8
+NEARBY_LOOKUP_CONCURRENCY = 5
+NEARBY_MAX_SEGMENTS = 20
 
 FOCUSED_ATTENTION_SHARE = 0.2
 COMPASSION_SHARE = 0.4
@@ -60,20 +76,99 @@ def _segment_id(route_phase: str, segment: StepSegment) -> str:
     return f"{route_phase}_{segment.i}"
 
 
-def _route_context(segments: Sequence[StepSegment], route_phase: str) -> str:
-    return json.dumps(
-        [
-            {
-                "segment_id": _segment_id(route_phase, segment),
-                "route_label": extract_street_hint(segment.instruction),
-                "instruction": segment.instruction,
-                "terrain": segment.label,
-            }
-            for segment in segments
-        ],
-        ensure_ascii=False,
-        indent=2,
+def _route_context(
+        segments: Sequence[StepSegment],
+        route_phase: str,
+        nearby: Dict[str, List[str]] | None = None,
+) -> str:
+    nearby = nearby or {}
+    items = []
+    for segment in segments:
+        segment_id = _segment_id(route_phase, segment)
+        item: Dict[str, Any] = {
+            "segment_id": segment_id,
+            "route_label": extract_street_hint(segment.instruction),
+            "instruction": segment.instruction,
+            "terrain": segment.label,
+        }
+        if nearby.get(segment_id):
+            item["nearby_features"] = nearby[segment_id]
+        items.append(item)
+    return json.dumps(items, ensure_ascii=False, indent=2)
+
+
+def _segment_midpoint(segment: StepSegment) -> LatLng:
+    return LatLng(
+        lat=(segment.start.lat + segment.end.lat) / 2,
+        lon=(segment.start.lon + segment.end.lon) / 2,
     )
+
+
+async def _lookup_nearby_features(
+        segments: Sequence[StepSegment],
+        route_phase: str,
+) -> Dict[str, List[str]]:
+    """Best-effort landmark lookup per segment; any failure yields no context."""
+    if not nearby_context_enabled() or not segments:
+        return {}
+
+    semaphore = asyncio.Semaphore(NEARBY_LOOKUP_CONCURRENCY)
+
+    async def lookup(client: httpx.AsyncClient, segment: StepSegment):
+        segment_id = _segment_id(route_phase, segment)
+        async with semaphore:
+            try:
+                names = await search_nearby_features(client, _segment_midpoint(segment))
+            except Exception:
+                logger.warning(
+                    "Nearby feature lookup failed for %s", segment_id, exc_info=True
+                )
+                return segment_id, []
+        return segment_id, names
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        results = await asyncio.gather(
+            *(lookup(client, segment) for segment in segments[:NEARBY_MAX_SEGMENTS])
+        )
+    return {segment_id: names for segment_id, names in results if names}
+
+
+def _word_count(text: str) -> int:
+    return len(text.split())
+
+
+def _word_count_shortfalls(
+        narrations: Dict[str, Any],
+        focused_words: int,
+        compassion_words: int,
+        closing_words: int,
+) -> List[str]:
+    """Describe sections whose generated text is well under the requested minimum."""
+    focused = narrations["focused_attention"]
+    closing = narrations["closing_meditation"]
+    actual = {
+        "focused_attention": (
+            _word_count(focused["opening_narration"])
+            + sum(_word_count(t) for t in focused["segment_narrations"].values())
+            + _word_count(focused["closing_narration"]),
+            focused_words,
+        ),
+        "compassion_meditation": (
+            _word_count(narrations["compassion_meditation"]["narration"]),
+            compassion_words,
+        ),
+        "closing_meditation": (
+            _word_count(closing["opening_narration"])
+            + sum(_word_count(t) for t in closing["segment_narrations"].values())
+            + _word_count(closing["closing_narration"]),
+            closing_words,
+        ),
+    }
+    return [
+        f"{name}: {words} words, requested at least {minimum}"
+        for name, (words, minimum) in actual.items()
+        if minimum > 0 and words < minimum * WORD_COUNT_TOLERANCE
+    ]
 
 
 def _segment_narrations_schema(segment_ids: Sequence[str]) -> Dict[str, Any]:
@@ -109,8 +204,8 @@ def _walking_section_schema(segment_ids: Sequence[str]) -> Dict[str, Any]:
 
 
 def _narration_schema(
-    focused_segment_ids: Sequence[str],
-    closing_segment_ids: Sequence[str],
+        focused_segment_ids: Sequence[str],
+        closing_segment_ids: Sequence[str],
 ) -> Dict[str, Any]:
     return {
         "type": "object",
@@ -134,9 +229,9 @@ def _narration_schema(
 
 
 def _parse_narrations(
-    generated_text: str,
-    focused_segment_ids: Sequence[str],
-    closing_segment_ids: Sequence[str],
+        generated_text: str,
+        focused_segment_ids: Sequence[str],
+        closing_segment_ids: Sequence[str],
 ) -> Dict[str, Any]:
     try:
         value = json.loads(generated_text)
@@ -174,10 +269,12 @@ def _parse_narrations(
 
 
 def _attach_route_metadata(
-    segments: Sequence[StepSegment],
-    route_phase: str,
-    narrations: Dict[str, str],
+        segments: Sequence[StepSegment],
+        route_phase: str,
+        narrations: Dict[str, str],
+        nearby: Dict[str, List[str]] | None = None,
 ) -> List[ScriptRouteSegment]:
+    nearby = nearby or {}
     return [
         ScriptRouteSegment(
             id=_segment_id(route_phase, segment),
@@ -196,6 +293,7 @@ def _attach_route_metadata(
                 start_m=round(segment.elev_start_m, 1),
                 end_m=round(segment.elev_end_m, 1),
             ),
+            nearby_features=nearby.get(_segment_id(route_phase, segment), []),
             narration=narrations[_segment_id(route_phase, segment)].strip(),
         )
         for segment in segments
@@ -203,21 +301,23 @@ def _attach_route_metadata(
 
 
 def _assemble_script(
-    *,
-    duration_minutes: int,
-    context: str,
-    weather_condition: str,
-    source: LatLng,
-    destination: LatLng,
-    park: LatLng | None,
-    focused_words: int,
-    compassion_words: int,
-    closing_words: int,
-    focused_segments: Sequence[StepSegment],
-    focused_route_phase: str,
-    closing_segments: Sequence[StepSegment],
-    closing_route_phase: str,
-    narrations: Dict[str, Any],
+        *,
+        duration_minutes: int,
+        context: str,
+        weather_condition: str,
+        source: LatLng,
+        destination: LatLng,
+        park: LatLng | None,
+        focused_words: int,
+        compassion_words: int,
+        closing_words: int,
+        focused_segments: Sequence[StepSegment],
+        focused_route_phase: str,
+        closing_segments: Sequence[StepSegment],
+        closing_route_phase: str,
+        narrations: Dict[str, Any],
+        nearby: Dict[str, List[str]] | None = None,
+        model: str = "",
 ) -> MeditationScript:
     focused = narrations["focused_attention"]
     compassion = narrations["compassion_meditation"]
@@ -227,6 +327,8 @@ def _assemble_script(
         duration_minutes=duration_minutes,
         language="simple",
         includes_pauses=True,
+        prompt_version=PROMPT_VERSION,
+        model=model,
         inputs=ScriptInputs(
             context=context,
             weather_condition=weather_condition,
@@ -246,6 +348,7 @@ def _assemble_script(
                     focused_segments,
                     focused_route_phase,
                     focused["segment_narrations"],
+                    nearby,
                 ),
                 closing_narration=ScriptNarration(
                     id="focused_closing",
@@ -271,6 +374,7 @@ def _assemble_script(
                     closing_segments,
                     closing_route_phase,
                     closing["segment_narrations"],
+                    nearby,
                 ),
                 closing_narration=ScriptNarration(
                     id="closing_closing",
@@ -282,18 +386,18 @@ def _assemble_script(
 
 
 async def generate_script_with_park(
-    source: LatLng,
-    destination: LatLng,
-    park: LatLng,
-    to_park_time: int,
-    park_time: int,
-    park_to_destination_time: int,
-    context: str,
-    study_parameters: str = "",
-    source_to_park_steps: Sequence[RouteStepInfo] | None = None,
-    park_to_destination_steps: Sequence[RouteStepInfo] | None = None,
-    output_folder: Path = DEFAULT_OUTPUT_FOLDER,
-    save_to_disk: bool = False,
+        source: LatLng,
+        destination: LatLng,
+        park: LatLng,
+        to_park_time: int,
+        park_time: int,
+        park_to_destination_time: int,
+        context: str,
+        study_parameters: str = "",
+        source_to_park_steps: Sequence[RouteStepInfo] | None = None,
+        park_to_destination_steps: Sequence[RouteStepInfo] | None = None,
+        output_folder: Path = DEFAULT_OUTPUT_FOLDER,
+        save_to_disk: bool = False,
 ) -> GeneratedScript:
     focused_words = _words_for_minutes(to_park_time / 60)
     compassion_words = _words_for_minutes(park_time / 60)
@@ -321,14 +425,19 @@ async def generate_script_with_park(
     closing_phase = "park_to_destination"
     focused_ids = [_segment_id(focused_phase, segment) for segment in source_to_park]
     closing_ids = [_segment_id(closing_phase, segment) for segment in park_to_destination]
+    focused_nearby, closing_nearby = await asyncio.gather(
+        _lookup_nearby_features(source_to_park, focused_phase),
+        _lookup_nearby_features(park_to_destination, closing_phase),
+    )
+    nearby = {**focused_nearby, **closing_nearby}
 
     prompt = render_template(
         get_script_generation_prompt("WITH_PARK"),
         context=context,
         duration_minutes=duration_minutes,
         FAM_word_count=focused_words,
-        source_to_park=_route_context(source_to_park, focused_phase),
-        park_to_destination=_route_context(park_to_destination, closing_phase),
+        source_to_park=_route_context(source_to_park, focused_phase, nearby),
+        park_to_destination=_route_context(park_to_destination, closing_phase, nearby),
         CM_word_count=compassion_words,
         Closing_word_count=closing_words,
         weatherCondition=weather_condition,
@@ -340,6 +449,10 @@ async def generate_script_with_park(
         schema_name="meditation_narrations",
     )
     narrations = _parse_narrations(generated.text, focused_ids, closing_ids)
+    for shortfall in _word_count_shortfalls(
+            narrations, focused_words, compassion_words, closing_words
+    ):
+        logger.warning("Generated script under word target - %s", shortfall)
     script = _assemble_script(
         duration_minutes=duration_minutes,
         context=context,
@@ -355,6 +468,8 @@ async def generate_script_with_park(
         closing_segments=park_to_destination,
         closing_route_phase=closing_phase,
         narrations=narrations,
+        nearby=nearby,
+        model=generated.usage.model,
     )
 
     if save_to_disk:
@@ -367,14 +482,14 @@ async def generate_script_with_park(
 
 
 async def generate_script_without_park(
-    source: LatLng,
-    destination: LatLng,
-    total_walking_time: int,
-    context: str,
-    study_parameters: str = "",
-    route_steps: Sequence[RouteStepInfo] | None = None,
-    output_folder: Path = DEFAULT_OUTPUT_FOLDER,
-    save_to_disk: bool = False,
+        source: LatLng,
+        destination: LatLng,
+        total_walking_time: int,
+        context: str,
+        study_parameters: str = "",
+        route_steps: Sequence[RouteStepInfo] | None = None,
+        output_folder: Path = DEFAULT_OUTPUT_FOLDER,
+        save_to_disk: bool = False,
 ) -> GeneratedScript:
     focused_words = _words_for_minutes(
         (total_walking_time * FOCUSED_ATTENTION_SHARE) / 60
@@ -397,13 +512,14 @@ async def generate_script_without_park(
     focused_phase = "source_to_destination"
     focused_ids = [_segment_id(focused_phase, segment) for segment in route_segments]
     closing_ids: List[str] = []
+    nearby = await _lookup_nearby_features(route_segments, focused_phase)
 
     prompt = render_template(
         get_script_generation_prompt("WITHOUT_PARK"),
         context=context,
         duration_minutes=duration_minutes,
         FAM_word_count=focused_words,
-        source_to_park=_route_context(route_segments, focused_phase),
+        source_to_park=_route_context(route_segments, focused_phase, nearby),
         CM_word_count=compassion_words,
         Closing_word_count=closing_words,
         weatherCondition=weather_condition,
@@ -415,6 +531,10 @@ async def generate_script_without_park(
         schema_name="meditation_narrations",
     )
     narrations = _parse_narrations(generated.text, focused_ids, closing_ids)
+    for shortfall in _word_count_shortfalls(
+            narrations, focused_words, compassion_words, closing_words
+    ):
+        logger.warning("Generated script under word target - %s", shortfall)
     script = _assemble_script(
         duration_minutes=duration_minutes,
         context=context,
@@ -430,6 +550,8 @@ async def generate_script_without_park(
         closing_segments=[],
         closing_route_phase="park_to_destination",
         narrations=narrations,
+        nearby=nearby,
+        model=generated.usage.model,
     )
 
     if save_to_disk:

@@ -83,6 +83,47 @@ def openai_api_key()->str:
     return key
 
 
+def openai_timeout_seconds() -> float:
+    """Per-request timeout for OpenAI calls (env OPENAI_TIMEOUT_SECONDS)."""
+    raw_value = os.getenv("OPENAI_TIMEOUT_SECONDS", "60").strip()
+    try:
+        value = float(raw_value)
+    except ValueError as exc:
+        raise ValueError("OPENAI_TIMEOUT_SECONDS must be a number") from exc
+    if value <= 0:
+        raise ValueError("OPENAI_TIMEOUT_SECONDS must be greater than zero")
+    return value
+
+
+def openai_max_retries() -> int:
+    """SDK-level retries for transient OpenAI failures (env OPENAI_MAX_RETRIES)."""
+    raw_value = os.getenv("OPENAI_MAX_RETRIES", "2").strip()
+    try:
+        value = int(raw_value)
+    except ValueError as exc:
+        raise ValueError("OPENAI_MAX_RETRIES must be an integer") from exc
+    if value < 0:
+        raise ValueError("OPENAI_MAX_RETRIES cannot be negative")
+    return value
+
+
+def nearby_context_enabled() -> bool:
+    """Whether script generation enriches route segments with nearby landmarks."""
+    value = os.getenv("ENABLE_NEARBY_CONTEXT", "false").strip().casefold()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off", ""}:
+        return False
+    raise ValueError(
+        "ENABLE_NEARBY_CONTEXT must be one of true/false, 1/0, yes/no, or on/off"
+    )
+
+
+# Bump when any file in prompts/ changes in a way that affects generated output,
+# so stored scripts can be traced back to the prompt that produced them.
+PROMPT_VERSION = "narration-2026-10-v2"
+
+
 def load_template(path: str) -> str:
     try:
         return Path(path).read_text(encoding="utf-8")
@@ -94,7 +135,7 @@ def render_template(template: str, **kwargs) -> str:
         return template.format(**kwargs)
     except KeyError as e:
         raise ValueError(f"Missing template variable: {e}")
-    
+
 def get_script_generation_prompt(meditation_style:str ) -> str:
     if meditation_style == "WITHOUT_PARK":
         return load_template(PROMPT_FOLDER / "without_park_narration.txt")

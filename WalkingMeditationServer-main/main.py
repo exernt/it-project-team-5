@@ -17,6 +17,7 @@ from route.studies import router as studies_router
 from route.study_questionnaires import router as study_questionnaires_router
 from route.services.generate_script import GeneratedScript, generate_script_with_park, generate_script_without_park
 from route.services.get_route import generate_walk_route
+from route.errors import OpenaiAPIError
 from route.models import WalkRouteRequest, WalkRouteResponse, ScriptWithParkRequest, ScriptWithParkResponse
 from route.models import ScriptWithoutParkRequest, ScriptWithoutParkResponse, TTSRequest
 from database.core import create_configured_database
@@ -111,8 +112,8 @@ async def database_health(request: Request):
 
 @app.post("/route/generate-path", response_model=WalkRouteResponse)
 async def generate_route(
-    payload: WalkRouteRequest,
-    _auth: None = Depends(require_app_token),
+        payload: WalkRouteRequest,
+        _auth: None = Depends(require_app_token),
 ):
     try:
         async with ROUTE_REQUEST_SEMAPHORE:
@@ -121,7 +122,7 @@ async def generate_route(
                 payload.destination,
                 payload.total_travel_time
             )
-        return result 
+        return result
     except Exception as e:
         logger.exception("Route generation failed")
         raise HTTPException(status_code=502, detail="Route generation failed") from e
@@ -129,8 +130,8 @@ async def generate_route(
 
 @app.post("/route/generate-script/park", response_model=ScriptWithParkResponse)
 async def generate_script_w_park(
-    payload: ScriptWithParkRequest,
-    _auth: None = Depends(require_app_token),
+        payload: ScriptWithParkRequest,
+        _auth: None = Depends(require_app_token),
 ):
     try:
         async with SCRIPT_REQUEST_SEMAPHORE:
@@ -153,14 +154,17 @@ async def generate_script_w_park(
             "usage": asdict(result.usage),
         }
 
+    except OpenaiAPIError as e:
+        logger.exception("Park script generation failed: OpenAI unavailable")
+        raise HTTPException(status_code=503, detail="AI service unavailable") from e
     except Exception as e:
         logger.exception("Park script generation failed")
         raise HTTPException(status_code=502, detail="Script generation failed") from e
-    
+
 @app.post("/route/generate-script/without-park", response_model=ScriptWithoutParkResponse)
 async def generate_script_wo_park(
-    payload: ScriptWithoutParkRequest,
-    _auth: None = Depends(require_app_token),
+        payload: ScriptWithoutParkRequest,
+        _auth: None = Depends(require_app_token),
 ):
     try:
         async with SCRIPT_REQUEST_SEMAPHORE:
@@ -179,6 +183,9 @@ async def generate_script_wo_park(
             "usage": asdict(result.usage),
         }
 
+    except OpenaiAPIError as e:
+        logger.exception("Baseline script generation failed: OpenAI unavailable")
+        raise HTTPException(status_code=503, detail="AI service unavailable") from e
     except Exception as e:
         logger.exception("Baseline script generation failed")
         raise HTTPException(status_code=502, detail="Script generation failed") from e
@@ -186,8 +193,8 @@ async def generate_script_wo_park(
 
 @app.post("/tts")#, response_model=Response)
 async def text_to_speech_endpoint(
-    payload: TTSRequest,
-    _auth: None = Depends(require_app_token),
+        payload: TTSRequest,
+        _auth: None = Depends(require_app_token),
 ):
 
     try:
