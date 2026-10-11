@@ -48,7 +48,7 @@ def _load_tts_model_sync():
 
     use_cuda = torch.cuda.is_available()
     return Qwen3TTSModel.from_pretrained(
-        "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
+        "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
         device_map="cuda:0" if use_cuda else "cpu",
         dtype=torch.bfloat16 if use_cuda else torch.float32,
     )
