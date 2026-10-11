@@ -3,6 +3,7 @@ import os
 import asyncio
 import logging
 import secrets
+from dataclasses import asdict
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from sqlalchemy.exc import SQLAlchemyError
 from typing import Any, Optional
@@ -14,7 +15,7 @@ from route.feedback import router as feedback_router
 from route.questionnaires import router as questionnaires_router
 from route.studies import router as studies_router
 from route.study_questionnaires import router as study_questionnaires_router
-from route.services.generate_script import generate_script_with_park, generate_script_without_park
+from route.services.generate_script import GeneratedScript, generate_script_with_park, generate_script_without_park
 from route.services.get_route import generate_walk_route
 from route.models import WalkRouteRequest, WalkRouteResponse, ScriptWithParkRequest, ScriptWithParkResponse
 from route.models import ScriptWithoutParkRequest, ScriptWithoutParkResponse, TTSRequest
@@ -133,7 +134,7 @@ async def generate_script_w_park(
 ):
     try:
         async with SCRIPT_REQUEST_SEMAPHORE:
-            result: str = await generate_script_with_park(
+            result: GeneratedScript = await generate_script_with_park(
                 payload.source,
                 payload.destination,
                 payload.park,
@@ -145,7 +146,9 @@ async def generate_script_w_park(
             )
 
         return {
-            "script": result
+            "script": result.script,
+            "generation_cost_usd": result.usage.cost_usd,
+            "usage": asdict(result.usage),
         }
 
     except Exception as e:
@@ -159,7 +162,7 @@ async def generate_script_wo_park(
 ):
     try:
         async with SCRIPT_REQUEST_SEMAPHORE:
-            result: str = await generate_script_without_park(
+            result: GeneratedScript = await generate_script_without_park(
                 payload.source,
                 payload.destination,
                 payload.total_walking_time,
@@ -168,7 +171,9 @@ async def generate_script_wo_park(
             )
 
         return {
-            "script": result
+            "script": result.script,
+            "generation_cost_usd": result.usage.cost_usd,
+            "usage": asdict(result.usage),
         }
 
     except Exception as e:

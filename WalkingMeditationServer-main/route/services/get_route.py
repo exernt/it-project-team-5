@@ -86,9 +86,10 @@ async def generate_walk_route(
         evaluated = await asyncio.gather(*(eval_one(p) for p in parks))
         results = [r for r in evaluated if r is not None]
 
-        # The time limit is a hard ceiling; prefer feasible routes that make
-        # useful use of it. Each result already represents a different park.
-        results.sort(key=lambda r: (r.slack_s, r.added_s, r.detour_s))
+        # The time limit is only a hard ceiling. Among feasible park routes,
+        # prefer the shortest walk from source to destination via the park.
+        # Python's stable sort preserves the Places result order for ties.
+        results.sort(key=lambda r: r.detour_s)
 
         return WalkRouteResponse(
             origin=source,

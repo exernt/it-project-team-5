@@ -16,15 +16,21 @@ async def search_parks_along_route(
     route_polyline: str,
     max_results: int = 20,
 ) -> List[ParkPlace]:
-    """Find city parks, optionally supplementing them with generic parks."""
+    """Find city parks and gardens, optionally adding generic parks."""
     city_parks = await _search_parks_by_type(
         client,
         route_polyline=route_polyline,
         place_type="city_park",
         text_query="city park",
     )
+    gardens = await _search_parks_by_type(
+        client,
+        route_polyline=route_polyline,
+        place_type="garden",
+        text_query="garden",
+    )
 
-    results = city_parks
+    results = city_parks + gardens
     if park_fallback_enabled():
         generic_parks = await _search_parks_by_type(
             client,
@@ -32,7 +38,7 @@ async def search_parks_along_route(
             place_type="park",
             text_query="park",
         )
-        results = city_parks + generic_parks
+        results += generic_parks
 
     unique: Dict[str, ParkPlace] = {park.place_id: park for park in results}
     return list(unique.values())[:max_results]

@@ -113,8 +113,80 @@ class ScriptWithParkRequest(BaseModel):
     context: str = Field(..., min_length=1, max_length=1_000)
     study_parameters: str = Field(default="", max_length=10_000)
 
+
+class ScriptGenerationUsage(BaseModel):
+    model: str
+    service_tier: str
+    input_tokens: int = Field(..., ge=0)
+    cached_input_tokens: int = Field(..., ge=0)
+    cache_write_tokens: int = Field(..., ge=0)
+    output_tokens: int = Field(..., ge=0)
+    reasoning_tokens: int = Field(..., ge=0)
+    total_tokens: int = Field(..., ge=0)
+
+
+class ScriptNarration(BaseModel):
+    id: str
+    text: str
+
+
+class ScriptElevation(BaseModel):
+    classification: str
+    gain_m: float
+    start_m: float
+    end_m: float
+
+
+class ScriptRouteSegment(BaseModel):
+    id: str
+    route_phase: Literal[
+        "source_to_destination",
+        "source_to_park",
+        "park_to_destination",
+    ]
+    index: int = Field(..., ge=1)
+    instruction: str
+    route_label: str
+    start: LatLng
+    end: LatLng
+    elevation: ScriptElevation
+    narration: str
+
+
+class ScriptWalkingSection(BaseModel):
+    type: Literal["focused_attention", "closing_meditation"]
+    minimum_words: int = Field(..., ge=0)
+    opening_narration: ScriptNarration
+    route_segments: List[ScriptRouteSegment] = Field(default_factory=list)
+    closing_narration: ScriptNarration
+
+
+class ScriptCompassionSection(BaseModel):
+    type: Literal["compassion_meditation"]
+    minimum_words: int = Field(..., ge=0)
+    narration: ScriptNarration
+
+
+class ScriptInputs(BaseModel):
+    context: str
+    weather_condition: str
+    source: LatLng
+    destination: LatLng
+    park: LatLng | None = None
+
+
+class MeditationScript(BaseModel):
+    duration_minutes: int = Field(..., ge=1)
+    language: str
+    includes_pauses: bool
+    inputs: ScriptInputs
+    sections: List[ScriptWalkingSection | ScriptCompassionSection]
+
+
 class ScriptWithParkResponse(BaseModel):
-    script: str
+    script: MeditationScript
+    generation_cost_usd: float = Field(..., ge=0)
+    usage: ScriptGenerationUsage
 
 class ScriptWithoutParkRequest(BaseModel):
     source: LatLng
@@ -123,8 +195,11 @@ class ScriptWithoutParkRequest(BaseModel):
     context: str = Field(..., min_length=1, max_length=1_000)
     study_parameters: str = Field(default="", max_length=10_000)
 
+
 class ScriptWithoutParkResponse(BaseModel):
-    script: str
+    script: MeditationScript
+    generation_cost_usd: float = Field(..., ge=0)
+    usage: ScriptGenerationUsage
 
 
 class RouteInfo(BaseModel):

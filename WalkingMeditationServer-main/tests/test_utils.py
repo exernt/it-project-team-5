@@ -74,7 +74,7 @@ class _PlacesClient:
 
 
 class ParkFallbackSearchTests(unittest.IsolatedAsyncioTestCase):
-    async def test_disabled_fallback_only_searches_city_parks(self):
+    async def test_disabled_fallback_searches_city_parks_and_gardens(self):
         client = _PlacesClient()
         with patch.dict(
             "os.environ",
@@ -83,10 +83,13 @@ class ParkFallbackSearchTests(unittest.IsolatedAsyncioTestCase):
         ):
             parks = await search_parks_along_route(client, route_polyline="encoded")
 
-        self.assertEqual(["city_park"], client.requested_types)
-        self.assertEqual(["city_park-id"], [park.place_id for park in parks])
+        self.assertEqual(["city_park", "garden"], client.requested_types)
+        self.assertEqual(
+            ["city_park-id", "garden-id"],
+            [park.place_id for park in parks],
+        )
 
-    async def test_enabled_fallback_supplements_city_parks(self):
+    async def test_enabled_fallback_supplements_city_parks_and_gardens(self):
         client = _PlacesClient()
         with patch.dict(
             "os.environ",
@@ -95,8 +98,11 @@ class ParkFallbackSearchTests(unittest.IsolatedAsyncioTestCase):
         ):
             parks = await search_parks_along_route(client, route_polyline="encoded")
 
-        self.assertEqual(["city_park", "park"], client.requested_types)
-        self.assertEqual(["city_park-id", "park-id"], [park.place_id for park in parks])
+        self.assertEqual(["city_park", "garden", "park"], client.requested_types)
+        self.assertEqual(
+            ["city_park-id", "garden-id", "park-id"],
+            [park.place_id for park in parks],
+        )
 
 
 if __name__ == "__main__":
