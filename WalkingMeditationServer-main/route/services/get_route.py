@@ -80,6 +80,8 @@ async def generate_walk_route(
                     slack_s=total_travel_time - detour_s,
                     polyline_to_park=to_park.polyline,
                     polyline_from_park=from_park.polyline,
+                    steps_to_park=to_park.steps,
+                    steps_from_park=from_park.steps,
                 )
             return None
 

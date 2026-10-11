@@ -1,8 +1,11 @@
 package com.example.walking_meditation;
 
 import static com.example.walking_meditation.nav.Extras.EXTRA_SCRIPT_JSON_PATH;
+import static com.example.walking_meditation.nav.Extras.EXTRA_ROUTE_PLAN_PATH;
 
+import android.content.Intent;
 import android.os.Bundle;
+import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -25,12 +28,22 @@ public class ScriptResultActivity extends AppCompatActivity {
         setContentView(R.layout.activity_script_result);
 
         TextView responseView = findViewById(R.id.tv_script_response);
+        Button startNavigation = findViewById(R.id.btn_start_navigation);
         String path = getIntent().getStringExtra(EXTRA_SCRIPT_JSON_PATH);
+        String routePlanPath = getIntent().getStringExtra(EXTRA_ROUTE_PLAN_PATH);
         if (path == null || path.trim().isEmpty()) {
             Toast.makeText(this, "Missing script response", Toast.LENGTH_LONG).show();
             finish();
             return;
         }
+
+        startNavigation.setEnabled(routePlanPath != null && !routePlanPath.trim().isEmpty());
+        startNavigation.setOnClickListener(view -> {
+            Intent intent = new Intent(this, MeditationPlaybackActivity.class);
+            intent.putExtra(EXTRA_SCRIPT_JSON_PATH, path);
+            intent.putExtra(EXTRA_ROUTE_PLAN_PATH, routePlanPath);
+            startActivity(intent);
+        });
 
         try {
             responseView.setText(formatResponse(CacheFiles.readText(path)));

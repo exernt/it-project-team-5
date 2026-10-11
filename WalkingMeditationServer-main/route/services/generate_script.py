@@ -18,6 +18,7 @@ from route.models import (
     ScriptNarration,
     ScriptRouteSegment,
     ScriptWalkingSection,
+    RouteStepInfo,
     StepSegment,
 )
 from route.persistence.script_storage import save_script_text
@@ -186,6 +187,9 @@ def _attach_route_metadata(
             route_label=extract_street_hint(segment.instruction),
             start=segment.start,
             end=segment.end,
+            polyline=segment.step_polyline,
+            duration_s=segment.duration_s,
+            distance_m=segment.distance_m,
             elevation=ScriptElevation(
                 classification=segment.label,
                 gain_m=round(segment.elev_gain_m, 1),
@@ -286,6 +290,8 @@ async def generate_script_with_park(
     park_to_destination_time: int,
     context: str,
     study_parameters: str = "",
+    source_to_park_steps: Sequence[RouteStepInfo] | None = None,
+    park_to_destination_steps: Sequence[RouteStepInfo] | None = None,
     output_folder: Path = DEFAULT_OUTPUT_FOLDER,
     save_to_disk: bool = False,
 ) -> GeneratedScript:
@@ -295,8 +301,16 @@ async def generate_script_with_park(
 
     weather, source_to_park, park_to_destination = await asyncio.gather(
         asyncio.to_thread(current_weather_lookup, park.lat, park.lon),
-        build_route_elevation_segments(source, park),
-        build_route_elevation_segments(park, destination),
+        build_route_elevation_segments(
+            source,
+            park,
+            selected_steps=list(source_to_park_steps or []),
+        ),
+        build_route_elevation_segments(
+            park,
+            destination,
+            selected_steps=list(park_to_destination_steps or []),
+        ),
     )
     weather_condition = _format_weather_condition(weather)
     duration_minutes = max(
@@ -358,6 +372,7 @@ async def generate_script_without_park(
     total_walking_time: int,
     context: str,
     study_parameters: str = "",
+    route_steps: Sequence[RouteStepInfo] | None = None,
     output_folder: Path = DEFAULT_OUTPUT_FOLDER,
     save_to_disk: bool = False,
 ) -> GeneratedScript:
@@ -371,7 +386,11 @@ async def generate_script_without_park(
 
     weather, route_segments = await asyncio.gather(
         asyncio.to_thread(current_weather_lookup, destination.lat, destination.lon),
-        build_route_elevation_segments(source, destination),
+        build_route_elevation_segments(
+            source,
+            destination,
+            selected_steps=list(route_steps or []),
+        ),
     )
     weather_condition = _format_weather_condition(weather)
     duration_minutes = max(1, round(total_walking_time / 60))

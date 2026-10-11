@@ -31,6 +31,16 @@ class LatLng(BaseModel):
     lat: float = Field(..., ge=-90, le=90)
     lon: float = Field(..., ge=-180, le=180)
 
+
+class RouteStepInfo(BaseModel):
+    index: int = Field(..., ge=1)
+    instruction: str = ""
+    start: LatLng
+    end: LatLng
+    duration_s: int = Field(default=0, ge=0)
+    distance_m: int = Field(default=0, ge=0)
+    polyline: str
+
 class RouteRequest(BaseModel):
     origin: LatLng
     destination: LatLng
@@ -112,6 +122,8 @@ class ScriptWithParkRequest(BaseModel):
     park_to_destination_time: int = Field(..., ge=0, le=14_400)
     context: str = Field(..., min_length=1, max_length=1_000)
     study_parameters: str = Field(default="", max_length=10_000)
+    source_to_park_steps: List[RouteStepInfo] = Field(default_factory=list)
+    park_to_destination_steps: List[RouteStepInfo] = Field(default_factory=list)
 
 
 class ScriptGenerationUsage(BaseModel):
@@ -149,6 +161,9 @@ class ScriptRouteSegment(BaseModel):
     route_label: str
     start: LatLng
     end: LatLng
+    polyline: str = ""
+    duration_s: int = Field(default=0, ge=0)
+    distance_m: int = Field(default=0, ge=0)
     elevation: ScriptElevation
     narration: str
 
@@ -194,6 +209,7 @@ class ScriptWithoutParkRequest(BaseModel):
     total_walking_time: int = Field(..., ge=0, le=14_400)
     context: str = Field(..., min_length=1, max_length=1_000)
     study_parameters: str = Field(default="", max_length=10_000)
+    route_steps: List[RouteStepInfo] = Field(default_factory=list)
 
 
 class ScriptWithoutParkResponse(BaseModel):
@@ -206,6 +222,7 @@ class RouteInfo(BaseModel):
     duration_s: int
     distance_m: int
     polyline: str
+    steps: List[RouteStepInfo] = Field(default_factory=list)
 
 class ParkPlace(BaseModel):
     place_id: str
@@ -226,6 +243,8 @@ class ParkDetourResult(BaseModel):
     slack_s: int
     polyline_to_park: str
     polyline_from_park: str
+    steps_to_park: List[RouteStepInfo] = Field(default_factory=list)
+    steps_from_park: List[RouteStepInfo] = Field(default_factory=list)
 
 class WalkRouteResponse(BaseModel):
     origin: LatLng
@@ -257,6 +276,8 @@ class StepSegment(BaseModel):
     start: LatLng
     end: LatLng
     step_polyline: str
+    duration_s: int = Field(default=0, ge=0)
+    distance_m: int = Field(default=0, ge=0)
     elev_start_m: float
     elev_end_m: float
     elev_gain_m: float
