@@ -197,6 +197,7 @@ class MeditationScript(BaseModel):
     includes_pauses: bool
     prompt_version: str = ""
     model: str = ""
+    fallback: bool = False
     inputs: ScriptInputs
     sections: List[ScriptWalkingSection | ScriptCompassionSection]
 

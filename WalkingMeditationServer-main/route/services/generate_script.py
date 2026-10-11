@@ -18,6 +18,7 @@ from route.config import (
     nearby_context_enabled,
     render_template,
 )
+from route.errors import OpenaiAPIError
 from route.models import (
     LatLng,
     MeditationScript,
@@ -32,12 +33,14 @@ from route.models import (
 )
 from route.persistence.script_storage import save_script_text
 from route.services.enrich_elevation import build_route_elevation_segments
+from route.services.script_fallback import FallbackSegment, build_fallback_narrations
 from route.utils.route_hint import extract_street_hint
 
 logger = logging.getLogger(__name__)
 
 # A section may fall this far below its requested minimum before we log a warning.
 WORD_COUNT_TOLERANCE = 0.8
+MAX_GENERATION_ATTEMPTS = 2
 NEARBY_LOOKUP_CONCURRENCY = 5
 NEARBY_MAX_SEGMENTS = 20
 
@@ -268,6 +271,120 @@ def _parse_narrations(
     return value
 
 
+def _zero_usage() -> GenerationUsage:
+    return GenerationUsage(
+        model="fallback",
+        service_tier="none",
+        input_tokens=0,
+        cached_input_tokens=0,
+        cache_write_tokens=0,
+        output_tokens=0,
+        reasoning_tokens=0,
+        total_tokens=0,
+        cost_usd=0.0,
+    )
+
+
+def _combine_usage(first: GenerationUsage, second: GenerationUsage) -> GenerationUsage:
+    return GenerationUsage(
+        model=second.model,
+        service_tier=second.service_tier,
+        input_tokens=first.input_tokens + second.input_tokens,
+        cached_input_tokens=first.cached_input_tokens + second.cached_input_tokens,
+        cache_write_tokens=first.cache_write_tokens + second.cache_write_tokens,
+        output_tokens=first.output_tokens + second.output_tokens,
+        reasoning_tokens=first.reasoning_tokens + second.reasoning_tokens,
+        total_tokens=first.total_tokens + second.total_tokens,
+        cost_usd=round(first.cost_usd + second.cost_usd, 10),
+    )
+
+
+def _retry_prompt(prompt: str, problems: Sequence[str]) -> str:
+    listed = "\n".join(f"- {problem}" for problem in problems)
+    return (
+        f"{prompt}\n\nYour previous response had these problems. "
+        f"Fix them in this response:\n{listed}\n"
+        "Keep every other requirement unchanged."
+    )
+
+
+async def _generate_validated_narrations(
+        prompt: str,
+        focused_ids: Sequence[str],
+        closing_ids: Sequence[str],
+        focused_words: int,
+        compassion_words: int,
+        closing_words: int,
+) -> tuple[Dict[str, Any] | None, GenerationUsage]:
+    """Generate narration, retrying once on invalid or too-short output.
+
+    Returns ``(None, usage)`` when OpenAI fails or the output stays structurally
+    invalid, so the caller can use the fallback script. Output that is valid but
+    still short after the last attempt is accepted with a warning.
+    """
+    usage: GenerationUsage | None = None
+    current_prompt = prompt
+    for attempt in range(1, MAX_GENERATION_ATTEMPTS + 1):
+        try:
+            generated = await generate_text(
+                current_prompt,
+                json_schema=_narration_schema(focused_ids, closing_ids),
+                schema_name="meditation_narrations",
+            )
+        except OpenaiAPIError:
+            logger.error(
+                "OpenAI unavailable on attempt %d; using fallback script",
+                attempt,
+                exc_info=True,
+            )
+            return None, usage or _zero_usage()
+
+        usage = generated.usage if usage is None else _combine_usage(usage, generated.usage)
+        narrations: Dict[str, Any] | None
+        try:
+            narrations = _parse_narrations(generated.text, focused_ids, closing_ids)
+        except ValueError as exc:
+            narrations = None
+            problems = [str(exc)]
+        else:
+            problems = _word_count_shortfalls(
+                narrations, focused_words, compassion_words, closing_words
+            )
+            if not problems:
+                return narrations, usage
+
+        if attempt == MAX_GENERATION_ATTEMPTS:
+            if narrations is None:
+                logger.error(
+                    "Generated narration still invalid after %d attempts; "
+                    "using fallback script: %s",
+                    attempt,
+                    problems[0],
+                )
+                return None, usage
+            for problem in problems:
+                logger.warning("Generated script under word target - %s", problem)
+            return narrations, usage
+
+        logger.warning("Retrying script generation (attempt %d): %s", attempt, problems)
+        current_prompt = _retry_prompt(prompt, problems)
+
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
+def _fallback_segments(
+        segments: Sequence[StepSegment], route_phase: str
+) -> List[FallbackSegment]:
+    return [
+        (
+            _segment_id(route_phase, segment),
+            extract_street_hint(segment.instruction),
+            segment.label,
+        )
+        for segment in segments
+    ]
+
+
 def _attach_route_metadata(
         segments: Sequence[StepSegment],
         route_phase: str,
@@ -318,6 +435,7 @@ def _assemble_script(
         narrations: Dict[str, Any],
         nearby: Dict[str, List[str]] | None = None,
         model: str = "",
+        fallback: bool = False,
 ) -> MeditationScript:
     focused = narrations["focused_attention"]
     compassion = narrations["compassion_meditation"]
@@ -329,6 +447,7 @@ def _assemble_script(
         includes_pauses=True,
         prompt_version=PROMPT_VERSION,
         model=model,
+        fallback=fallback,
         inputs=ScriptInputs(
             context=context,
             weather_condition=weather_condition,
@@ -443,16 +562,21 @@ async def generate_script_with_park(
         weatherCondition=weather_condition,
         study_parameters=study_parameters.strip() or "No additional study instructions.",
     )
-    generated = await generate_text(
+    narrations, usage = await _generate_validated_narrations(
         prompt,
-        json_schema=_narration_schema(focused_ids, closing_ids),
-        schema_name="meditation_narrations",
+        focused_ids,
+        closing_ids,
+        focused_words,
+        compassion_words,
+        closing_words,
     )
-    narrations = _parse_narrations(generated.text, focused_ids, closing_ids)
-    for shortfall in _word_count_shortfalls(
-            narrations, focused_words, compassion_words, closing_words
-    ):
-        logger.warning("Generated script under word target - %s", shortfall)
+    used_fallback = narrations is None
+    if narrations is None:
+        narrations = build_fallback_narrations(
+            _fallback_segments(source_to_park, focused_phase),
+            _fallback_segments(park_to_destination, closing_phase),
+            has_park=True,
+        )
     script = _assemble_script(
         duration_minutes=duration_minutes,
         context=context,
@@ -469,7 +593,8 @@ async def generate_script_with_park(
         closing_route_phase=closing_phase,
         narrations=narrations,
         nearby=nearby,
-        model=generated.usage.model,
+        model=usage.model,
+        fallback=used_fallback,
     )
 
     if save_to_disk:
@@ -478,7 +603,7 @@ async def generate_script_with_park(
             output_folder,
             prefix="meditation_script",
         )
-    return GeneratedScript(script=script, usage=generated.usage)
+    return GeneratedScript(script=script, usage=usage)
 
 
 async def generate_script_without_park(
@@ -525,16 +650,21 @@ async def generate_script_without_park(
         weatherCondition=weather_condition,
         study_parameters=study_parameters.strip() or "No additional study instructions.",
     )
-    generated = await generate_text(
+    narrations, usage = await _generate_validated_narrations(
         prompt,
-        json_schema=_narration_schema(focused_ids, closing_ids),
-        schema_name="meditation_narrations",
+        focused_ids,
+        closing_ids,
+        focused_words,
+        compassion_words,
+        closing_words,
     )
-    narrations = _parse_narrations(generated.text, focused_ids, closing_ids)
-    for shortfall in _word_count_shortfalls(
-            narrations, focused_words, compassion_words, closing_words
-    ):
-        logger.warning("Generated script under word target - %s", shortfall)
+    used_fallback = narrations is None
+    if narrations is None:
+        narrations = build_fallback_narrations(
+            _fallback_segments(route_segments, focused_phase),
+            [],
+            has_park=False,
+        )
     script = _assemble_script(
         duration_minutes=duration_minutes,
         context=context,
@@ -551,7 +681,8 @@ async def generate_script_without_park(
         closing_route_phase="park_to_destination",
         narrations=narrations,
         nearby=nearby,
-        model=generated.usage.model,
+        model=usage.model,
+        fallback=used_fallback,
     )
 
     if save_to_disk:
@@ -560,4 +691,4 @@ async def generate_script_without_park(
             output_folder,
             prefix="meditation_script",
         )
-    return GeneratedScript(script=script, usage=generated.usage)
+    return GeneratedScript(script=script, usage=usage)
