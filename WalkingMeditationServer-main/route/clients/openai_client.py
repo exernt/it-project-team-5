@@ -5,9 +5,10 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-from openai import OpenAI
+from openai import OpenAI, OpenAIError
 
-from route.config import openai_api_key
+from route.config import openai_api_key, openai_max_retries, openai_timeout_seconds
+from route.errors import OpenaiAPIError
 
 logger = logging.getLogger(__name__)
 
@@ -51,11 +52,11 @@ def _token_count(value: object, attribute: str) -> int:
 
 
 def _calculate_luna_standard_cost_usd(
-    *,
-    input_tokens: int,
-    cached_input_tokens: int,
-    cache_write_tokens: int,
-    output_tokens: int,
+        *,
+        input_tokens: int,
+        cached_input_tokens: int,
+        cache_write_tokens: int,
+        output_tokens: int,
 ) -> float:
     if input_tokens > _LONG_CONTEXT_THRESHOLD:
         input_rate = _LONG_CONTEXT_INPUT_RATE
@@ -71,31 +72,35 @@ def _calculate_luna_standard_cost_usd(
     ordinary_input_tokens = max(
         0,
         input_tokens - cached_input_tokens - cache_write_tokens,
-    )
+        )
     cost = (
-        ordinary_input_tokens * input_rate
-        + cached_input_tokens * cached_input_rate
-        + cache_write_tokens * cache_write_rate
-        + output_tokens * output_rate
-    ) / _TOKENS_PER_MILLION
+                   ordinary_input_tokens * input_rate
+                   + cached_input_tokens * cached_input_rate
+                   + cache_write_tokens * cache_write_rate
+                   + output_tokens * output_rate
+           ) / _TOKENS_PER_MILLION
     return round(cost, 10)
 
 
 def _generate_text_sync(
-    prompt: str,
-    *,
-    model: str = DEFAULT_MODEL,
-    temperature: float = DEFAULT_TEMPERATURE,
-    api_key: Optional[str] = None,
-    json_schema: Optional[Dict[str, Any]] = None,
-    schema_name: str = "structured_response",
+        prompt: str,
+        *,
+        model: str = DEFAULT_MODEL,
+        temperature: float = DEFAULT_TEMPERATURE,
+        api_key: Optional[str] = None,
+        json_schema: Optional[Dict[str, Any]] = None,
+        schema_name: str = "structured_response",
 ) -> GeneratedText:
     if model != DEFAULT_MODEL:
         raise ValueError(
             f"Cost calculation is configured only for {DEFAULT_MODEL}; received {model}"
         )
 
-    client = OpenAI(api_key=api_key or openai_api_key())
+    client = OpenAI(
+        api_key=api_key or openai_api_key(),
+        timeout=openai_timeout_seconds(),
+        max_retries=openai_max_retries(),
+    )
     request: Dict[str, Any] = dict(
         model=model,
         reasoning={"effort": "none"},
@@ -113,7 +118,12 @@ def _generate_text_sync(
             }
         }
 
-    resp = client.responses.create(**request)
+    try:
+        resp = client.responses.create(**request)
+    except OpenAIError as exc:
+        # Keep SDK exception types out of the API layer; log the details here.
+        logger.warning("OpenAI request failed: %s", type(exc).__name__, exc_info=True)
+        raise OpenaiAPIError(f"OpenAI request failed: {type(exc).__name__}") from exc
 
     if resp.usage is None:
         raise RuntimeError("OpenAI response did not include token usage")
@@ -164,13 +174,13 @@ def _generate_text_sync(
 
 
 async def generate_text(
-    prompt: str,
-    *,
-    model: str = DEFAULT_MODEL,
-    temperature: float = DEFAULT_TEMPERATURE,
-    api_key: Optional[str] = None,
-    json_schema: Optional[Dict[str, Any]] = None,
-    schema_name: str = "structured_response",
+        prompt: str,
+        *,
+        model: str = DEFAULT_MODEL,
+        temperature: float = DEFAULT_TEMPERATURE,
+        api_key: Optional[str] = None,
+        json_schema: Optional[Dict[str, Any]] = None,
+        schema_name: str = "structured_response",
 ) -> GeneratedText:
     """Run the synchronous OpenAI SDK call without blocking the event loop."""
     return await asyncio.to_thread(

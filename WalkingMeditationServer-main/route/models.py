@@ -165,6 +165,7 @@ class ScriptRouteSegment(BaseModel):
     duration_s: int = Field(default=0, ge=0)
     distance_m: int = Field(default=0, ge=0)
     elevation: ScriptElevation
+    nearby_features: List[str] = Field(default_factory=list)
     narration: str
 
 
@@ -194,6 +195,8 @@ class MeditationScript(BaseModel):
     duration_minutes: int = Field(..., ge=1)
     language: str
     includes_pauses: bool
+    prompt_version: str = ""
+    model: str = ""
     inputs: ScriptInputs
     sections: List[ScriptWalkingSection | ScriptCompassionSection]
 
@@ -231,7 +234,7 @@ class ParkPlace(BaseModel):
     lon: float
     primary_type: str | None = None
     types: List[str] = Field(default_factory=list)
-    
+
 
 class ParkDetourResult(BaseModel):
     park: ParkPlace

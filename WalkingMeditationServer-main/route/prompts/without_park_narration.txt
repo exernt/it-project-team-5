@@ -13,6 +13,7 @@ General requirements:
 - Incorporate the current conditions naturally: {weatherCondition}.
 - When discussing terrain, use words such as uphill, flat, or downhill; do not quote numeric elevations.
 - Keep the listener aware of their surroundings and walking safety.
+- Some route segments list "nearby_features". You may mention at most one per segment, briefly and only as a calm point of attention; never invent landmarks that are not listed, and never ask the listener to look at a phone.
 - End each section gently.
 
 Focused attention:

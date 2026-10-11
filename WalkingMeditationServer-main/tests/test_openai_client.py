@@ -2,6 +2,9 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from openai import APIConnectionError
+
+from route.errors import OpenaiAPIError
 from route.clients.openai_client import (
     DEFAULT_MODEL,
     _calculate_luna_standard_cost_usd,
@@ -113,6 +116,28 @@ class OpenAIClientTests(unittest.TestCase):
             },
             request["text"],
         )
+
+
+    @patch.dict("os.environ", {"OPENAI_TIMEOUT_SECONDS": "12", "OPENAI_MAX_RETRIES": "1"})
+    @patch("route.clients.openai_client.OpenAI")
+    def test_configures_timeout_and_retries(self, openai_mock):
+        openai_mock.return_value.responses.create.side_effect = RuntimeError("stop")
+
+        with self.assertRaises(RuntimeError):
+            _generate_text_sync("prompt", api_key="test-key")
+
+        openai_mock.assert_called_once_with(
+            api_key="test-key", timeout=12.0, max_retries=1
+        )
+
+    @patch("route.clients.openai_client.OpenAI")
+    def test_wraps_sdk_errors_in_openai_api_error(self, openai_mock):
+        client = MagicMock()
+        client.responses.create.side_effect = APIConnectionError(request=MagicMock())
+        openai_mock.return_value = client
+
+        with self.assertRaises(OpenaiAPIError):
+            _generate_text_sync("prompt", api_key="test-key")
 
 
 if __name__ == "__main__":

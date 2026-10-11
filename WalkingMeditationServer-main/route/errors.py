@@ -14,7 +14,7 @@ class OverpassError(Exception):
     """Raised when Open Street Maps APIs return an error or unexpected payload."""
 
 class OpenaiAPIError(Exception):
-    """Raised when Open Street Maps APIs return an error or unexpected payload."""
+    """Raised when the OpenAI API is unconfigured, unreachable, or returns an error."""
 
 class TTSNotReadyError(RuntimeError):
     """Raised when the TTS model is not loaded / available."""
