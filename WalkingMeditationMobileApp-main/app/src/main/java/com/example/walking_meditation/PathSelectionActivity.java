@@ -1,6 +1,7 @@
 package com.example.walking_meditation;
 
 import static com.example.walking_meditation.nav.Extras.EXTRA_SCRIPT_JSON_PATH;
+import static com.example.walking_meditation.nav.Extras.EXTRA_ROUTE_PLAN_PATH;
 
 import android.Manifest;
 import android.content.Intent;
@@ -35,8 +36,10 @@ import com.example.walking_meditation.models.ApiResponse;
 import com.example.walking_meditation.models.LatLon;
 import com.example.walking_meditation.models.ParkItem;
 import com.example.walking_meditation.models.RouteOption;
+import com.example.walking_meditation.models.RoutePlan;
 import com.example.walking_meditation.utils.CacheFiles;
 import com.example.walking_meditation.utils.PolylineDecoder;
+import com.example.walking_meditation.utils.RoutePlanFiles;
 import com.example.walking_meditation.utils.SessionManager;
 import com.example.walking_meditation.utils.StudyConfigClient;
 import com.google.android.gms.location.FusedLocationProviderClient;
@@ -61,6 +64,7 @@ import com.google.android.libraries.places.api.net.PlacesClient;
 import com.google.gson.Gson;
 
 import org.json.JSONObject;
+import org.json.JSONArray;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -149,6 +153,7 @@ public class PathSelectionActivity extends AppCompatActivity
     @Nullable private ApiResponse routeResponse;
     @Nullable private RouteOption selectedRoute;
     @Nullable private String routeResponsePath;
+    @Nullable private String selectedRoutePlanPath;
     private String lastMeditationContext = "";
 
     private boolean participatingInStudy;
@@ -811,6 +816,15 @@ public class PathSelectionActivity extends AppCompatActivity
             payload.put("context", lastMeditationContext.isEmpty()
                     ? "general wellbeing" : lastMeditationContext);
             payload.put("study_parameters", participatingInStudy ? studyParameters : "");
+            payload.put("source_to_park_steps", new JSONArray(
+                    gson.toJson(parkItem.steps_to_park == null
+                            ? new ArrayList<>() : parkItem.steps_to_park)));
+            payload.put("park_to_destination_steps", new JSONArray(
+                    gson.toJson(parkItem.steps_from_park == null
+                            ? new ArrayList<>() : parkItem.steps_from_park)));
+
+            RoutePlan routePlan = RoutePlan.forParkRoute(routeResponse, parkItem);
+            selectedRoutePlanPath = RoutePlanFiles.save(this, routePlan);
 
             Request request = authenticatedRequest(SCRIPT_WITH_PARK_URL)
                     .post(RequestBody.create(payload.toString(), JSON))
@@ -831,6 +845,7 @@ public class PathSelectionActivity extends AppCompatActivity
                     this, "scripts", "script-response", ".json", responseBody);
             Intent intent = new Intent(this, ScriptResultActivity.class);
             intent.putExtra(EXTRA_SCRIPT_JSON_PATH, path);
+            intent.putExtra(EXTRA_ROUTE_PLAN_PATH, selectedRoutePlanPath);
             startActivity(intent);
         } catch (IOException exception) {
             Toast.makeText(this,

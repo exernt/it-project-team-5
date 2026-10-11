@@ -17,11 +17,18 @@
             android:text="Server script response"
             android:textSize="20sp" />
 
+        <Button
+            android:id="@+id/btn_start_navigation"
+            style="@style/App.PrimaryButton"
+            android:layout_marginTop="@dimen/space_12"
+            android:text="Start walk" />
+
         <TextView
             android:id="@+id/tv_script_response"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/space_12"
+            android:layout_marginTop="@dimen/space_24"
+            android:layout_marginBottom="@dimen/space_24"
             android:fontFamily="monospace"
             android:textColor="@color/black"
             android:textIsSelectable="true"
