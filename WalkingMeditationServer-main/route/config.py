@@ -118,6 +118,20 @@ def nearby_context_enabled() -> bool:
         "ENABLE_NEARBY_CONTEXT must be one of true/false, 1/0, yes/no, or on/off"
     )
 
+def script_fallback_enabled() -> bool:
+    """Whether a generic script replaces failed OpenAI generation (default: yes).
+
+    Set SCRIPT_FALLBACK_ENABLED=false to return an error instead, e.g. when
+    canned scripts must never reach study participants.
+    """
+    value = os.getenv("SCRIPT_FALLBACK_ENABLED", "true").strip().casefold()
+    if value in {"1", "true", "yes", "on", ""}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(
+        "SCRIPT_FALLBACK_ENABLED must be one of true/false, 1/0, yes/no, or on/off"
+    )
 
 # Bump when any file in prompts/ changes in a way that affects generated output,
 # so stored scripts can be traced back to the prompt that produced them.

@@ -16,6 +16,7 @@ from route.config import (
     PROMPT_VERSION,
     get_script_generation_prompt,
     nearby_context_enabled,
+    script_fallback_enabled,
     render_template,
 )
 from route.errors import OpenaiAPIError
@@ -333,7 +334,7 @@ async def _generate_validated_narrations(
             )
         except OpenaiAPIError:
             logger.error(
-                "OpenAI unavailable on attempt %d; using fallback script",
+                "OpenAI unavailable on attempt %d",
                 attempt,
                 exc_info=True,
             )
@@ -356,8 +357,7 @@ async def _generate_validated_narrations(
         if attempt == MAX_GENERATION_ATTEMPTS:
             if narrations is None:
                 logger.error(
-                    "Generated narration still invalid after %d attempts; "
-                    "using fallback script: %s",
+                    "Generated narration still invalid after %d attempts: %s",
                     attempt,
                     problems[0],
                 )
@@ -572,6 +572,8 @@ async def generate_script_with_park(
     )
     used_fallback = narrations is None
     if narrations is None:
+        if not script_fallback_enabled():
+            raise OpenaiAPIError("Script generation failed and fallback is disabled")
         narrations = build_fallback_narrations(
             _fallback_segments(source_to_park, focused_phase),
             _fallback_segments(park_to_destination, closing_phase),
@@ -660,6 +662,8 @@ async def generate_script_without_park(
     )
     used_fallback = narrations is None
     if narrations is None:
+        if not script_fallback_enabled():
+            raise OpenaiAPIError("Script generation failed and fallback is disabled")
         narrations = build_fallback_narrations(
             _fallback_segments(route_segments, focused_phase),
             [],
