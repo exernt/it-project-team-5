@@ -455,6 +455,40 @@ class RetryAndFallbackTests(unittest.IsolatedAsyncioTestCase):
             result.script.sections[2].route_segments[0].id,
         )
 
+    @patch.dict("os.environ", {"SCRIPT_FALLBACK_ENABLED": "false"})
+    @patch("route.services.generate_script.generate_text", new_callable=AsyncMock)
+    @patch(
+        "route.services.generate_script.build_route_elevation_segments",
+        new_callable=AsyncMock,
+    )
+    @patch("route.services.generate_script.current_weather_lookup")
+    async def test_fallback_disabled_raises_instead_of_serving_canned_script(
+            self, weather_mock, elevation_mock, generate_text_mock
+    ):
+        generate_text_mock.side_effect = OpenaiAPIError("down")
+
+        with self.assertRaises(OpenaiAPIError):
+            await self._generate(generate_text_mock, elevation_mock, weather_mock)
+
+    @patch.dict("os.environ", {"SCRIPT_FALLBACK_ENABLED": "false"})
+    @patch("route.services.generate_script.generate_text", new_callable=AsyncMock)
+    @patch(
+        "route.services.generate_script.build_route_elevation_segments",
+        new_callable=AsyncMock,
+    )
+    @patch("route.services.generate_script.current_weather_lookup")
+    async def test_fallback_disabled_still_returns_valid_generated_script(
+            self, weather_mock, elevation_mock, generate_text_mock
+    ):
+        generate_text_mock.return_value = GeneratedText(
+            text=_generated_json(["source_to_destination_1"]),
+            usage=_usage(),
+        )
+
+        result = await self._generate(generate_text_mock, elevation_mock, weather_mock)
+
+        self.assertFalse(result.script.fallback)
+
 
 if __name__ == "__main__":
     unittest.main()
