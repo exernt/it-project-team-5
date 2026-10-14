@@ -99,6 +99,15 @@
             android:name=".ResearcherEditQuestionnaireActivity"
             android:exported="false" />
         <activity
+            android:name=".ResearcherQuestionnaireResponsesActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ParticipantQuestionnaireListActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ParticipantTakeQuestionnaireActivity"
+            android:exported="false" />
+        <activity
             android:name=".ResearcherRosterActivity"
             android:exported="false" />
         <activity

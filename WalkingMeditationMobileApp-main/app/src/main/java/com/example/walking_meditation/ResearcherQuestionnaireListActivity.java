@@ -97,11 +97,9 @@ public class ResearcherQuestionnaireListActivity extends AppCompatActivity {
             btn.setTextSize(16);
             btn.setMinHeight(getResources().getDimensionPixelSize(R.dimen.field_height));
             btn.setOnClickListener(view -> {
-                Intent intent = new Intent(this, ResearcherEditQuestionnaireActivity.class);
-                intent.putExtra("questionnaire_id", q.getId());
-                intent.putExtra("questionnaire_title", q.getTitle());
-                intent.putExtra("questionnaire_status", q.getStatus());
-                intent.putExtra("questionnaire_definition", q.getDefinition().toString());
+                Intent intent = new Intent(this, ResearcherQuestionnaireResponsesActivity.class);
+                intent.putExtra("study_id", studyId);
+                intent.putExtra("study_questionnaire_id", q.getId());
                 startActivity(intent);
             });
 
