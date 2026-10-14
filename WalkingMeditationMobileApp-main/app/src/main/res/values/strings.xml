@@ -67,6 +67,8 @@
     <string name="move_to_experimental">Move to experimental</string>
     <string name="view_roster">View Participants</string>
     <string name="share_invite_link">Share Invite Link</string>
+    <string name="create_questionnaire">Create Questionnaire</string>
+    <string name="manage_questionnaires">Manage Questionnaires</string>
     <plurals name="study_duration_days">
         <item quantity="one">Duration: %d day</item>
         <item quantity="other">Duration: %d days</item>

@@ -120,6 +120,20 @@
                 android:text="@string/share_invite_link" />
 
             <Button
+                android:id="@+id/btnResearcherDetailQuestionnaire"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/field_height"
+                android:layout_marginTop="@dimen/space_12"
+                android:text="@string/create_questionnaire" />
+
+            <Button
+                android:id="@+id/btnResearcherDetailQuestionnairesList"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/field_height"
+                android:layout_marginTop="@dimen/space_12"
+                android:text="@string/manage_questionnaires" />
+
+            <Button
                 android:id="@+id/btnResearcherDetailBack"
                 android:layout_width="match_parent"
                 android:layout_height="@dimen/field_height"
