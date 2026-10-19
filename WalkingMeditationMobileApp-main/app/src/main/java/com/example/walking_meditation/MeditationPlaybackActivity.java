@@ -2,6 +2,8 @@ package com.example.walking_meditation;
 
 import static com.example.walking_meditation.nav.Extras.EXTRA_ROUTE_PLAN_PATH;
 import static com.example.walking_meditation.nav.Extras.EXTRA_SCRIPT_JSON_PATH;
+import static com.example.walking_meditation.nav.Extras.EXTRA_TTS_INSTRUCT;
+import static com.example.walking_meditation.nav.Extras.EXTRA_TTS_SPEAKER;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
@@ -153,14 +155,27 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
     private void loadRouteAndScript() throws IOException {
         String planPath = getIntent().getStringExtra(EXTRA_ROUTE_PLAN_PATH);
         String scriptPath = getIntent().getStringExtra(EXTRA_SCRIPT_JSON_PATH);
+        String ttsSpeaker = getIntent().getStringExtra(EXTRA_TTS_SPEAKER);
+        String ttsInstruct = getIntent().getStringExtra(EXTRA_TTS_INSTRUCT);
+
         if (planPath == null || planPath.trim().isEmpty()) {
             throw new IOException("Missing selected route plan");
         }
         if (scriptPath == null || scriptPath.trim().isEmpty()) {
             throw new IOException("Missing generated script");
         }
+        if (ttsSpeaker == null || ttsSpeaker.trim().isEmpty()) {
+            ttsSpeaker = "Ryan";
+        }
+
+        if (ttsInstruct == null) {
+            ttsInstruct = "Calm and clear";
+        }
+
         routePlan = RoutePlanFiles.read(planPath);
         parseScriptSegments(CacheFiles.readText(scriptPath));
+
+
     }
 
     private void parseScriptSegments(String responseJson) throws IOException {

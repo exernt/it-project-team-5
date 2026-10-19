@@ -2,6 +2,8 @@ package com.example.walking_meditation;
 
 import static com.example.walking_meditation.nav.Extras.EXTRA_SCRIPT_JSON_PATH;
 import static com.example.walking_meditation.nav.Extras.EXTRA_ROUTE_PLAN_PATH;
+import static com.example.walking_meditation.nav.Extras.EXTRA_TTS_INSTRUCT;
+import static com.example.walking_meditation.nav.Extras.EXTRA_TTS_SPEAKER;
 
 import android.Manifest;
 import android.content.Intent;
@@ -142,6 +144,9 @@ public class PathSelectionActivity extends AppCompatActivity
     private LinearLayout resultsContainer;
     private RecyclerView routeOptionsView;
     private RouteOptionsAdapter routeOptionsAdapter;
+    private AutoCompleteTextView ddTtsSpeaker;
+
+    private EditText etTtsInstruct;
 
     private MapView mapView;
     @Nullable private GoogleMap googleMap;
@@ -228,6 +233,8 @@ public class PathSelectionActivity extends AppCompatActivity
         btnBackToSearch.setOnClickListener(v -> showInputState());
         btnSelectRoute.setOnClickListener(v -> generateSelectedRouteScript());
 
+        setupTtsSpeakerDropdown();
+
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
@@ -251,6 +258,7 @@ public class PathSelectionActivity extends AppCompatActivity
         etDestination = findViewById(R.id.et_destination);
         etTotalMinutes = findViewById(R.id.et_total_minutes);
         etContext = findViewById(R.id.et_context);
+        etTtsInstruct = findViewById(R.id.et_tts_instruct);
         btnUseCurrentLocation = findViewById(R.id.btn_use_current_location);
         btnFindPath = findViewById(R.id.btn_find_path);
         btnSelectRoute = findViewById(R.id.btn_select_route);
@@ -261,6 +269,7 @@ public class PathSelectionActivity extends AppCompatActivity
         resultsContainer = findViewById(R.id.results_container);
         routeOptionsView = findViewById(R.id.rv_route_options);
         mapView = findViewById(R.id.route_map);
+        ddTtsSpeaker = findViewById(R.id.dd_tts_speaker);
     }
 
     private void onMapReady(@NonNull GoogleMap map) {
@@ -843,10 +852,25 @@ public class PathSelectionActivity extends AppCompatActivity
         try {
             String path = CacheFiles.writeText(
                     this, "scripts", "script-response", ".json", responseBody);
+
             Intent intent = new Intent(this, ScriptResultActivity.class);
+
             intent.putExtra(EXTRA_SCRIPT_JSON_PATH, path);
             intent.putExtra(EXTRA_ROUTE_PLAN_PATH, selectedRoutePlanPath);
+
+            // Pass TTS preferences
+            intent.putExtra(
+                    EXTRA_TTS_SPEAKER,
+                    ddTtsSpeaker.getText().toString().trim()
+            );
+
+            intent.putExtra(
+                    EXTRA_TTS_INSTRUCT,
+                    etTtsInstruct.getText().toString().trim()
+            );
+
             startActivity(intent);
+
         } catch (IOException exception) {
             Toast.makeText(this,
                     "Unable to save script response: " + exception.getMessage(),
@@ -996,6 +1020,23 @@ public class PathSelectionActivity extends AppCompatActivity
             }
         }
     }
+
+    private void setupTtsSpeakerDropdown() {
+        String[] speakers = {"Aiden", "Ryan"};
+
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                this,
+                android.R.layout.simple_dropdown_item_1line,
+                speakers
+        );
+
+        ddTtsSpeaker.setAdapter(adapter);
+        ddTtsSpeaker.setThreshold(0);
+
+        ddTtsSpeaker.setText(speakers[0], false);
+    }
+
+
 
     @Override
     protected void onRestoreInstanceState(@NonNull Bundle savedInstanceState) {

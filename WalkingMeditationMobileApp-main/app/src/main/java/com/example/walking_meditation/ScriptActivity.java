@@ -317,6 +317,8 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
         }
     }
 
+    // this is the main tts functionality
+
     private void downloadTTS(NarrationItem item, int position, boolean fromQueue) {
         isDownloadActive = true;
         item.status = NarrationItem.Status.DOWNLOADING;

@@ -2,6 +2,8 @@ package com.example.walking_meditation;
 
 import static com.example.walking_meditation.nav.Extras.EXTRA_SCRIPT_JSON_PATH;
 import static com.example.walking_meditation.nav.Extras.EXTRA_ROUTE_PLAN_PATH;
+import static com.example.walking_meditation.nav.Extras.EXTRA_TTS_SPEAKER;
+import static com.example.walking_meditation.nav.Extras.EXTRA_TTS_INSTRUCT;
 
 import android.content.Intent;
 import android.os.Bundle;
@@ -31,6 +33,9 @@ public class ScriptResultActivity extends AppCompatActivity {
         Button startNavigation = findViewById(R.id.btn_start_navigation);
         String path = getIntent().getStringExtra(EXTRA_SCRIPT_JSON_PATH);
         String routePlanPath = getIntent().getStringExtra(EXTRA_ROUTE_PLAN_PATH);
+        String ttsSpeaker = getIntent().getStringExtra(EXTRA_TTS_SPEAKER);
+        String ttsInstruct = getIntent().getStringExtra(EXTRA_TTS_INSTRUCT);
+
         if (path == null || path.trim().isEmpty()) {
             Toast.makeText(this, "Missing script response", Toast.LENGTH_LONG).show();
             finish();
@@ -38,10 +43,16 @@ public class ScriptResultActivity extends AppCompatActivity {
         }
 
         startNavigation.setEnabled(routePlanPath != null && !routePlanPath.trim().isEmpty());
+
         startNavigation.setOnClickListener(view -> {
             Intent intent = new Intent(this, MeditationPlaybackActivity.class);
+
             intent.putExtra(EXTRA_SCRIPT_JSON_PATH, path);
             intent.putExtra(EXTRA_ROUTE_PLAN_PATH, routePlanPath);
+
+            intent.putExtra(EXTRA_TTS_SPEAKER, ttsSpeaker);
+            intent.putExtra(EXTRA_TTS_INSTRUCT, ttsInstruct);
+
             startActivity(intent);
         });
 
