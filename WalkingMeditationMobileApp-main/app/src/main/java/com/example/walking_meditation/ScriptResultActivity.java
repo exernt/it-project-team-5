@@ -2,8 +2,6 @@ package com.example.walking_meditation;
 
 import static com.example.walking_meditation.nav.Extras.EXTRA_SCRIPT_JSON_PATH;
 import static com.example.walking_meditation.nav.Extras.EXTRA_ROUTE_PLAN_PATH;
-import static com.example.walking_meditation.nav.Extras.EXTRA_TTS_SPEAKER;
-import static com.example.walking_meditation.nav.Extras.EXTRA_TTS_INSTRUCT;
 
 import android.content.Intent;
 import android.os.Bundle;
@@ -14,55 +12,65 @@ import android.widget.Toast;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.example.walking_meditation.models.RoutePlan;
+import com.example.walking_meditation.script.ScriptNarrationParser;
+import com.example.walking_meditation.script.NarrationScheduler;
+import com.example.walking_meditation.utils.RoutePlanFiles;
+import com.example.walking_meditation.models.ScheduledNarration;
 import com.example.walking_meditation.utils.CacheFiles;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 /** Temporary screen used to inspect the raw script-generation response. */
 public class ScriptResultActivity extends AppCompatActivity {
 
+    private RoutePlan routePlan;
+    private final List<ScheduledNarration> scheduledNarrations =
+            new ArrayList<>();
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_script_result);
 
         TextView responseView = findViewById(R.id.tv_script_response);
-        Button startNavigation = findViewById(R.id.btn_start_navigation);
-        String path = getIntent().getStringExtra(EXTRA_SCRIPT_JSON_PATH);
-        String routePlanPath = getIntent().getStringExtra(EXTRA_ROUTE_PLAN_PATH);
-        String ttsSpeaker = getIntent().getStringExtra(EXTRA_TTS_SPEAKER);
-        String ttsInstruct = getIntent().getStringExtra(EXTRA_TTS_INSTRUCT);
+        Button startButton = findViewById(R.id.btn_start_navigation);
 
-        if (path == null || path.trim().isEmpty()) {
-            Toast.makeText(this, "Missing script response", Toast.LENGTH_LONG).show();
+        startButton.setEnabled(false);
+
+        String scriptJsonPath = getIntent().getStringExtra(
+                EXTRA_SCRIPT_JSON_PATH);
+        String routePlanPath = getIntent().getStringExtra(
+                EXTRA_ROUTE_PLAN_PATH);
+
+        if (scriptJsonPath == null || routePlanPath == null) {
+            Toast.makeText(this, "Missing script or route plan",
+                    Toast.LENGTH_LONG).show();
             finish();
             return;
         }
 
-        startNavigation.setEnabled(routePlanPath != null && !routePlanPath.trim().isEmpty());
-
-        startNavigation.setOnClickListener(view -> {
-            Intent intent = new Intent(this, MeditationPlaybackActivity.class);
-
-            intent.putExtra(EXTRA_SCRIPT_JSON_PATH, path);
-            intent.putExtra(EXTRA_ROUTE_PLAN_PATH, routePlanPath);
-
-            intent.putExtra(EXTRA_TTS_SPEAKER, ttsSpeaker);
-            intent.putExtra(EXTRA_TTS_INSTRUCT, ttsInstruct);
-
-            startActivity(intent);
-        });
-
         try {
-            responseView.setText(formatResponse(CacheFiles.readText(path)));
-        } catch (IOException exception) {
-            Toast.makeText(this,
-                    "Unable to read script response: " + exception.getMessage(),
-                    Toast.LENGTH_LONG).show();
+            String scriptJson = CacheFiles.readText(scriptJsonPath);
+            routePlan = RoutePlanFiles.read(routePlanPath);
+
+            responseView.setText(formatResponse(scriptJson));
+
+            scheduledNarrations.clear();
+            scheduledNarrations.addAll(ScriptNarrationParser.parse(scriptJson, routePlan));
+
+            NarrationScheduler.resolve(routePlan, scheduledNarrations);
+
+            // Audio preparation will be added here next.
+
+        } catch (Exception e) {
+            Toast.makeText(this, "Unable to load route or script: "
+                    + e.getMessage(), Toast.LENGTH_LONG).show();
             finish();
+            return;
         }
     }
 
