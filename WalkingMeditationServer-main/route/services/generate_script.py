@@ -59,7 +59,7 @@ class GeneratedScript:
     usage: GenerationUsage
 
 
-def _words_for_minutes(minutes: float, *, wpm: int = 150) -> int:
+def _words_for_minutes(minutes: float, *, wpm: int = 110) -> int:
     return int(round(minutes * wpm))
 
 
