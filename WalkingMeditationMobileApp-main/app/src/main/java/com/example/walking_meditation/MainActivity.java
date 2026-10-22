@@ -11,6 +11,8 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.walking_meditation.utils.StudyConfigClient;
 import com.example.walking_meditation.utils.SessionManager;
+import com.example.walking_meditation.utils.CacheFiles;
+import com.example.walking_meditation.utils.RoutePlanFiles;
 
 import org.json.JSONObject;
 
@@ -58,10 +60,12 @@ public class MainActivity extends AppCompatActivity {
 
     private void performLogout() {
         String refreshToken = SessionManager.getRefreshToken(this);
+        btnLogOut.setEnabled(false);
 
-        // Clear local session immediately
-        SessionManager.saveTokens(this, "", "");
-        SessionManager.clearStudyConfiguration(this);
+        // Remove all account, study, route, script, and generated-audio data immediately.
+        SessionManager.clearSession(this);
+        RoutePlanFiles.clearAll(this);
+        CacheFiles.clearSensitiveFiles(this);
 
         if (refreshToken != null && !refreshToken.isEmpty()) {
             try {
@@ -79,19 +83,32 @@ public class MainActivity extends AppCompatActivity {
                 httpClient.newCall(request).enqueue(new Callback() {
                     @Override
                     public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                        // Proceed to login even if network call fails
+                        finishLogout(false);
                     }
 
                     @Override
                     public void onResponse(@NonNull Call call, @NonNull Response response) {
+                        boolean revokedRemotely = response.isSuccessful();
                         response.close();
+                        finishLogout(revokedRemotely);
                     }
                 });
-            } catch (Exception ignored) {}
+                return;
+            } catch (Exception ignored) {
+                finishLogout(false);
+                return;
+            }
         }
 
+        finishLogout(true);
+    }
+
+    private void finishLogout(boolean revokedRemotely) {
         runOnUiThread(() -> {
-            Toast.makeText(MainActivity.this, "Logged out successfully", Toast.LENGTH_SHORT).show();
+            String message = revokedRemotely
+                    ? "Logged out successfully"
+                    : "Logged out locally; server session could not be revoked";
+            Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
             Intent intent = new Intent(MainActivity.this, LoginActivity.class);
             intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);

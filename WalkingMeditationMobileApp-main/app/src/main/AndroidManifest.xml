@@ -16,7 +16,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication"
-        android:usesCleartextTraffic="true"
+        android:usesCleartextTraffic="${usesCleartextTraffic}"
         tools:targetApi="31" >
 
         <activity
@@ -90,6 +90,9 @@
             android:name=".ResearcherStudyDetailActivity"
             android:exported="false" />
         <activity
+            android:name=".ResearcherScriptParametersActivity"
+            android:exported="false" />
+        <activity
             android:name=".ResearcherCreateStudyActivity"
             android:exported="false" />
         <activity
@@ -114,11 +117,30 @@
             android:name=".ResearcherRosterActivity"
             android:exported="false" />
         <activity
-            android:name=".PathSelectionActivity"
-            android:exported="false" />
-        <activity
             android:name=".EmailAuthenticationActivity"
             android:exported="false" />
+        <activity
+            android:name=".PasswordResetLinkActivity"
+            android:exported="true"
+            android:noHistory="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="walkingmeditation"
+                    android:host="password-reset" />
+            </intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="${appLinkHost}"
+                    android:pathPrefix="/auth/password-reset/open" />
+            </intent-filter>
+        </activity>
         <activity
             android:name=".ForgotPasswordActivity"
             android:exported="false" />

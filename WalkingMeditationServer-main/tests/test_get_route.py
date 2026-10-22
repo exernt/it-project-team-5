@@ -45,6 +45,7 @@ class RouteSelectionTests(unittest.IsolatedAsyncioTestCase):
             async def __aexit__(self, exc_type, exc, traceback):
                 return False
 
+        search_parks = AsyncMock(return_value=parks)
         with (
             patch(
                 "route.services.get_route.httpx.AsyncClient",
@@ -56,7 +57,7 @@ class RouteSelectionTests(unittest.IsolatedAsyncioTestCase):
             ),
             patch(
                 "route.services.get_route.search_parks_along_route",
-                new=AsyncMock(return_value=parks),
+                new=search_parks,
             ),
         ):
             result = await generate_walk_route(
@@ -65,6 +66,8 @@ class RouteSelectionTests(unittest.IsolatedAsyncioTestCase):
                 total_travel_time=3_600,
             )
 
+        search_parks.assert_awaited_once()
+        self.assertEqual(3, search_parks.await_args.kwargs["max_results"])
         self.assertEqual(
             ["short", "medium", "long"],
             [option.park.place_id for option in result.parks],

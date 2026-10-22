@@ -1,8 +1,6 @@
 package com.example.walking_meditation;
 
-import android.content.Intent;
 import android.os.Bundle;
-import android.widget.AutoCompleteTextView;
 import android.widget.Button;
 import android.widget.Toast;
 
@@ -23,8 +21,7 @@ import okhttp3.Response;
 
 public class EmailAuthenticationActivity extends AppCompatActivity {
 
-    private AutoCompleteTextView codeInput;
-    private Button btnVerify, btnResend;
+    private Button btnResend;
     private String userEmail;
 
     @Override
@@ -34,25 +31,12 @@ public class EmailAuthenticationActivity extends AppCompatActivity {
 
         userEmail = getIntent().getStringExtra("email");
 
-        codeInput = findViewById(R.id.codeConfirm);
-        btnVerify = findViewById(R.id.btnVerify);
         btnResend = findViewById(R.id.btnResendCode);
-
-        btnVerify.setOnClickListener(v -> {
-            String code = codeInput.getText().toString().trim();
-            if (!code.isEmpty()) {
-                Intent intent = new Intent(EmailAuthenticationActivity.this, ResetPasswordActivity.class);
-                intent.putExtra("reset_token", code);
-                startActivity(intent);
-                finish();
-            } else {
-                codeInput.setError("Enter verification code / token");
-            }
-        });
 
         if (btnResend != null) {
             btnResend.setOnClickListener(v -> resendResetRequest());
         }
+        findViewById(R.id.btnBackToLogin).setOnClickListener(v -> finish());
     }
 
     private void resendResetRequest() {
@@ -78,17 +62,25 @@ public class EmailAuthenticationActivity extends AppCompatActivity {
         client.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                runOnUiThread(() -> Toast.makeText(EmailAuthenticationActivity.this, "Failed to resend code", Toast.LENGTH_SHORT).show());
+                runOnUiThread(() -> Toast.makeText(
+                        EmailAuthenticationActivity.this,
+                        R.string.password_reset_resend_failed,
+                        Toast.LENGTH_SHORT
+                ).show());
             }
 
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) {
-                response.close();
-                runOnUiThread(() -> Toast.makeText(
-                        EmailAuthenticationActivity.this,
-                        "If registered, a new reset code has been sent.",
-                        Toast.LENGTH_LONG
-                ).show());
+                try (Response closedResponse = response) {
+                    int message = closedResponse.isSuccessful()
+                            ? R.string.password_reset_resent
+                            : R.string.password_reset_resend_failed;
+                    runOnUiThread(() -> Toast.makeText(
+                            EmailAuthenticationActivity.this,
+                            message,
+                            Toast.LENGTH_LONG
+                    ).show());
+                }
             }
         });
     }

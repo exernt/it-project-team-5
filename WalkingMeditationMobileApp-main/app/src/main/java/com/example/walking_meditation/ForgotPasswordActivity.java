@@ -73,16 +73,23 @@ public class ForgotPasswordActivity extends AppCompatActivity {
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
-                if (response.isSuccessful()) {
-                    runOnUiThread(() -> {
-                        Toast.makeText(ForgotPasswordActivity.this, "If registered, a reset code has been sent to your email", Toast.LENGTH_LONG).show();
-
-                        Intent intent = new Intent(ForgotPasswordActivity.this, EmailAuthenticationActivity.class);
-                        intent.putExtra("email", email);
-                        startActivity(intent);
-                    });
-                } else {
-                    runOnUiThread(() -> Toast.makeText(ForgotPasswordActivity.this, "Server error: " + response.code(), Toast.LENGTH_SHORT).show());
+                try (Response closedResponse = response) {
+                    if (closedResponse.isSuccessful()) {
+                        runOnUiThread(() -> {
+                            Intent intent = new Intent(
+                                    ForgotPasswordActivity.this,
+                                    EmailAuthenticationActivity.class
+                            );
+                            intent.putExtra("email", email);
+                            startActivity(intent);
+                        });
+                    } else {
+                        runOnUiThread(() -> Toast.makeText(
+                                ForgotPasswordActivity.this,
+                                R.string.password_reset_request_failed,
+                                Toast.LENGTH_SHORT
+                        ).show());
+                    }
                 }
             }
         });

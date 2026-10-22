@@ -96,6 +96,8 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
     private int playbackSegmentIndex;
     private long activeWalkingMs;
     private long lastLocationRealtimeMs;
+    @Nullable private String routePlanPath;
+    @Nullable private String scriptJsonPath;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -151,16 +153,16 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
     }
 
     private void loadRouteAndScript() throws IOException {
-        String planPath = getIntent().getStringExtra(EXTRA_ROUTE_PLAN_PATH);
-        String scriptPath = getIntent().getStringExtra(EXTRA_SCRIPT_JSON_PATH);
-        if (planPath == null || planPath.trim().isEmpty()) {
+        routePlanPath = getIntent().getStringExtra(EXTRA_ROUTE_PLAN_PATH);
+        scriptJsonPath = getIntent().getStringExtra(EXTRA_SCRIPT_JSON_PATH);
+        if (routePlanPath == null || routePlanPath.trim().isEmpty()) {
             throw new IOException("Missing selected route plan");
         }
-        if (scriptPath == null || scriptPath.trim().isEmpty()) {
+        if (scriptJsonPath == null || scriptJsonPath.trim().isEmpty()) {
             throw new IOException("Missing generated script");
         }
-        routePlan = RoutePlanFiles.read(planPath);
-        parseScriptSegments(CacheFiles.readText(scriptPath));
+        routePlan = RoutePlanFiles.read(this, routePlanPath);
+        parseScriptSegments(CacheFiles.readText(scriptJsonPath));
     }
 
     private void parseScriptSegments(String responseJson) throws IOException {
@@ -512,6 +514,14 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
     protected void onDestroy() {
         stopLocationUpdates();
         mapView.onDestroy();
+        if (isFinishing() && !isChangingConfigurations()) {
+            if (routePlanPath != null) {
+                RoutePlanFiles.delete(this, routePlanPath);
+            }
+            if (scriptJsonPath != null) {
+                CacheFiles.deleteOwnedFile(this, scriptJsonPath);
+            }
+        }
         super.onDestroy();
     }
 

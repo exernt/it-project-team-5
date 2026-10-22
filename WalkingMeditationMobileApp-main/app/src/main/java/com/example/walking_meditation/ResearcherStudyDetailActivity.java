@@ -12,6 +12,8 @@ import android.widget.ProgressBar;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.walking_meditation.models.Study;
@@ -24,8 +26,18 @@ public class ResearcherStudyDetailActivity extends AppCompatActivity {
     private static final String EXTRA_STUDY_ID = "study_id";
 
     private final OkHttpClient httpClient = new OkHttpClient();
+    private final ActivityResultLauncher<Intent> scriptParametersLauncher =
+            registerForActivityResult(
+                    new ActivityResultContracts.StartActivityForResult(),
+                    result -> {
+                        if (result.getResultCode() == RESULT_OK) {
+                            loadStudy();
+                        }
+                    }
+            );
     private String studyId = "";
     private String currentStatus = "";
+    private String currentScriptParameters = "";
 
     private ProgressBar progress;
     private ScrollView content;
@@ -86,6 +98,13 @@ public class ResearcherStudyDetailActivity extends AppCompatActivity {
             startActivity(intent);
         });
         findViewById(R.id.btnResearcherDetailShare).setOnClickListener(view -> shareInviteLink());
+        findViewById(R.id.btnResearcherDetailScriptParameters).setOnClickListener(view ->
+                scriptParametersLauncher.launch(ResearcherScriptParametersActivity.createIntent(
+                        this,
+                        studyId,
+                        currentScriptParameters
+                ))
+        );
     }
 
     private void shareInviteLink() {
@@ -129,6 +148,7 @@ public class ResearcherStudyDetailActivity extends AppCompatActivity {
         nameField.setText(study.getName());
         durationField.setText(String.valueOf(study.getDuration()));
         descriptionField.setText(study.getDescription());
+        currentScriptParameters = study.getScriptGenerationParameters();
 
         configureLifecycleButton();
         content.setVisibility(View.VISIBLE);

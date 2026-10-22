@@ -129,15 +129,15 @@ public class ResearcherLoginActivity extends AppCompatActivity {
                 if (SessionManager.isVerifiedResearcher(ResearcherLoginActivity.this)) {
                     runOnUiThread(() -> {
                         Toast.makeText(ResearcherLoginActivity.this, "Welcome, Researcher!", Toast.LENGTH_SHORT).show();
-                        Intent intent = new Intent(ResearcherLoginActivity.this, ResearcherStudyListActivity.class);
-                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                        Intent intent = new Intent(ResearcherLoginActivity.this, MainActivity.class);
+                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NEW_TASK);
                         startActivity(intent);
                         finish();
                     });
                 } else {
                     runOnUiThread(() -> {
                         Toast.makeText(ResearcherLoginActivity.this, "Access Denied: Account is not a verified researcher", Toast.LENGTH_LONG).show();
-                        SessionManager.saveTokens(ResearcherLoginActivity.this, "", "");
+                        SessionManager.clearSession(ResearcherLoginActivity.this);
                     });
                 }
             }

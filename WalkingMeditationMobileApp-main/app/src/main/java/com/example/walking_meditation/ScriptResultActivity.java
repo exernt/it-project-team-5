@@ -43,6 +43,7 @@ public class ScriptResultActivity extends AppCompatActivity {
             intent.putExtra(EXTRA_SCRIPT_JSON_PATH, path);
             intent.putExtra(EXTRA_ROUTE_PLAN_PATH, routePlanPath);
             startActivity(intent);
+            finish();
         });
 
         try {

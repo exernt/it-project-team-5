@@ -203,8 +203,8 @@ public class ResearcherSignUpActivity extends AppCompatActivity {
                 if (SessionManager.isVerifiedResearcher(ResearcherSignUpActivity.this)) {
                     runOnUiThread(() -> {
                         Toast.makeText(ResearcherSignUpActivity.this, "Researcher account registered successfully!", Toast.LENGTH_SHORT).show();
-                        Intent intent = new Intent(ResearcherSignUpActivity.this, ResearcherStudyListActivity.class);
-                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                        Intent intent = new Intent(ResearcherSignUpActivity.this, MainActivity.class);
+                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NEW_TASK);
                         startActivity(intent);
                         finish();
                     });

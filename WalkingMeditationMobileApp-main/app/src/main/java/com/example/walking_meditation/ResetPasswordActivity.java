@@ -1,5 +1,6 @@
 package com.example.walking_meditation;
 
+import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
@@ -8,6 +9,7 @@ import android.widget.Button;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.annotation.NonNull;
 
 import org.json.JSONObject;
 
@@ -22,17 +24,30 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 public class ResetPasswordActivity extends AppCompatActivity {
+    private static final String EXTRA_RESET_TOKEN = "reset_token";
 
     private Button btnResetPasswordConfirm;
     private AutoCompleteTextView passwordField, passwordConfirmField;
     private String resetToken;
+
+    @NonNull
+    public static Intent createIntent(@NonNull Context context, @NonNull String resetToken) {
+        return new Intent(context, ResetPasswordActivity.class)
+                .putExtra(EXTRA_RESET_TOKEN, resetToken);
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_reset_password);
 
-        resetToken = getIntent().getStringExtra("reset_token");
+        resetToken = getIntent().getStringExtra(EXTRA_RESET_TOKEN);
+        getIntent().removeExtra(EXTRA_RESET_TOKEN);
+        if (resetToken == null || resetToken.isEmpty()) {
+            Toast.makeText(this, R.string.password_reset_link_invalid, Toast.LENGTH_LONG).show();
+            finish();
+            return;
+        }
 
         btnResetPasswordConfirm = findViewById(R.id.btnResetPasswordConfrim);
 
@@ -78,6 +93,7 @@ public class ResetPasswordActivity extends AppCompatActivity {
                 try (Response closedResponse = response) {
                     if (closedResponse.isSuccessful()) {
                         runOnUiThread(() -> {
+                            resetToken = null;
                             Toast.makeText(ResetPasswordActivity.this, "Password Reset Successful! Please Login.", Toast.LENGTH_LONG).show();
 
                             Intent intent = new Intent(ResetPasswordActivity.this, LoginActivity.class);

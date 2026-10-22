@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from urllib.parse import urlsplit
 from dotenv import load_dotenv
 
 
 BASE_DIR = Path(__file__).resolve().parent
+SERVER_DIR = BASE_DIR.parent
 PROMPT_FOLDER = BASE_DIR / "prompts"
 
 # Load environment variables once for the package.
@@ -173,3 +175,97 @@ def access_token_ttl_minutes() -> int:
 
 def refresh_token_ttl_days() -> int:
     return _positive_int_env("REFRESH_TOKEN_TTL_DAYS", 30)
+
+
+def email_backend() -> str:
+    """Return the transactional-email backend used by the server."""
+    backend = os.getenv("EMAIL_BACKEND", "file").strip().casefold()
+    if backend not in {"file", "ses"}:
+        raise ValueError("EMAIL_BACKEND must be either 'file' or 'ses'")
+    return backend
+
+
+def email_capture_directory() -> Path:
+    raw_value = os.getenv("EMAIL_CAPTURE_DIRECTORY", "var/dev-mail").strip()
+    if not raw_value:
+        raise ValueError("EMAIL_CAPTURE_DIRECTORY cannot be empty")
+    path = Path(raw_value)
+    return path if path.is_absolute() else SERVER_DIR / path
+
+
+def password_reset_from_email() -> str:
+    value = os.getenv(
+        "PASSWORD_RESET_FROM_EMAIL",
+        "Walking Meditation <no-reply@localhost>",
+    ).strip()
+    if not value:
+        raise ValueError("PASSWORD_RESET_FROM_EMAIL cannot be empty")
+    return value
+
+
+def password_reset_reply_to_email() -> str | None:
+    value = os.getenv("PASSWORD_RESET_REPLY_TO_EMAIL", "").strip()
+    return value or None
+
+
+def password_reset_link_base() -> str:
+    value = os.getenv(
+        "PASSWORD_RESET_LINK_BASE",
+        "walkingmeditation://password-reset",
+    ).strip()
+    parsed = urlsplit(value)
+    if not parsed.scheme:
+        raise ValueError("PASSWORD_RESET_LINK_BASE must be an absolute URL")
+    is_local_app_link = (
+        parsed.scheme.casefold() == "walkingmeditation"
+        and parsed.netloc.casefold() == "password-reset"
+    )
+    is_https_app_link = (
+        parsed.scheme.casefold() == "https"
+        and bool(parsed.netloc)
+        and parsed.path == "/auth/password-reset/open"
+    )
+    if not is_local_app_link and not is_https_app_link:
+        raise ValueError(
+            "PASSWORD_RESET_LINK_BASE must be the local app URI or an HTTPS "
+            "URL ending in /auth/password-reset/open"
+        )
+    if parsed.query:
+        raise ValueError("PASSWORD_RESET_LINK_BASE must not contain a query string")
+    if parsed.fragment:
+        raise ValueError("PASSWORD_RESET_LINK_BASE must not contain a fragment")
+    return value
+
+
+def password_reset_request_cooldown_seconds() -> int:
+    return _positive_int_env("PASSWORD_RESET_REQUEST_COOLDOWN_SECONDS", 60)
+
+
+def aws_region() -> str:
+    value = (
+        os.getenv("AWS_REGION", "").strip()
+        or os.getenv("AWS_DEFAULT_REGION", "").strip()
+    )
+    if not value:
+        raise ValueError("AWS_REGION must be configured when EMAIL_BACKEND=ses")
+    return value
+
+
+def ses_configuration_set() -> str | None:
+    value = os.getenv("SES_CONFIGURATION_SET", "").strip()
+    return value or None
+
+
+def android_app_package_name() -> str:
+    value = os.getenv(
+        "ANDROID_APP_PACKAGE_NAME",
+        "com.example.walking_meditation",
+    ).strip()
+    if not value:
+        raise ValueError("ANDROID_APP_PACKAGE_NAME cannot be empty")
+    return value
+
+
+def android_app_sha256_cert_fingerprints() -> list[str]:
+    value = os.getenv("ANDROID_APP_SHA256_CERT_FINGERPRINTS", "")
+    return [item.strip() for item in value.split(",") if item.strip()]
