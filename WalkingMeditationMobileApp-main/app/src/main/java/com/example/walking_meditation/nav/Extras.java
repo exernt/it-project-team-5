@@ -1,9 +1,10 @@
 package com.example.walking_meditation.nav;
 
 public final class Extras {
-    private Extras() {}
+    private Extras() {
+    }
 
-    public static final String EXTRA_ROUTE_JSON_PATH  = "route_json_path";
+    public static final String EXTRA_ROUTE_JSON_PATH = "route_json_path";
     public static final String EXTRA_SCRIPT_JSON_PATH = "script_json_path";
     public static final String EXTRA_CONTEXT = "meditation_context";
     public static final String EXTRA_STUDY_PARAMETERS = "study_script_parameters";
@@ -16,6 +17,4 @@ public final class Extras {
     public static final String EXTRA_AUDIO_LONGITUDES = "audio_longitudes";
     public static final String EXTRA_STUDY_ID = "study_id";
     public static final String EXTRA_STUDY_NAME = "study_name";
-    public static final String EXTRA_TTS_SPEAKER = "tts_speaker";
-    public static final String EXTRA_TTS_INSTRUCT = "tts_instruct";
 }

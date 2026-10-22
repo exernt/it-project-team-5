@@ -51,6 +51,9 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 
+
+// TO BE DEPRECATED
+
 public class ScriptActivity extends AppCompatActivity implements NarrationAdapter.OnNarrationClickListener {
 
     // NEW: matches RouteOptionsActivity intent extra key

@@ -1,5 +1,5 @@
 package com.example.walking_meditation.models;
-
+// TO BE DEPRECATED
 public class NarrationItem {
 
     public enum Status {
