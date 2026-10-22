@@ -2,10 +2,10 @@ package com.example.walking_meditation;
 
 import static com.example.walking_meditation.nav.Extras.EXTRA_ROUTE_PLAN_PATH;
 import static com.example.walking_meditation.nav.Extras.EXTRA_SCRIPT_JSON_PATH;
-import static com.example.walking_meditation.nav.Extras.EXTRA_TTS_INSTRUCT;
-import static com.example.walking_meditation.nav.Extras.EXTRA_TTS_SPEAKER;
 
 import android.Manifest;
+import android.media.MediaPlayer;
+import java.io.File;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.os.Bundle;
@@ -26,6 +26,9 @@ import com.example.walking_meditation.models.LatLon;
 import com.example.walking_meditation.models.RouteLeg;
 import com.example.walking_meditation.models.RoutePlan;
 import com.example.walking_meditation.models.RouteStep;
+import com.example.walking_meditation.models.SpeechSegment;
+import com.example.walking_meditation.models.ScheduledNarration;
+import com.example.walking_meditation.script.NarrationScheduler;
 import com.example.walking_meditation.navigation.RouteProgressTracker;
 import com.example.walking_meditation.utils.CacheFiles;
 import com.example.walking_meditation.utils.RoutePlanFiles;
@@ -57,18 +60,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.text.BreakIterator;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Full-screen selected-route navigation with deterministic simulated narration events. */
 public class MeditationPlaybackActivity extends AppCompatActivity {
-    private static final double SEGMENT_LEAD_METRES = 25.0;
     private static final long LOCATION_INTERVAL_MS = 1_000L;
-
-    private static final class PlaybackSegment {
-        String id;
-        double routeStartM;
-        long plannedStartMs;
-    }
-
     private MapView mapView;
     @Nullable private GoogleMap googleMap;
     private TextView instructionView;
@@ -84,7 +82,7 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
     private RoutePlan routePlan;
     private RouteProgressTracker progressTracker;
     private List<RouteStep> routeSteps = new ArrayList<>();
-    private final List<PlaybackSegment> playbackSegments = new ArrayList<>();
+    private final List<ScheduledNarration> scheduledNarrations = new ArrayList<>();
     private final List<String> playbackLog = new ArrayList<>();
 
     @Nullable private Polyline completedLine;
@@ -92,10 +90,13 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
     @Nullable private Polyline recoveryLine;
     @Nullable private Location previousLocation;
 
+    @Nullable private MediaPlayer narrationPlayer;
+    private boolean narrationPrepared;
     private boolean walkPaused;
     private boolean followUser = true;
+    private boolean isNarrationPlaying = false;
     private int navigationStepIndex;
-    private int playbackSegmentIndex;
+    private int narrationBlockIndex = 0;
     private long activeWalkingMs;
     private long lastLocationRealtimeMs;
 
@@ -155,8 +156,6 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
     private void loadRouteAndScript() throws IOException {
         String planPath = getIntent().getStringExtra(EXTRA_ROUTE_PLAN_PATH);
         String scriptPath = getIntent().getStringExtra(EXTRA_SCRIPT_JSON_PATH);
-        String ttsSpeaker = getIntent().getStringExtra(EXTRA_TTS_SPEAKER);
-        String ttsInstruct = getIntent().getStringExtra(EXTRA_TTS_INSTRUCT);
 
         if (planPath == null || planPath.trim().isEmpty()) {
             throw new IOException("Missing selected route plan");
@@ -164,61 +163,9 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
         if (scriptPath == null || scriptPath.trim().isEmpty()) {
             throw new IOException("Missing generated script");
         }
-        if (ttsSpeaker == null || ttsSpeaker.trim().isEmpty()) {
-            ttsSpeaker = "Ryan";
-        }
-
-        if (ttsInstruct == null) {
-            ttsInstruct = "Calm and clear";
-        }
 
         routePlan = RoutePlanFiles.read(planPath);
-        parseScriptSegments(CacheFiles.readText(scriptPath));
 
-
-    }
-
-    private void parseScriptSegments(String responseJson) throws IOException {
-        try {
-            JSONObject response = new JSONObject(responseJson);
-            JSONObject script = response.optJSONObject("script");
-            if (script == null) throw new IOException("Script response has no script object");
-            JSONArray sections = script.optJSONArray("sections");
-            if (sections == null) throw new IOException("Script response has no sections");
-
-            Map<String, RouteLeg> legsById = new HashMap<>();
-            for (RouteLeg leg : routePlan.legs) {
-                if (leg.steps == null) leg.steps = new ArrayList<>();
-                legsById.put(leg.id, leg);
-            }
-
-            for (int sectionIndex = 0; sectionIndex < sections.length(); sectionIndex++) {
-                JSONObject section = sections.optJSONObject(sectionIndex);
-                if (section == null) continue;
-                JSONArray segments = section.optJSONArray("route_segments");
-                if (segments == null) continue;
-                for (int index = 0; index < segments.length(); index++) {
-                    JSONObject segment = segments.optJSONObject(index);
-                    if (segment == null) continue;
-                    String id = segment.optString("id", "").trim();
-                    if (id.isEmpty()) continue;
-                    PlaybackSegment playback = new PlaybackSegment();
-                    playback.id = id;
-                    playbackSegments.add(playback);
-
-                    String phase = segment.optString("route_phase", "");
-                    RouteLeg leg = legsById.get(phase);
-                    if (leg != null && findStep(leg.steps, id) == null) {
-                        RouteStep step = routeStepFromJson(segment, id);
-                        leg.steps.add(step);
-                    }
-                }
-            }
-        } catch (IOException exception) {
-            throw exception;
-        } catch (Exception exception) {
-            throw new IOException("Invalid script response", exception);
-        }
     }
 
     private static RouteStep routeStepFromJson(JSONObject value, String id) {
@@ -247,20 +194,8 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
         return null;
     }
 
-    private void buildPlaybackSchedule() {
-        Map<String, RouteStep> stepsById = new HashMap<>();
-        long plannedStartMs = 0;
-        for (RouteStep step : routeSteps) {
-            stepsById.put(step.id, step);
-        }
-        for (PlaybackSegment playback : playbackSegments) {
-            RouteStep step = stepsById.get(playback.id);
-            if (step != null) {
-                playback.routeStartM = step.routeStartDistanceM;
-                playback.plannedStartMs = plannedStartMs;
-                plannedStartMs += Math.max(1, step.duration_s) * 1_000L;
-            }
-        }
+    private void buildPlaybackSchedule() throws IOException {
+        NarrationScheduler.resolve(routePlan, scheduledNarrations);
     }
 
     private void onMapReady(@NonNull GoogleMap map) {
@@ -463,18 +398,67 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
     }
 
     private void updatePlayback(RouteProgressTracker.Match match) {
-        if (playbackSegmentIndex >= playbackSegments.size()) return;
-        PlaybackSegment next = playbackSegments.get(playbackSegmentIndex);
-        boolean reachedSpatialWindow = !match.offRoute
-                && match.progressM + SEGMENT_LEAD_METRES >= next.routeStartM;
-        boolean reachedTimeFallback = activeWalkingMs >= next.plannedStartMs + 60_000L;
-        if (!reachedSpatialWindow && !reachedTimeFallback) return;
+        if (narrationBlockIndex >= scheduledNarrations.size()) return;
 
-        String message = "Playing segment " + next.id;
-        playbackLog.add(message);
-        while (playbackLog.size() > 4) playbackLog.remove(0);
-        playbackLogView.setText(String.join("\n", playbackLog));
-        playbackSegmentIndex++;
+        ScheduledNarration next =
+                scheduledNarrations.get(narrationBlockIndex);
+
+        if (!NarrationScheduler.isEligible(next, match.progressM,
+                activeWalkingMs, match.offRoute)) return;
+
+        // Don't start another narration while one is playing.
+        if (isNarrationPlaying) return;
+
+        playScheduledNarration(next);
+    }
+
+    private void playScheduledNarration(ScheduledNarration narration) {
+        File audio = narration.audioFilePath == null
+                ? null : new File(narration.audioFilePath);
+        if (audio == null || !audio.isFile() || audio.length() == 0) {
+            setWalkPaused(true);
+            routeStatusView.setText("Prepared narration audio is missing");
+            return;
+        }
+        MediaPlayer player = new MediaPlayer();
+        narrationPlayer = player;
+        isNarrationPlaying = true;
+        player.setOnPreparedListener(prepared -> {
+            narrationPrepared = true;
+            if (!walkPaused) prepared.start();
+        });
+        player.setOnCompletionListener(completed -> {
+            releaseNarrationPlayer();
+            onNarrationCompleted();
+        });
+        player.setOnErrorListener((failed, what, extra) -> {
+            releaseNarrationPlayer();
+            setWalkPaused(true);
+            routeStatusView.setText("Unable to play prepared narration");
+            return true;
+        });
+        try {
+            player.setDataSource(audio.getAbsolutePath());
+            player.prepareAsync();
+        } catch (Exception exception) {
+            releaseNarrationPlayer();
+            setWalkPaused(true);
+            routeStatusView.setText("Unable to open prepared narration");
+        }
+    }
+
+    private void releaseNarrationPlayer() {
+        if (narrationPlayer != null) {
+            narrationPlayer.release();
+            narrationPlayer = null;
+        }
+        isNarrationPlaying = false;
+        narrationPrepared = false;
+    }
+
+    private void onNarrationCompleted() {
+        isNarrationPlaying = false;
+        narrationBlockIndex++;
     }
 
     private void followLocation(Location location) {
@@ -487,6 +471,14 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
 
     private void setWalkPaused(boolean paused) {
         walkPaused = paused;
+        if (narrationPlayer != null && narrationPrepared) {
+            if (paused && narrationPlayer.isPlaying()) narrationPlayer.pause();
+            else if (!paused) {
+                try { narrationPlayer.start(); } catch (IllegalStateException ignored) {
+                    // Preparation callback starts audio once it is ready.
+                }
+            }
+        }
         pauseButton.setText(paused ? "Resume" : "Pause");
         if (paused) {
             stopLocationUpdates();
@@ -494,6 +486,76 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
         } else {
             routeStatusView.setText("Resuming guidance…");
             startLocationUpdates();
+        }
+    }
+
+    // tts helper methods
+
+    private static List<SpeechSegment> createChunks(
+            String blockId,
+            String text
+    ) {
+        List<SpeechSegment> result = new ArrayList<>();
+
+        Pattern pausePattern = Pattern.compile(
+                "\\(pause\\)", Pattern.CASE_INSENSITIVE
+        );
+
+        Matcher matcher = pausePattern.matcher(text);
+        int cursor = 0;
+
+        while (matcher.find()) {
+            appendSentences(
+                    result,
+                    blockId,
+                    text.substring(cursor, matcher.start())
+            );
+
+            SpeechSegment pause = new SpeechSegment();
+            pause.blockId = blockId;
+            pause.id = blockId + "_" + result.size();
+            pause.isPause = true;
+            pause.pauseDurationMs = 2500;
+
+            result.add(pause);
+            cursor = matcher.end();
+        }
+
+        appendSentences(
+                result,
+                blockId,
+                text.substring(cursor)
+        );
+
+        return result;
+    }
+
+    private static void appendSentences(
+            List<SpeechSegment> result,
+            String blockId,
+            String text
+    ) {
+        BreakIterator iterator =
+                BreakIterator.getSentenceInstance(Locale.ENGLISH);
+
+        iterator.setText(text);
+
+        int start = iterator.first();
+
+        for (int end = iterator.next();
+             end != BreakIterator.DONE;
+             start = end, end = iterator.next()) {
+
+            String sentence = text.substring(start, end).trim();
+
+            if (sentence.isEmpty()) continue;
+
+            SpeechSegment chunk = new SpeechSegment();
+            chunk.blockId = blockId;
+            chunk.id = blockId + "_" + result.size();
+            chunk.text = sentence;
+
+            result.add(chunk);
         }
     }
 
@@ -512,7 +574,7 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
 
     @Override
     protected void onPause() {
-        stopLocationUpdates();
+        setWalkPaused(true);
         mapView.onPause();
         super.onPause();
     }
@@ -526,6 +588,7 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         stopLocationUpdates();
+        releaseNarrationPlayer();
         mapView.onDestroy();
         super.onDestroy();
     }
