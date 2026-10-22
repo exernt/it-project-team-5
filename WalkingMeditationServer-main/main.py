@@ -2,9 +2,11 @@ import warnings
 import os
 import asyncio
 import logging
+logging.basicConfig(level=logging.INFO)
 import secrets
 from dataclasses import asdict
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi.responses import HTMLResponse
 from sqlalchemy.exc import SQLAlchemyError
 from typing import Any, Optional
 
@@ -22,6 +24,7 @@ from route.models import WalkRouteRequest, WalkRouteResponse, ScriptWithParkRequ
 from route.models import ScriptWithoutParkRequest, ScriptWithoutParkResponse, TTSRequest
 from database.core import create_configured_database
 from route.utils.utils import _ensure_ffmpeg
+
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +112,26 @@ async def database_health(request: Request):
         ) from exc
 
     return {"database": "ready"}
+
+from fastapi.responses import HTMLResponse
+
+@app.get("/study/join", response_model=None)
+async def study_join_redirect(id: str):
+    deep_link = f"walkingmeditation://study/join?id={id}"
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Join Study - Walking Meditation</title>
+        <meta http-equiv="refresh" content="0;url={deep_link}">
+    </head>
+    <body style="font-family: sans-serif; text-align: center; padding-top: 50px;">
+        <h2>Opening Walking Meditation App...</h2>
+        <p>If the app does not open automatically, <a href="{deep_link}">click here to join</a>.</p>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
 
 @app.post("/route/generate-path", response_model=WalkRouteResponse)
 async def generate_route(
@@ -225,7 +248,8 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app",
         host="127.0.0.1",
-        port=8000,
+        port=8443,
         reload=True,
-        reload_excludes=[os.path.join("env", "*")],
+        ssl_certfile="certs/cert.pem",
+        ssl_keyfile="certs/key.pem",
     )

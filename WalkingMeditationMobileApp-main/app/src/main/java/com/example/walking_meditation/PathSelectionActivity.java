@@ -111,9 +111,9 @@ public class PathSelectionActivity extends AppCompatActivity
 
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
             .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)
+            .readTimeout(5, TimeUnit.MINUTES)
             .writeTimeout(30, TimeUnit.SECONDS)
-            .callTimeout(240, TimeUnit.SECONDS)
+            .callTimeout(6, TimeUnit.MINUTES)
             .build();
 
     private PlacesClient placesClient;

@@ -67,8 +67,16 @@ public class StudyDetailsActivity extends AppCompatActivity {
         joinButton.setOnClickListener(view -> openConsent());
 
         Intent intent = getIntent();
+        android.net.Uri data = intent.getData();
+        if (data != null) {
+            String queryId = data.getQueryParameter("id");
+            if (queryId != null && !queryId.isEmpty()) {
+                studyId = queryId;
+            }
+        }
+
         String requestedStudyId = intent.getStringExtra(EXTRA_STUDY_ID);
-        if (requestedStudyId != null) {
+        if (requestedStudyId != null && !requestedStudyId.isEmpty()) {
             studyId = requestedStudyId;
         }
 
