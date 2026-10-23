@@ -2,6 +2,7 @@ from typing import List, Literal, Tuple
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 from datetime import datetime
 from uuid import UUID
+from route.services.speech_chunks import MAX_BLOCK_CHARACTERS
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -265,7 +266,7 @@ class WalkRouteRequest(BaseModel):
 class TTSRequest(BaseModel):
     """Polly SynthesizeSpeech fields accepted by the Android payload adapter."""
     model_config = ConfigDict(extra="forbid")
-    text: str = Field(..., alias="Text", min_length=1, max_length=6000)
+    text: str = Field(..., alias="Text", min_length=1, max_length=MAX_BLOCK_CHARACTERS)
     text_type: Literal["text", "ssml"] = Field(default="text", alias="TextType")
     voice_id: str = Field(default="Joanna", alias="VoiceId", pattern=r"^[A-Za-z]+$", max_length=64)
     language_code: str | None = Field(default=None, alias="LanguageCode", min_length=2, max_length=16, pattern=r"^[A-Za-z-]+$")
@@ -287,8 +288,8 @@ class TTSRequest(BaseModel):
             if root.tag != "speak":
                 raise ValueError("SSML must have a speak root")
             spoken = "".join(root.itertext())
-        if not spoken.strip() or len(spoken) > 3000:
-            raise ValueError("Speech must contain 1-3000 spoken characters")
+        if not spoken.strip():
+            raise ValueError("Speech must contain spoken characters")
         return self
 
 class TTSResponse(BaseModel):
