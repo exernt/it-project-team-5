@@ -330,12 +330,7 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
         updateFabState();
 
         try {
-            JSONObject payload = new JSONObject();
-            payload.put("text", item.text);
-            payload.put("language", "English");
-            payload.put("speaker", "Ryan");
-            payload.put("instruct", "Calm and clear");
-            payload.put("bitrate", "192k");
+            JSONObject payload = new com.example.walking_meditation.audio.PollyPayload().toJson(item.text);
 
             RequestBody body = RequestBody.create(payload.toString(), JSON);
 
@@ -484,7 +479,7 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
     }
 
     private String buildMp3FileName(NarrationItem item, int position) {
-        return "tts_" + scriptId + "_" + sanitize(item.id) + "_" + position + ".mp3";
+        return "tts_polly_v1_" + scriptId + "_" + sanitize(item.id) + "_" + position + ".mp3";
     }
 
     private void restoreExistingDownloads() {

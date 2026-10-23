@@ -6,7 +6,7 @@ import static com.example.walking_meditation.nav.Extras.EXTRA_ROUTE_PLAN_PATH;
 import android.content.Intent;
 import com.example.walking_meditation.audio.CurrentWalk;
 import com.example.walking_meditation.audio.TtsClient;
-import com.example.walking_meditation.audio.QwenPayload;
+import com.example.walking_meditation.audio.PollyPayload;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -112,7 +112,7 @@ public class ScriptResultActivity extends AppCompatActivity {
             try {
                 CurrentWalk store = new CurrentWalk(getFilesDir());
                 // Select the payload and backend endpoint here. Parsing and playback stay unchanged.
-                TtsClient tts = new TtsClient(getApplicationContext(), new QwenPayload());
+                TtsClient tts = new TtsClient(getApplicationContext(), new PollyPayload());
                 client = tts;
                 StringBuilder preparationIdentity = new StringBuilder(routePlan.routeId)
                         .append("\n").append(scriptJson);
