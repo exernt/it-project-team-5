@@ -7,7 +7,8 @@ from route.errors import OpenaiAPIError
 from route.models import LatLng, StepSegment
 from route.services.generate_script import (
     _route_context,
-    _word_count_shortfalls,
+    _word_count,
+    _word_count_violations,
     generate_script_with_park,
     generate_script_without_park,
 )
@@ -34,6 +35,8 @@ def _segment(index: int, instruction: str = "Turn right onto Test St") -> StepSe
         start=LatLng(lat=-37.81, lon=144.96),
         end=LatLng(lat=-37.80, lon=144.97),
         step_polyline="encoded",
+        duration_s=300,
+        distance_m=400,
         elev_start_m=20.04,
         elev_end_m=29.96,
         elev_gain_m=9.92,
@@ -304,23 +307,71 @@ class RouteContextAndValidationTests(unittest.TestCase):
         )
         self.assertEqual(["Royal Park"], context[0]["nearby_features"])
 
-    def test_word_count_shortfalls_flags_only_short_sections(self):
-        long_text = " ".join(["word"] * 100)
-        narrations = json.loads(_generated_json(["a"], pad=False))
-        narrations["focused_attention"]["opening_narration"] = long_text
-        narrations["closing_meditation"]["opening_narration"] = long_text
+        self.assertEqual(300, context[0]["estimated_duration_seconds"])
+        self.assertEqual(750, context[0]["target_words"])
+        self.assertEqual(600, context[0]["minimum_words"])
+        self.assertEqual(900, context[0]["maximum_words"])
 
-        shortfalls = _word_count_shortfalls(narrations, 50, 50, 50)
+    def test_word_count_excludes_pause_markers(self):
+        self.assertEqual(4, _word_count("one two (pause) three four"))
 
-        self.assertEqual(1, len(shortfalls))
-        self.assertIn("compassion_meditation", shortfalls[0])
+    def test_word_count_violations_fold_opening_and_closing_into_leg(self):
+        segment = _segment(1)
+        narrations = json.loads(
+            _generated_json(["source_to_destination_1"], pad=False)
+        )
+        narrations["focused_attention"]["opening_narration"] = " ".join(
+            ["word"] * 300
+        )
+        narrations["focused_attention"]["segment_narrations"][
+            "source_to_destination_1"
+        ] = " ".join(["word"] * 300)
+        narrations["focused_attention"]["closing_narration"] = " ".join(
+            ["word"] * 150
+        )
+        narrations["compassion_meditation"]["narration"] = " ".join(
+            ["word"] * 600
+        )
+        narrations["closing_meditation"]["opening_narration"] = " ".join(
+            ["word"] * 300
+        )
+        narrations["closing_meditation"]["closing_narration"] = " ".join(
+            ["word"] * 300
+        )
 
-    def test_word_count_shortfalls_ignores_zero_minimums(self):
-        narrations = json.loads(_generated_json(["a"], pad=False))
-        self.assertEqual([], _word_count_shortfalls(narrations, 0, 0, 0))
+        problems = _word_count_violations(
+            narrations,
+            [segment],
+            "source_to_destination",
+            600,
+            [],
+            "park_to_destination",
+            600,
+        )
+
+        self.assertEqual([], problems)
+
+    def test_word_count_violations_flag_short_and_long_blocks(self):
+        narrations = json.loads(
+            _generated_json(["source_to_destination_1"], pad=False)
+        )
+        problems = _word_count_violations(
+            narrations,
+            [_segment(1)],
+            "source_to_destination",
+            600,
+            [],
+            "park_to_destination",
+            600,
+        )
+
+        self.assertEqual(3, len(problems))
+        self.assertTrue(any("focused_attention" in problem for problem in problems))
+        self.assertTrue(any("compassion_meditation" in problem for problem in problems))
+        self.assertTrue(any("closing_meditation" in problem for problem in problems))
 
 
-class RetryAndFallbackTests(unittest.IsolatedAsyncioTestCase):
+class ValidationAndFallbackTests(unittest.IsolatedAsyncioTestCase):
     async def _generate(self, generate_text_mock, elevation_mock, weather_mock):
         weather_mock.return_value = {}
         elevation_mock.return_value = [_segment(1)]
@@ -337,36 +388,7 @@ class RetryAndFallbackTests(unittest.IsolatedAsyncioTestCase):
         new_callable=AsyncMock,
     )
     @patch("route.services.generate_script.current_weather_lookup")
-    async def test_retries_once_when_output_is_too_short(
-            self, weather_mock, elevation_mock, generate_text_mock
-    ):
-        generate_text_mock.side_effect = [
-            GeneratedText(
-                text=_generated_json(["source_to_destination_1"], pad=False),
-                usage=_usage(),
-            ),
-            GeneratedText(
-                text=_generated_json(["source_to_destination_1"]),
-                usage=_usage(),
-            ),
-        ]
-
-        result = await self._generate(generate_text_mock, elevation_mock, weather_mock)
-
-        self.assertEqual(2, generate_text_mock.await_count)
-        self.assertIn("previous response", generate_text_mock.await_args_list[1].args[0])
-        self.assertNotIn("previous response", generate_text_mock.await_args_list[0].args[0])
-        self.assertFalse(result.script.fallback)
-        self.assertEqual(300, result.usage.total_tokens)
-        self.assertEqual(0.00007, result.usage.cost_usd)
-
-    @patch("route.services.generate_script.generate_text", new_callable=AsyncMock)
-    @patch(
-        "route.services.generate_script.build_route_elevation_segments",
-        new_callable=AsyncMock,
-    )
-    @patch("route.services.generate_script.current_weather_lookup")
-    async def test_accepts_short_but_valid_output_after_retry(
+    async def test_falls_back_without_retry_when_output_is_too_short(
             self, weather_mock, elevation_mock, generate_text_mock
     ):
         generate_text_mock.return_value = GeneratedText(
@@ -376,7 +398,51 @@ class RetryAndFallbackTests(unittest.IsolatedAsyncioTestCase):
 
         result = await self._generate(generate_text_mock, elevation_mock, weather_mock)
 
-        self.assertEqual(2, generate_text_mock.await_count)
+        self.assertEqual(1, generate_text_mock.await_count)
+        self.assertTrue(result.script.fallback)
+        self.assertEqual(150, result.usage.total_tokens)
+        self.assertEqual(0.000035, result.usage.cost_usd)
+
+    @patch("route.services.generate_script.generate_text", new_callable=AsyncMock)
+    @patch(
+        "route.services.generate_script.build_route_elevation_segments",
+        new_callable=AsyncMock,
+    )
+    @patch("route.services.generate_script.current_weather_lookup")
+    async def test_falls_back_without_retry_when_a_leg_is_too_long(
+            self, weather_mock, elevation_mock, generate_text_mock
+    ):
+        generated = json.loads(_generated_json(["source_to_destination_1"]))
+        generated["focused_attention"]["opening_narration"] = " ".join(
+            ["word"] * 1_000
+        )
+        generate_text_mock.return_value = GeneratedText(
+            text=json.dumps(generated),
+            usage=_usage(),
+        )
+
+        result = await self._generate(generate_text_mock, elevation_mock, weather_mock)
+
+        self.assertEqual(1, generate_text_mock.await_count)
+        self.assertTrue(result.script.fallback)
+
+    @patch("route.services.generate_script.generate_text", new_callable=AsyncMock)
+    @patch(
+        "route.services.generate_script.build_route_elevation_segments",
+        new_callable=AsyncMock,
+    )
+    @patch("route.services.generate_script.current_weather_lookup")
+    async def test_accepts_output_within_word_ranges(
+            self, weather_mock, elevation_mock, generate_text_mock
+    ):
+        generate_text_mock.return_value = GeneratedText(
+            text=_generated_json(["source_to_destination_1"]),
+            usage=_usage(),
+        )
+
+        result = await self._generate(generate_text_mock, elevation_mock, weather_mock)
+
+        self.assertEqual(1, generate_text_mock.await_count)
         self.assertFalse(result.script.fallback)
         self.assertEqual(
             "Narration for source_to_destination_1.",
@@ -389,23 +455,22 @@ class RetryAndFallbackTests(unittest.IsolatedAsyncioTestCase):
         new_callable=AsyncMock,
     )
     @patch("route.services.generate_script.current_weather_lookup")
-    async def test_falls_back_when_output_stays_invalid(
+    async def test_falls_back_after_one_structurally_invalid_output(
             self, weather_mock, elevation_mock, generate_text_mock
     ):
-        generate_text_mock.side_effect = [
-            GeneratedText(text="not json", usage=_usage()),
-            GeneratedText(text="{}", usage=_usage()),
-        ]
+        generate_text_mock.return_value = GeneratedText(
+            text="not json", usage=_usage()
+        )
 
         result = await self._generate(generate_text_mock, elevation_mock, weather_mock)
 
-        self.assertEqual(2, generate_text_mock.await_count)
+        self.assertEqual(1, generate_text_mock.await_count)
         script = result.script
         self.assertTrue(script.fallback)
         segment = script.sections[0].route_segments[0]
         self.assertEqual("source_to_destination_1", segment.id)
         self.assertIn("Test St", segment.narration)
-        self.assertEqual(0.00007, result.usage.cost_usd)
+        self.assertEqual(0.000035, result.usage.cost_usd)
 
     @patch("route.services.generate_script.generate_text", new_callable=AsyncMock)
     @patch(

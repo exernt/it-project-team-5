@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Sequence
@@ -39,9 +41,8 @@ from route.utils.route_hint import extract_street_hint
 
 logger = logging.getLogger(__name__)
 
-# A section may fall this far below its requested minimum before we log a warning.
-WORD_COUNT_TOLERANCE = 0.8
-MAX_GENERATION_ATTEMPTS = 2
+TARGET_WORDS_PER_MINUTE = 150
+WORD_COUNT_TOLERANCE = 0.2
 NEARBY_LOOKUP_CONCURRENCY = 5
 NEARBY_MAX_SEGMENTS = 20
 
@@ -61,6 +62,22 @@ class GeneratedScript:
 
 def _words_for_minutes(minutes: float, *, wpm: int = 150) -> int:
     return int(round(minutes * wpm))
+
+
+def _word_range(target_words: int) -> tuple[int, int]:
+    return (
+        max(0, math.floor(target_words * (1 - WORD_COUNT_TOLERANCE))),
+        max(0, math.ceil(target_words * (1 + WORD_COUNT_TOLERANCE))),
+    )
+
+
+def _segment_word_budget(segment: StepSegment) -> tuple[int, int, int]:
+    target = _words_for_minutes(
+        segment.duration_s / 60,
+        wpm=TARGET_WORDS_PER_MINUTE,
+    )
+    minimum, maximum = _word_range(target)
+    return target, minimum, maximum
 
 
 def _format_weather_condition(weather: Dict[str, Any]) -> str:
@@ -94,7 +111,16 @@ def _route_context(
             "route_label": extract_street_hint(segment.instruction),
             "instruction": segment.instruction,
             "terrain": segment.label,
+            "estimated_duration_seconds": segment.duration_s,
         }
+        target_words, minimum_words, maximum_words = _segment_word_budget(segment)
+        item.update(
+            {
+                "target_words": target_words,
+                "minimum_words": minimum_words,
+                "maximum_words": maximum_words,
+            }
+        )
         if nearby.get(segment_id):
             item["nearby_features"] = nearby[segment_id]
         items.append(item)
@@ -138,41 +164,74 @@ async def _lookup_nearby_features(
 
 
 def _word_count(text: str) -> int:
-    return len(text.split())
+    # Pause markers reserve time but are not spoken words.
+    without_pauses = re.sub(r"\(\s*pause\s*\)", " ", text, flags=re.IGNORECASE)
+    return len(without_pauses.split())
 
 
-def _word_count_shortfalls(
+def _word_count_violations(
         narrations: Dict[str, Any],
-        focused_words: int,
+        focused_segments: Sequence[StepSegment],
+        focused_route_phase: str,
         compassion_words: int,
-        closing_words: int,
+        closing_segments: Sequence[StepSegment],
+        closing_route_phase: str,
+        standalone_closing_words: int,
 ) -> List[str]:
-    """Describe sections whose generated text is well under the requested minimum."""
-    focused = narrations["focused_attention"]
-    closing = narrations["closing_meditation"]
-    actual = {
-        "focused_attention": (
-            _word_count(focused["opening_narration"])
-            + sum(_word_count(t) for t in focused["segment_narrations"].values())
-            + _word_count(focused["closing_narration"]),
-            focused_words,
-        ),
-        "compassion_meditation": (
-            _word_count(narrations["compassion_meditation"]["narration"]),
-            compassion_words,
-        ),
-        "closing_meditation": (
+    """Describe narration blocks outside their target word-count ranges.
+
+    Walking-section opening and closing narration is charged to the first and
+    last route segment respectively. A one-segment section carries both.
+    """
+    problems: List[str] = []
+
+    def check_range(name: str, words: int, target: int) -> None:
+        minimum, maximum = _word_range(target)
+        if words < minimum or words > maximum:
+            problems.append(
+                f"{name}: {words} spoken words, expected {minimum}-{maximum}"
+            )
+
+    def check_walking_section(
+            section_name: str,
+            segments: Sequence[StepSegment],
+            route_phase: str,
+    ) -> None:
+        section = narrations[section_name]
+        if not segments:
+            return
+        last_index = len(segments) - 1
+        for index, segment in enumerate(segments):
+            segment_id = _segment_id(route_phase, segment)
+            words = _word_count(section["segment_narrations"][segment_id])
+            if index == 0:
+                words += _word_count(section["opening_narration"])
+            if index == last_index:
+                words += _word_count(section["closing_narration"])
+            target, _, _ = _segment_word_budget(segment)
+            check_range(f"{section_name}.{segment_id}", words, target)
+
+    check_walking_section(
+        "focused_attention", focused_segments, focused_route_phase
+    )
+    check_walking_section(
+        "closing_meditation", closing_segments, closing_route_phase
+    )
+
+    compassion_count = _word_count(
+        narrations["compassion_meditation"]["narration"]
+    )
+    check_range("compassion_meditation", compassion_count, compassion_words)
+
+    if not closing_segments:
+        closing = narrations["closing_meditation"]
+        closing_count = (
             _word_count(closing["opening_narration"])
-            + sum(_word_count(t) for t in closing["segment_narrations"].values())
-            + _word_count(closing["closing_narration"]),
-            closing_words,
-        ),
-    }
-    return [
-        f"{name}: {words} words, requested at least {minimum}"
-        for name, (words, minimum) in actual.items()
-        if minimum > 0 and words < minimum * WORD_COUNT_TOLERANCE
-    ]
+            + _word_count(closing["closing_narration"])
+        )
+        check_range("closing_meditation", closing_count, standalone_closing_words)
+
+    return problems
 
 
 def _segment_narrations_schema(segment_ids: Sequence[str]) -> Dict[str, Any]:
@@ -286,90 +345,52 @@ def _zero_usage() -> GenerationUsage:
     )
 
 
-def _combine_usage(first: GenerationUsage, second: GenerationUsage) -> GenerationUsage:
-    return GenerationUsage(
-        model=second.model,
-        service_tier=second.service_tier,
-        input_tokens=first.input_tokens + second.input_tokens,
-        cached_input_tokens=first.cached_input_tokens + second.cached_input_tokens,
-        cache_write_tokens=first.cache_write_tokens + second.cache_write_tokens,
-        output_tokens=first.output_tokens + second.output_tokens,
-        reasoning_tokens=first.reasoning_tokens + second.reasoning_tokens,
-        total_tokens=first.total_tokens + second.total_tokens,
-        cost_usd=round(first.cost_usd + second.cost_usd, 10),
-    )
-
-
-def _retry_prompt(prompt: str, problems: Sequence[str]) -> str:
-    listed = "\n".join(f"- {problem}" for problem in problems)
-    return (
-        f"{prompt}\n\nYour previous response had these problems. "
-        f"Fix them in this response:\n{listed}\n"
-        "Keep every other requirement unchanged."
-    )
-
-
 async def _generate_validated_narrations(
         prompt: str,
-        focused_ids: Sequence[str],
-        closing_ids: Sequence[str],
-        focused_words: int,
+        focused_segments: Sequence[StepSegment],
+        focused_route_phase: str,
         compassion_words: int,
-        closing_words: int,
+        closing_segments: Sequence[StepSegment],
+        closing_route_phase: str,
+        standalone_closing_words: int,
 ) -> tuple[Dict[str, Any] | None, GenerationUsage]:
-    """Generate narration, retrying once on invalid or too-short output.
+    """Generate once and return ``None`` when structure or word ranges fail."""
+    focused_ids = [
+        _segment_id(focused_route_phase, segment) for segment in focused_segments
+    ]
+    closing_ids = [
+        _segment_id(closing_route_phase, segment) for segment in closing_segments
+    ]
+    try:
+        generated = await generate_text(
+            prompt,
+            json_schema=_narration_schema(focused_ids, closing_ids),
+            schema_name="meditation_narrations",
+        )
+    except OpenaiAPIError:
+        logger.error("OpenAI unavailable", exc_info=True)
+        return None, _zero_usage()
 
-    Returns ``(None, usage)`` when OpenAI fails or the output stays structurally
-    invalid, so the caller can use the fallback script. Output that is valid but
-    still short after the last attempt is accepted with a warning.
-    """
-    usage: GenerationUsage | None = None
-    current_prompt = prompt
-    for attempt in range(1, MAX_GENERATION_ATTEMPTS + 1):
-        try:
-            generated = await generate_text(
-                current_prompt,
-                json_schema=_narration_schema(focused_ids, closing_ids),
-                schema_name="meditation_narrations",
-            )
-        except OpenaiAPIError:
-            logger.error(
-                "OpenAI unavailable on attempt %d",
-                attempt,
-                exc_info=True,
-            )
-            return None, usage or _zero_usage()
+    try:
+        narrations = _parse_narrations(generated.text, focused_ids, closing_ids)
+    except ValueError as exc:
+        logger.error("Generated narration is invalid: %s", exc)
+        return None, generated.usage
 
-        usage = generated.usage if usage is None else _combine_usage(usage, generated.usage)
-        narrations: Dict[str, Any] | None
-        try:
-            narrations = _parse_narrations(generated.text, focused_ids, closing_ids)
-        except ValueError as exc:
-            narrations = None
-            problems = [str(exc)]
-        else:
-            problems = _word_count_shortfalls(
-                narrations, focused_words, compassion_words, closing_words
-            )
-            if not problems:
-                return narrations, usage
-
-        if attempt == MAX_GENERATION_ATTEMPTS:
-            if narrations is None:
-                logger.error(
-                    "Generated narration still invalid after %d attempts: %s",
-                    attempt,
-                    problems[0],
-                )
-                return None, usage
-            for problem in problems:
-                logger.warning("Generated script under word target - %s", problem)
-            return narrations, usage
-
-        logger.warning("Retrying script generation (attempt %d): %s", attempt, problems)
-        current_prompt = _retry_prompt(prompt, problems)
-
-    raise AssertionError("unreachable")  # pragma: no cover
+    problems = _word_count_violations(
+        narrations,
+        focused_segments,
+        focused_route_phase,
+        compassion_words,
+        closing_segments,
+        closing_route_phase,
+        standalone_closing_words,
+    )
+    if problems:
+        for problem in problems:
+            logger.warning("Generated script outside word target - %s", problem)
+        return None, generated.usage
+    return narrations, generated.usage
 
 
 def _fallback_segments(
@@ -521,6 +542,7 @@ async def generate_script_with_park(
     focused_words = _words_for_minutes(to_park_time / 60)
     compassion_words = _words_for_minutes(park_time / 60)
     closing_words = _words_for_minutes(park_to_destination_time / 60)
+    compassion_min_words, compassion_max_words = _word_range(compassion_words)
 
     weather, source_to_park, park_to_destination = await asyncio.gather(
         asyncio.to_thread(current_weather_lookup, park.lat, park.lon),
@@ -542,8 +564,6 @@ async def generate_script_with_park(
     )
     focused_phase = "source_to_park"
     closing_phase = "park_to_destination"
-    focused_ids = [_segment_id(focused_phase, segment) for segment in source_to_park]
-    closing_ids = [_segment_id(closing_phase, segment) for segment in park_to_destination]
     focused_nearby, closing_nearby = await asyncio.gather(
         _lookup_nearby_features(source_to_park, focused_phase),
         _lookup_nearby_features(park_to_destination, closing_phase),
@@ -558,16 +578,19 @@ async def generate_script_with_park(
         source_to_park=_route_context(source_to_park, focused_phase, nearby),
         park_to_destination=_route_context(park_to_destination, closing_phase, nearby),
         CM_word_count=compassion_words,
+        CM_min_words=compassion_min_words,
+        CM_max_words=compassion_max_words,
         Closing_word_count=closing_words,
         weatherCondition=weather_condition,
         study_parameters=study_parameters.strip() or "No additional study instructions.",
     )
     narrations, usage = await _generate_validated_narrations(
         prompt,
-        focused_ids,
-        closing_ids,
-        focused_words,
+        source_to_park,
+        focused_phase,
         compassion_words,
+        park_to_destination,
+        closing_phase,
         closing_words,
     )
     used_fallback = narrations is None
@@ -625,6 +648,8 @@ async def generate_script_without_park(
         (total_walking_time * COMPASSION_SHARE) / 60
     )
     closing_words = _words_for_minutes((total_walking_time * CLOSING_SHARE) / 60)
+    compassion_min_words, compassion_max_words = _word_range(compassion_words)
+    closing_min_words, closing_max_words = _word_range(closing_words)
 
     weather, route_segments = await asyncio.gather(
         asyncio.to_thread(current_weather_lookup, destination.lat, destination.lon),
@@ -637,8 +662,6 @@ async def generate_script_without_park(
     weather_condition = _format_weather_condition(weather)
     duration_minutes = max(1, round(total_walking_time / 60))
     focused_phase = "source_to_destination"
-    focused_ids = [_segment_id(focused_phase, segment) for segment in route_segments]
-    closing_ids: List[str] = []
     nearby = await _lookup_nearby_features(route_segments, focused_phase)
 
     prompt = render_template(
@@ -648,16 +671,21 @@ async def generate_script_without_park(
         FAM_word_count=focused_words,
         source_to_park=_route_context(route_segments, focused_phase, nearby),
         CM_word_count=compassion_words,
+        CM_min_words=compassion_min_words,
+        CM_max_words=compassion_max_words,
         Closing_word_count=closing_words,
+        Closing_min_words=closing_min_words,
+        Closing_max_words=closing_max_words,
         weatherCondition=weather_condition,
         study_parameters=study_parameters.strip() or "No additional study instructions.",
     )
     narrations, usage = await _generate_validated_narrations(
         prompt,
-        focused_ids,
-        closing_ids,
-        focused_words,
+        route_segments,
+        focused_phase,
         compassion_words,
+        [],
+        "park_to_destination",
         closing_words,
     )
     used_fallback = narrations is None

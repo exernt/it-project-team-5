@@ -137,7 +137,7 @@ def script_fallback_enabled() -> bool:
 
 # Bump when any file in prompts/ changes in a way that affects generated output,
 # so stored scripts can be traced back to the prompt that produced them.
-PROMPT_VERSION = "narration-2026-10-v2"
+PROMPT_VERSION = "narration-2026-10-v3"
 
 
 def load_template(path: str) -> str:
