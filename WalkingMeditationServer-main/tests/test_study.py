@@ -18,14 +18,11 @@ from database.models import (
     ConsentForm,
     Feedback,
     FeedbackCategory,
-    Questionnaire,
-    QuestionnaireStatus,
     ResearcherProfile,
     Role,
     Study,
     StudyCreatedBy,
     StudyGroup,
-    StudyQuestionnaire,
     StudyRegistration,
     StudyStatus,
     User,
@@ -487,11 +484,11 @@ class ListMyStudiesTests(unittest.IsolatedAsyncioTestCase):
             withdrawn_at=None,
             study_group=StudyGroup.CONTROL,
         )
-        result_mock = MagicMock()
-        result_mock.all.return_value = [(registration, study)]
-        questionnaire_result = MagicMock()
-        questionnaire_result.all.return_value = []
-        self.session.execute.side_effect = [result_mock, questionnaire_result]
+        registrations_result = MagicMock()
+        registrations_result.all.return_value = [(registration, study)]
+        questionnaires_result = MagicMock()
+        questionnaires_result.all.return_value = []
+        self.session.execute.side_effect = [registrations_result, questionnaires_result]
 
         response = await list_my_studies(self.user, self.session)
 
@@ -503,6 +500,7 @@ class ListMyStudiesTests(unittest.IsolatedAsyncioTestCase):
             response.studies[0].description,
         )
         self.assertEqual("recruiting", response.studies[0].status)
+        self.assertEqual([], response.studies[0].open_questionnaires)
         self.assertEqual("control", response.studies[0].study_group)
         self.assertIsNone(response.studies[0].withdrawn_at)
 
@@ -514,49 +512,6 @@ class ListMyStudiesTests(unittest.IsolatedAsyncioTestCase):
         response = await list_my_studies(self.user, self.session)
 
         self.assertEqual(0, len(response.studies))
-
-    async def test_includes_open_questionnaire_rounds(self):
-        study = Study(
-            id=uuid4(),
-            name="Morning walks",
-            duration=14,
-            status=StudyStatus.ACTIVE,
-        )
-        registration = StudyRegistration(
-            user_id=self.user.id,
-            study_id=study.id,
-            registered_at=datetime.now(timezone.utc),
-            consented_at=datetime.now(timezone.utc),
-            withdrawn_at=None,
-            study_group=StudyGroup.CONTROL,
-        )
-        questionnaire = Questionnaire(
-            id=uuid4(),
-            title="Weekly check-in",
-            researcher_id=uuid4(),
-            status=QuestionnaireStatus.PUBLISHED,
-            definition={"title": "Weekly check-in", "questions": []},
-            created_on=datetime.now(timezone.utc),
-        )
-        issuance = StudyQuestionnaire(
-            id=uuid4(),
-            study_id=study.id,
-            questionnaire_id=questionnaire.id,
-            round_number=2,
-            issued_at=datetime.now(timezone.utc),
-            revoked_at=None,
-        )
-        registrations_result = MagicMock()
-        registrations_result.all.return_value = [(registration, study)]
-        questionnaires_result = MagicMock()
-        questionnaires_result.all.return_value = [(issuance, questionnaire, None)]
-        self.session.execute.side_effect = [registrations_result, questionnaires_result]
-
-        response = await list_my_studies(self.user, self.session)
-
-        self.assertEqual(1, len(response.studies[0].open_questionnaires))
-        self.assertEqual(2, response.studies[0].open_questionnaires[0].round_number)
-        self.assertFalse(response.studies[0].open_questionnaires[0].has_responded)
 
     async def test_includes_withdrawn_registrations(self):
         study = Study(
@@ -1257,6 +1212,18 @@ class RejoinStudyTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(409, raised.exception.status_code)
+
+
+# NOTE: The old SetQuestionTests class (testing POST /{study_id}/setquestion
+# and SetQuestionRequest) was removed here. It tested a single-question
+# Questionnaire schema (study_id, int id, title-only JSON blob) that predates
+# and is incompatible with the structured questionnaire system (definitions,
+# rounds, STAI/DASS-21 support) added by the questionnaire branch merge —
+# the two features share the `Questionnaire` model name but not a schema.
+# The old /setquestion endpoint and SetQuestionRequest model were removed
+# from route/studies.py and route/models.py accordingly; use
+# tests/test_study_questionnaires.py for the current questionnaire tests.
+
 
 class ListStudyFeedbackTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):

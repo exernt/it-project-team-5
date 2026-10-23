@@ -29,7 +29,7 @@
             android:id="@+id/btnExplore"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Let's Explore the App"
+            android:text="@string/start_meditation"
             android:layout_marginBottom="16dp"/>
 
         <Button
@@ -44,7 +44,15 @@
             android:id="@+id/btnStudy"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
             android:text="@string/manage_study"/>
+
+        <Button
+            android:id="@+id/btnLogOut"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/logout" />
 
     </LinearLayout>
 

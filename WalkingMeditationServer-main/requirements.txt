@@ -9,6 +9,7 @@ asyncpg==0.31.0
 audioop-lts==0.2.2
 audioread==3.1.0
 branca==0.8.2
+boto3==1.43.109
 brotli==1.2.0
 certifi==2026.1.4
 cffi==2.0.0

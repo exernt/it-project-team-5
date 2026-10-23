@@ -1,26 +1,71 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:gravity="center"
-    android:padding="24dp">
+    android:layout_height="match_parent">
 
-    <TextView
-        android:id="@+id/tvStatus"
-        android:layout_width="wrap_content"
+    <com.google.android.gms.maps.MapView
+        android:id="@+id/navigation_map"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="Walking navigation map" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Mode: --"
-        android:textSize="20sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="20dp"/>
+        android:layout_gravity="top"
+        android:layout_margin="16dp"
+        android:background="@drawable/rounded_input"
+        android:elevation="8dp"
+        android:orientation="vertical"
+        android:padding="16dp">
 
-    <TextView
-        android:id="@+id/tvCoordinates"
+        <TextView
+            android:id="@+id/tv_navigation_instruction"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Preparing route…"
+            android:textColor="@color/black"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tv_route_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Waiting for location"
+            android:textColor="@color/hint_grey"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/tv_playback_log"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="No segment playing"
+            android:textColor="@color/sky_blue_dark"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <Button
+        android:id="@+id/btn_recenter"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Waiting for updates..."
-        android:textSize="16sp"/>
+        android:layout_height="48dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="92dp"
+        android:elevation="8dp"
+        android:text="Recenter"
+        android:visibility="gone" />
 
-</LinearLayout>
+    <Button
+        android:id="@+id/btn_pause_walk"
+        style="@style/App.PrimaryButton"
+        android:layout_width="200dp"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="20dp"
+        android:elevation="10dp"
+        android:text="Pause" />
+
+</FrameLayout>

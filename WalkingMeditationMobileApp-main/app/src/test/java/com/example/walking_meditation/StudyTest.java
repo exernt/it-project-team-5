@@ -1,6 +1,7 @@
 package com.example.walking_meditation;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import com.example.walking_meditation.models.Study;
@@ -18,5 +19,19 @@ public class StudyTest {
     public void draftAndClosedStudiesAreNotOpen() {
         assertFalse(new Study("3", "Draft", 7, "Description", "draft").isOpen());
         assertFalse(new Study("4", "Closed", 14, "Description", "closed").isOpen());
+    }
+
+    @Test
+    public void exposesScriptGenerationParameters() {
+        Study study = new Study(
+                "5",
+                "Parameterized",
+                14,
+                "Description",
+                "draft",
+                "Use short narration segments."
+        );
+
+        assertEquals("Use short narration segments.", study.getScriptGenerationParameters());
     }
 }

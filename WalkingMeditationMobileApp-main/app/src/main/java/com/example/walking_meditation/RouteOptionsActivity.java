@@ -42,6 +42,7 @@ import static com.example.walking_meditation.nav.Extras.EXTRA_ROUTE_POLYLINES;
 import static com.example.walking_meditation.nav.Extras.EXTRA_SCRIPT_JSON_PATH;
 import static com.example.walking_meditation.nav.Extras.EXTRA_STUDY_PARAMETERS;
 
+import com.example.walking_meditation.utils.AuthenticatedHttpClient;
 import com.example.walking_meditation.utils.CacheFiles;
 
 public class RouteOptionsActivity extends AppCompatActivity implements RouteOptionsAdapter.OnRouteClickListener {
@@ -67,12 +68,7 @@ public class RouteOptionsActivity extends AppCompatActivity implements RouteOpti
     private ApiResponse resp;
 
     // Long timeouts (>20s)
-    private final OkHttpClient httpClient = new OkHttpClient.Builder()
-            .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)   // allow long server generation
-            .writeTimeout(30, TimeUnit.SECONDS)
-            .callTimeout(240, TimeUnit.SECONDS)
-            .build();
+    private OkHttpClient httpClient;
 
     private volatile boolean isLoading = false;
     private Call inFlightCall;
@@ -82,6 +78,12 @@ public class RouteOptionsActivity extends AppCompatActivity implements RouteOpti
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        httpClient = AuthenticatedHttpClient.configure(this, new OkHttpClient.Builder())
+                .connectTimeout(20, TimeUnit.SECONDS)
+                .readTimeout(5, TimeUnit.MINUTES)   // allow long server generation
+                .writeTimeout(30, TimeUnit.SECONDS)
+                .callTimeout(6, TimeUnit.MINUTES)
+                .build();
         setContentView(R.layout.activity_route_options);
 
         tvHeader = findViewById(R.id.tv_header);
@@ -290,13 +292,10 @@ public class RouteOptionsActivity extends AppCompatActivity implements RouteOpti
         setLoading(true);
 
         RequestBody body = RequestBody.create(payload.toString(), JSON);
-        Request.Builder requestBuilder = new Request.Builder()
+        Request req = new Request.Builder()
                 .url(url)
-                .post(body);
-        if (!BuildConfig.SERVER_ACCESS_TOKEN.isEmpty()) {
-            requestBuilder.header("X-App-Token", BuildConfig.SERVER_ACCESS_TOKEN);
-        }
-        Request req = requestBuilder.build();
+                .post(body)
+                .build();
 
         if (inFlightCall != null) inFlightCall.cancel();
         inFlightCall = httpClient.newCall(req);
@@ -333,8 +332,7 @@ public class RouteOptionsActivity extends AppCompatActivity implements RouteOpti
                     }
 
                     try {
-                        // respBody is JSON from your backend (may be large)
-                        // Save entire JSON to cache and pass file path to ScriptActivity
+                        // Save the complete JSON response for the temporary inspection screen.
                         String scriptPath = CacheFiles.writeText(
                                 RouteOptionsActivity.this,
                                 "scripts",
@@ -343,9 +341,8 @@ public class RouteOptionsActivity extends AppCompatActivity implements RouteOpti
                                 respBody
                                 );
 
-                        Intent intent = new Intent(RouteOptionsActivity.this, ScriptActivity.class);
+                        Intent intent = new Intent(RouteOptionsActivity.this, ScriptResultActivity.class);
                         intent.putExtra(EXTRA_SCRIPT_JSON_PATH, scriptPath);
-                        intent.putStringArrayListExtra(EXTRA_ROUTE_POLYLINES, routePolylines);
                         startActivity(intent);
 
                     } catch (IOException ioe) {

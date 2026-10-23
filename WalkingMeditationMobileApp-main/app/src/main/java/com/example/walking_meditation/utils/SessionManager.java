@@ -7,9 +7,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 public final class SessionManager {
-    private static final String PREFS = "walking_meditation_session";
-    private static final String ACCESS_TOKEN = "access_token";
-    private static final String REFRESH_TOKEN = "refresh_token";
+    private static final String PREFS = SecureTokenStore.PREFERENCES_NAME;
     private static final String STUDY_ACTIVE = "study_active";
     private static final String STUDY_ID = "study_id";
     private static final String STUDY_PARAMETERS = "study_script_parameters";
@@ -27,20 +25,26 @@ public final class SessionManager {
             @NonNull String accessToken,
             @NonNull String refreshToken
     ) {
-        preferences(context).edit()
-                .putString(ACCESS_TOKEN, accessToken)
-                .putString(REFRESH_TOKEN, refreshToken)
-                .apply();
+        SecureTokenStore.save(context, accessToken, refreshToken);
     }
 
     @Nullable
     public static String getAccessToken(@NonNull Context context) {
-        return preferences(context).getString(ACCESS_TOKEN, null);
+        return SecureTokenStore.getAccessToken(context);
     }
 
     @Nullable
     public static String getRefreshToken(@NonNull Context context) {
-        return preferences(context).getString(REFRESH_TOKEN, null);
+        return SecureTokenStore.getRefreshToken(context);
+    }
+
+    public static boolean hasSessionCredentials(@NonNull Context context) {
+        return SecureTokenStore.hasCredentials(context);
+    }
+
+    public static void clearSession(@NonNull Context context) {
+        SecureTokenStore.clear(context);
+        preferences(context).edit().clear().commit();
     }
 
     public static void cacheStudyConfiguration(

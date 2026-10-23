@@ -427,7 +427,8 @@ public final class StudyApiClient {
                 item.getString("name"),
                 item.getInt("duration"),
                 item.optString("description", ""),
-                item.getString("status")
+                item.getString("status"),
+                item.optString("script_generation_parameters", "")
         );
     }
 

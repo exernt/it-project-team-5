@@ -11,12 +11,13 @@ from route.models import LatLng, ParkDetourResult, ParkPlace, WalkRouteResponse
 
 logger = logging.getLogger(__name__)
 
+MAX_PARK_CANDIDATES = 3
+
 async def generate_walk_route(
     source: LatLng,
     destination: LatLng,
     total_travel_time: int,
     *,
-    sar_max_parks: int = 25,
     concurrency: int = 6,
     timeout_s: float = 40.0,
 ) -> WalkRouteResponse:
@@ -37,8 +38,11 @@ async def generate_walk_route(
         parks = await search_parks_along_route(
             client,
             route_polyline=baseline.polyline,
-            max_results=sar_max_parks,
+            max_results=MAX_PARK_CANDIDATES,
         )
+        # Enforce the limit locally as well, in case the Places provider
+        # returns more results than requested.
+        parks = parks[:MAX_PARK_CANDIDATES]
 
         if not parks:
             return WalkRouteResponse(
@@ -80,18 +84,23 @@ async def generate_walk_route(
                     slack_s=total_travel_time - detour_s,
                     polyline_to_park=to_park.polyline,
                     polyline_from_park=from_park.polyline,
+                    steps_to_park=to_park.steps,
+                    steps_from_park=from_park.steps,
                 )
             return None
 
         evaluated = await asyncio.gather(*(eval_one(p) for p in parks))
         results = [r for r in evaluated if r is not None]
 
-        results.sort(key=lambda r: (-r.slack_s, r.added_s, r.detour_s))
+        # The time limit is only a hard ceiling. Among feasible park routes,
+        # prefer the shortest walk from source to destination via the park.
+        # Python's stable sort preserves the Places result order for ties.
+        results.sort(key=lambda r: r.detour_s)
 
         return WalkRouteResponse(
             origin=source,
             destination=destination,
             total_travel_time=total_travel_time,
             baseline=baseline,
-            parks=results,
+            parks=results[:3],
         )

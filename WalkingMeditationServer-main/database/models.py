@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import Boolean, CheckConstraint, DateTime, Text, UniqueConstraint, Uuid, func, text, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
@@ -38,6 +38,11 @@ class User(Base):
     )
     email: Mapped[str] = mapped_column(Text, nullable=False)
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    session_version: Mapped[int] = mapped_column(
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+    )
     gender: Mapped[str | None] = mapped_column(Text, nullable=True)
     age: Mapped[int | None] = mapped_column(nullable=True)
     role: Mapped[Role] = mapped_column(
@@ -94,6 +99,7 @@ class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
     __table_args__ = (
         UniqueConstraint("token_hash", name="uq_refresh_tokens_token_hash"),
+        UniqueConstraint("parent_id", name="uq_refresh_tokens_parent_id"),
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -106,6 +112,17 @@ class RefreshToken(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
+    )
+    family_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        nullable=False,
+        default=uuid4,
+        index=True,
+    )
+    parent_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("refresh_tokens.id", ondelete="SET NULL"),
+        nullable=True,
     )
     token_hash: Mapped[str] = mapped_column(Text, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

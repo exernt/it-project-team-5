@@ -1,5 +1,7 @@
 package com.example.walking_meditation.models;
 
+import java.util.List;
+
 public class ParkItem {
     public Park park;
     public int baseline_s;
@@ -10,4 +12,6 @@ public class ParkItem {
     public int slack_s;
     public String polyline_to_park;
     public String polyline_from_park;
+    public List<RouteStep> steps_to_park;
+    public List<RouteStep> steps_from_park;
 }
