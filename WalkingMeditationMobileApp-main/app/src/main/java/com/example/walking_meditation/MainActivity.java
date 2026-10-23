@@ -1,6 +1,7 @@
 package com.example.walking_meditation;
 
 import android.content.Intent;
+import com.example.walking_meditation.audio.CurrentWalk;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -25,6 +26,8 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         btnExplore = findViewById(R.id.btnExplore);
+        findViewById(R.id.btnResumeWalk).setOnClickListener(v ->
+                startActivity(new Intent(this, MeditationPlaybackActivity.class)));
         btnResearcherDashboard = findViewById(R.id.btnResearcherDashboard);
         btnStudy = findViewById(R.id.btnStudy);
         btnFeedback = findViewById(R.id.btnFeedback);
@@ -63,6 +66,14 @@ public class MainActivity extends AppCompatActivity {
         btnFeedback.setOnClickListener(view ->
                 startActivity(new Intent(MainActivity.this, FeedbackActivity.class))
         );
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        boolean ready;
+        try { ready = new CurrentWalk(getFilesDir()).read(true).ready; }
+        catch (Exception ignored) { ready = false; }
+        findViewById(R.id.btnResumeWalk).setVisibility(ready ? View.VISIBLE : View.GONE);
     }
 
     private void openStudyManagement() {
