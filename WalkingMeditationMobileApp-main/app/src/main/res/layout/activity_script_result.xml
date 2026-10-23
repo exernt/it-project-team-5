@@ -17,6 +17,21 @@
             android:text="Server script response"
             android:textSize="20sp" />
 
+        <TextView
+            android:id="@+id/tv_audio_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Preparing walk audio…" />
+        <Button
+            android:id="@+id/btn_retry_audio"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Retry audio preparation" />
+        <Button
+            android:id="@+id/btn_discard_walk"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Discard walk" />
         <Button
             android:id="@+id/btn_start_navigation"
             style="@style/App.PrimaryButton"
