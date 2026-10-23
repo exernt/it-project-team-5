@@ -11,6 +11,17 @@ import java.util.*;
 import static org.junit.Assert.*;
 
 public class ScriptNarrationParserTest {
+    @Test public void preservesPauseMarkersForPayloadImplementations() throws Exception {
+        JSONObject response = sample();
+        RoutePlan plan = route(response);
+        String original = "Notice & breathe. (pause) Keep walking. (PAUSE)";
+        response.getJSONObject("script").getJSONArray("sections").getJSONObject(0)
+                .getJSONObject("opening_narration").put("text", original);
+        ScheduledNarration narration = ScriptNarrationParser.parse(response.toString(), plan).get(0);
+        assertEquals(original, narration.text);
+        assertEquals(ScheduledNarration.Anchor.ROUTE_START, narration.anchor);
+    }
+
     private JSONObject sample() throws Exception {
         try (InputStream stream = getClass().getResourceAsStream("/example_script_n1.json")) {
             assertNotNull(stream);
