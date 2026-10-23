@@ -82,9 +82,9 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
     // OkHttp with reasonable timeouts (tts mp3 can take time)
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
             .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)
+            .readTimeout(300, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
-            .callTimeout(180, TimeUnit.SECONDS)
+            .callTimeout(600, TimeUnit.SECONDS)
             .build();
 
     @Override

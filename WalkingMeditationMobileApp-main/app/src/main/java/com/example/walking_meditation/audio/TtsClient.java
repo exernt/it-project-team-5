@@ -37,9 +37,9 @@ public class TtsClient {
 
     private static OkHttpClient defaultClient() { return new OkHttpClient.Builder()
             .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)
+            .readTimeout(300, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
-            .callTimeout(180, TimeUnit.SECONDS)
+            .callTimeout(600, TimeUnit.SECONDS)
             .build(); }
 
     private final OkHttpClient httpClient;

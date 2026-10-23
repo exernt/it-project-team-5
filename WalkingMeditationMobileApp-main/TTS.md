@@ -4,7 +4,7 @@
 
 `QwenPayload` preserves the previous Qwen contract and turns pause markers into paragraph breaks. Its default settings remain English / Ryan / Calm and clear / 192k. Constructor arguments allow different settings.
 
-`PollyPayload` converts pause markers to SSML breaks (2500 ms by default), XML-escapes ordinary narration, and emits AWS-shaped fields: `Text`, `TextType`, `VoiceId`, `LanguageCode`, `Engine`, and `OutputFormat`. It validates synchronous request length and pause duration. Voice/engine compatibility must be validated by the backend.
+`PollyPayload` converts pause markers to SSML breaks (2500 ms by default), XML-escapes ordinary narration, and emits AWS-shaped fields: `Text`, `TextType`, `VoiceId`, `LanguageCode`, `Engine`, and `OutputFormat`. It validates the backend 60,000-character block limit and pause duration. The backend splits oversized narration to meet Polly per-request limits and returns one joined MP3. Voice/engine compatibility must be validated by the backend.
 
 Polly is selected in `ScriptResultActivity` and the legacy `ScriptActivity`. The backend `/tts` endpoint accepts its AWS-shaped JSON and returns raw MP3 bytes. For example:
 

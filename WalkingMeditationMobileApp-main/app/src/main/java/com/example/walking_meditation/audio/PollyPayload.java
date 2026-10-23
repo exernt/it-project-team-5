@@ -29,15 +29,14 @@ public final class PollyPayload implements TtsPayload {
             throw new IOException("Polly narration must contain spoken text");
         String[] parts = PAUSE.split(narration.trim(), -1);
         StringBuilder ssml = new StringBuilder("<speak>");
-        int spokenCharacters = 0;
         for (int i = 0; i < parts.length; i++) {
-            spokenCharacters += parts[i].codePointCount(0, parts[i].length());
             if (i > 0) ssml.append("<break time=\"").append(pauseMs).append("ms\"/>");
             ssml.append(escapeXml(parts[i]));
         }
         ssml.append("</speak>");
-        if (spokenCharacters > 3000 || ssml.codePointCount(0, ssml.length()) > 6000)
-            throw new IOException("Polly narration exceeds the synchronous request text limit");
+        // The backend splits this block into requests that fit Polly's individual limits.
+        if (ssml.codePointCount(0, ssml.length()) > 60000)
+            throw new IOException("Narration exceeds the backend's 60000-character block limit");
         return new JSONObject().put("Text", ssml.toString()).put("TextType", "ssml")
                 .put("VoiceId", voiceId).put("LanguageCode", languageCode)
                 .put("Engine", engine).put("OutputFormat", "mp3");
