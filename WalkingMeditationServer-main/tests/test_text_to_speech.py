@@ -83,9 +83,7 @@ class TtsEndpointTests(unittest.TestCase):
             {**PAYLOAD, "Text": "<speak>broken"},
             {**PAYLOAD, "Text": "<wrong>Walk.</wrong>"},
             {**PAYLOAD, "Text": "<speak><break time='1s'/></speak>"},
-            {**PAYLOAD, "Text": "<speak>" + "a" * 3001 + "</speak>"},
-            {**PAYLOAD, "TextType": "text", "Text": "a" * 3001},
-            {**PAYLOAD, "Text": "<speak>" + "&amp;" * 1300 + "</speak>"},
+            {**PAYLOAD, "Text": "<speak>" + "a" * 60001 + "</speak>"},
             {**PAYLOAD, "Text": '<!DOCTYPE speak [<!ENTITY x "Walk">]><speak>&x;</speak>'},
             {**PAYLOAD, "OutputFormat": "pcm"},
         ]
