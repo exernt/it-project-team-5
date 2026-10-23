@@ -5,9 +5,7 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.util.regex.Pattern;
 
-/** AWS-shaped JSON for a future backend Polly proxy returning raw MP3 bytes.
- * The current Qwen /tts endpoint does not accept this contract.
- */
+/** AWS-shaped JSON for the backend /tts Polly proxy, which returns raw MP3 bytes. */
 public final class PollyPayload implements TtsPayload {
     private static final Pattern PAUSE = Pattern.compile("\\(pause\\)", Pattern.CASE_INSENSITIVE);
     private final String voiceId, languageCode, engine;
