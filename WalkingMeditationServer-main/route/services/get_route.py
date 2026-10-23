@@ -11,12 +11,13 @@ from route.models import LatLng, ParkDetourResult, ParkPlace, WalkRouteResponse
 
 logger = logging.getLogger(__name__)
 
+MAX_PARK_CANDIDATES = 3
+
 async def generate_walk_route(
     source: LatLng,
     destination: LatLng,
     total_travel_time: int,
     *,
-    sar_max_parks: int = 25,
     concurrency: int = 6,
     timeout_s: float = 40.0,
 ) -> WalkRouteResponse:
@@ -37,8 +38,11 @@ async def generate_walk_route(
         parks = await search_parks_along_route(
             client,
             route_polyline=baseline.polyline,
-            max_results=sar_max_parks,
+            max_results=MAX_PARK_CANDIDATES,
         )
+        # Enforce the limit locally as well, in case the Places provider
+        # returns more results than requested.
+        parks = parks[:MAX_PARK_CANDIDATES]
 
         if not parks:
             return WalkRouteResponse(

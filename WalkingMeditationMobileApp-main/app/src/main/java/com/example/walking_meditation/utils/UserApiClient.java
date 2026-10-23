@@ -28,6 +28,10 @@ public final class UserApiClient {
     public interface CurrentUserListener {
         void onLoaded(@NonNull String role, boolean researcherVerified);
         void onFailure(@NonNull String message);
+
+        default void onSessionExpired() {
+            onFailure("Your session has expired. Please sign in again.");
+        }
     }
 
     public interface RegisterResearcherListener {
@@ -62,7 +66,11 @@ public final class UserApiClient {
     ) {
         String accessToken = SessionManager.getAccessToken(context);
         if (accessToken == null || accessToken.isEmpty()) {
-            listener.onFailure("Your session has expired. Please sign in again.");
+            if (allowRefresh) {
+                refreshAndRetry(context, client, listener);
+            } else {
+                listener.onSessionExpired();
+            }
             return;
         }
 
@@ -112,7 +120,7 @@ public final class UserApiClient {
     ) {
         String refreshToken = SessionManager.getRefreshToken(context);
         if (refreshToken == null || refreshToken.isEmpty()) {
-            listener.onFailure("Your session has expired. Please sign in again.");
+            listener.onSessionExpired();
             return;
         }
 
@@ -133,8 +141,14 @@ public final class UserApiClient {
                 @Override
                 public void onResponse(@NonNull Call call, @NonNull Response response) {
                     try (Response closedResponse = response) {
+                        if (closedResponse.code() == 401) {
+                            listener.onSessionExpired();
+                            return;
+                        }
                         if (!closedResponse.isSuccessful() || closedResponse.body() == null) {
-                            listener.onFailure("Your session has expired. Please sign in again.");
+                            listener.onFailure(
+                                    "Unable to refresh session (" + closedResponse.code() + ")"
+                            );
                             return;
                         }
                         JSONObject body = new JSONObject(closedResponse.body().string());

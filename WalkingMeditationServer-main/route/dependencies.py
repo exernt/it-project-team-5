@@ -29,12 +29,12 @@ async def get_current_user(
 ) -> User:
     """FastAPI dependency: require a valid access token, return the User it names."""
     try:
-        user_id = decode_access_token(credentials.credentials)
-    except jwt.PyJWTError:
+        user_id, token_session_version = decode_access_token(credentials.credentials)
+    except (jwt.PyJWTError, KeyError, TypeError, ValueError):
         raise _invalid_credentials()
 
     user = await session.get(User, user_id)
-    if user is None:
+    if user is None or user.session_version != token_session_version:
         raise _invalid_credentials()
 
     return user

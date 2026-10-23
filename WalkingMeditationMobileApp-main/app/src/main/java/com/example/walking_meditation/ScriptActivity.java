@@ -13,6 +13,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.walking_meditation.adapters.NarrationAdapter;
 import com.example.walking_meditation.models.NarrationItem;
 import com.example.walking_meditation.models.LatLon;
+import com.example.walking_meditation.utils.AuthenticatedHttpClient;
 import com.example.walking_meditation.utils.PolylineDecoder;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
@@ -80,16 +81,17 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
     private String scriptId = "script";
 
     // OkHttp with reasonable timeouts (tts mp3 can take time)
-    private final OkHttpClient httpClient = new OkHttpClient.Builder()
-            .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(300, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
-            .callTimeout(600, TimeUnit.SECONDS)
-            .build();
+    private OkHttpClient httpClient;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        httpClient = AuthenticatedHttpClient.configure(this, new OkHttpClient.Builder())
+                .connectTimeout(20, TimeUnit.SECONDS)
+                .readTimeout(120, TimeUnit.SECONDS)
+                .writeTimeout(30, TimeUnit.SECONDS)
+                .callTimeout(180, TimeUnit.SECONDS)
+                .build();
         setContentView(R.layout.activity_script);
 
         recyclerView = findViewById(R.id.recyclerView);
@@ -334,13 +336,10 @@ public class ScriptActivity extends AppCompatActivity implements NarrationAdapte
 
             RequestBody body = RequestBody.create(payload.toString(), JSON);
 
-            Request.Builder requestBuilder = new Request.Builder()
+            Request request = new Request.Builder()
                     .url(TTS_URL)
-                    .post(body);
-            if (!BuildConfig.SERVER_ACCESS_TOKEN.isEmpty()) {
-                requestBuilder.header("X-App-Token", BuildConfig.SERVER_ACCESS_TOKEN);
-            }
-            Request request = requestBuilder.build();
+                    .post(body)
+                    .build();
 
             activeTtsCall = httpClient.newCall(request);
             activeTtsCall.enqueue(new Callback() {

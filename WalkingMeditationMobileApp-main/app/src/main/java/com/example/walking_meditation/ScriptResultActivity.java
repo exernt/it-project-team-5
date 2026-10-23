@@ -12,6 +12,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import android.os.Bundle;
 import android.widget.Button;
+import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -81,6 +82,15 @@ public class ScriptResultActivity extends AppCompatActivity {
             finish();
             return;
         }
+
+        startNavigation.setEnabled(routePlanPath != null && !routePlanPath.trim().isEmpty());
+        startNavigation.setOnClickListener(view -> {
+            Intent intent = new Intent(this, MeditationPlaybackActivity.class);
+            intent.putExtra(EXTRA_SCRIPT_JSON_PATH, path);
+            intent.putExtra(EXTRA_ROUTE_PLAN_PATH, routePlanPath);
+            startActivity(intent);
+            finish();
+        });
 
         try {
             scriptJson = CacheFiles.readText(scriptJsonPath);

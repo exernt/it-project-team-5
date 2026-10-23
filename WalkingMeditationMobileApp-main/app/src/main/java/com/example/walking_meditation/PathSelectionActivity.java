@@ -37,8 +37,10 @@ import com.example.walking_meditation.models.LatLon;
 import com.example.walking_meditation.models.ParkItem;
 import com.example.walking_meditation.models.RouteOption;
 import com.example.walking_meditation.models.RoutePlan;
+import com.example.walking_meditation.utils.AuthenticatedHttpClient;
 import com.example.walking_meditation.utils.CacheFiles;
 import com.example.walking_meditation.utils.PolylineDecoder;
+import com.example.walking_meditation.utils.RoutePlanFiles;
 import com.example.walking_meditation.utils.RoutePlanFiles;
 import com.example.walking_meditation.utils.SessionManager;
 import com.example.walking_meditation.utils.StudyConfigClient;
@@ -64,6 +66,7 @@ import com.google.android.libraries.places.api.net.PlacesClient;
 import com.google.gson.Gson;
 
 import org.json.JSONObject;
+import org.json.JSONArray;
 import org.json.JSONArray;
 
 import java.io.IOException;
@@ -109,12 +112,7 @@ public class PathSelectionActivity extends AppCompatActivity
     private final List<Polyline> displayedRouteLines = new ArrayList<>();
     private final Gson gson = new Gson();
 
-    private final OkHttpClient httpClient = new OkHttpClient.Builder()
-            .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
-            .callTimeout(240, TimeUnit.SECONDS)
-            .build();
+    private OkHttpClient httpClient;
 
     private PlacesClient placesClient;
     private FusedLocationProviderClient fusedLocationClient;
@@ -157,6 +155,7 @@ public class PathSelectionActivity extends AppCompatActivity
     @Nullable private RouteOption selectedRoute;
     @Nullable private String routeResponsePath;
     @Nullable private String selectedRoutePlanPath;
+    @Nullable private String selectedRoutePlanPath;
     private String lastMeditationContext = "";
 
     private boolean participatingInStudy;
@@ -173,6 +172,12 @@ public class PathSelectionActivity extends AppCompatActivity
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        httpClient = AuthenticatedHttpClient.configure(this, new OkHttpClient.Builder())
+                .connectTimeout(20, TimeUnit.SECONDS)
+                .readTimeout(5, TimeUnit.MINUTES)
+                .writeTimeout(30, TimeUnit.SECONDS)
+                .callTimeout(6, TimeUnit.MINUTES)
+                .build();
         setContentView(R.layout.activity_path_selection);
 
         bindViews();
@@ -590,7 +595,8 @@ public class PathSelectionActivity extends AppCompatActivity
             payload.put("destination", latLngJson(destination.latitude, destination.longitude));
             payload.put("total_travel_time", totalTravelSeconds);
 
-            Request request = authenticatedRequest(ROUTE_URL)
+            Request request = new Request.Builder()
+                    .url(ROUTE_URL)
                     .post(RequestBody.create(payload.toString(), JSON))
                     .build();
             enqueueRequest(request, false);
@@ -829,7 +835,8 @@ public class PathSelectionActivity extends AppCompatActivity
             RoutePlan routePlan = RoutePlan.forParkRoute(routeResponse, parkItem);
             selectedRoutePlanPath = RoutePlanFiles.save(this, routePlan);
 
-            Request request = authenticatedRequest(SCRIPT_WITH_PARK_URL)
+            Request request = new Request.Builder()
+                    .url(SCRIPT_WITH_PARK_URL)
                     .post(RequestBody.create(payload.toString(), JSON))
                     .build();
             setScriptBusy(true);
@@ -851,7 +858,6 @@ public class PathSelectionActivity extends AppCompatActivity
 
             intent.putExtra(EXTRA_SCRIPT_JSON_PATH, path);
             intent.putExtra(EXTRA_ROUTE_PLAN_PATH, selectedRoutePlanPath);
-
             startActivity(intent);
 
         } catch (IOException exception) {
@@ -870,14 +876,6 @@ public class PathSelectionActivity extends AppCompatActivity
             }
         }
         return null;
-    }
-
-    private Request.Builder authenticatedRequest(@NonNull String url) {
-        Request.Builder builder = new Request.Builder().url(url);
-        if (!BuildConfig.SERVER_ACCESS_TOKEN.isEmpty()) {
-            builder.header("X-App-Token", BuildConfig.SERVER_ACCESS_TOKEN);
-        }
-        return builder;
     }
 
     private static JSONObject latLngJson(double latitude, double longitude) throws Exception {

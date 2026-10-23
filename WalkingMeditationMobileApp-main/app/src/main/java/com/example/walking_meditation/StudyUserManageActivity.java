@@ -58,6 +58,19 @@ public class StudyUserManageActivity extends AppCompatActivity {
         leaveButton = findViewById(R.id.btnLeaveStudy);
         feedbackButton = findViewById(R.id.btnStudyFeedback);
 
+        Button questionnaireButton = findViewById(R.id.btnStudyQuestionnaire);
+        questionnaireButton.setEnabled(true);
+        questionnaireButton.setBackgroundTintList(getResources().getColorStateList(R.color.sky_blue_dark, getTheme()));
+        questionnaireButton.setOnClickListener(view -> {
+            if (currentEnrollment != null) {
+                Intent intent = new Intent(this, ParticipantQuestionnaireListActivity.class);
+                intent.putExtra("study_id", currentEnrollment.getStudy().getId());
+                startActivity(intent);
+            } else {
+                Toast.makeText(this, "Study details not loaded yet", Toast.LENGTH_SHORT).show();
+            }
+        });
+
         startButton.setOnClickListener(view -> startStudyMeditation());
         leaveButton.setOnClickListener(view -> leaveStudy());
         feedbackButton.setOnClickListener(view -> openFeedback());

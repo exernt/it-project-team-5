@@ -12,10 +12,13 @@ import android.widget.ProgressBar;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.walking_meditation.models.Study;
 import com.example.walking_meditation.utils.StudyApiClient;
+import com.example.walking_meditation.utils.StudyLifecycle;
 import com.example.walking_meditation.utils.StudyLifecycle;
 
 import okhttp3.OkHttpClient;
@@ -24,8 +27,18 @@ public class ResearcherStudyDetailActivity extends AppCompatActivity {
     private static final String EXTRA_STUDY_ID = "study_id";
 
     private final OkHttpClient httpClient = new OkHttpClient();
+    private final ActivityResultLauncher<Intent> scriptParametersLauncher =
+            registerForActivityResult(
+                    new ActivityResultContracts.StartActivityForResult(),
+                    result -> {
+                        if (result.getResultCode() == RESULT_OK) {
+                            loadStudy();
+                        }
+                    }
+            );
     private String studyId = "";
     private String currentStatus = "";
+    private String currentScriptParameters = "";
 
     private ProgressBar progress;
     private ScrollView content;
@@ -75,11 +88,40 @@ public class ResearcherStudyDetailActivity extends AppCompatActivity {
         findViewById(R.id.btnResearcherDetailRoster).setOnClickListener(view ->
                 startActivity(ResearcherRosterActivity.createIntent(this, studyId))
         );
-        findViewById(R.id.btnResearcherDetailFeedback).setOnClickListener(view ->
-                startActivity(ResearcherFeedbackActivity.createIntentForStudy(
-                        this, studyId, nameField.getText().toString()
+        findViewById(R.id.btnResearcherDetailQuestionnaire).setOnClickListener(view -> {
+            Intent intent = new Intent(this, ResearcherCreateQuestionnaireActivity.class);
+            intent.putExtra("study_id", studyId);
+            startActivity(intent);
+        });
+        findViewById(R.id.btnResearcherDetailQuestionnairesList).setOnClickListener(view -> {
+            Intent intent = new Intent(this, ResearcherQuestionnaireListActivity.class);
+            intent.putExtra("study_id", studyId);
+            startActivity(intent);
+        });
+        findViewById(R.id.btnResearcherDetailShare).setOnClickListener(view -> shareInviteLink());
+        findViewById(R.id.btnResearcherDetailScriptParameters).setOnClickListener(view ->
+                scriptParametersLauncher.launch(ResearcherScriptParametersActivity.createIntent(
+                        this,
+                        studyId,
+                        currentScriptParameters
                 ))
         );
+    }
+
+    private void shareInviteLink() {
+        if (studyId.isEmpty()) {
+            Toast.makeText(this, "Study ID not available", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String inviteUrl = BuildConfig.SERVER_BASE_URL + "/study/join?id=" + studyId;
+        String shareMessage = "Join my Walking Meditation study! Click this link to join:\n" + inviteUrl;
+
+        Intent sendIntent = new Intent(Intent.ACTION_SEND);
+        sendIntent.putExtra(Intent.EXTRA_TEXT, shareMessage);
+        sendIntent.setType("text/plain");
+
+        Intent shareIntent = Intent.createChooser(sendIntent, "Share Study Invite Link");
+        startActivity(shareIntent);
     }
 
     private void loadStudy() {
@@ -107,6 +149,7 @@ public class ResearcherStudyDetailActivity extends AppCompatActivity {
         nameField.setText(study.getName());
         durationField.setText(String.valueOf(study.getDuration()));
         descriptionField.setText(study.getDescription());
+        currentScriptParameters = study.getScriptGenerationParameters();
 
         configureLifecycleButton();
         content.setVisibility(View.VISIBLE);
@@ -122,15 +165,27 @@ public class ResearcherStudyDetailActivity extends AppCompatActivity {
         lifecycleButton.setVisibility(View.VISIBLE);
         switch (action) {
             case "publish":
+        String action = StudyLifecycle.nextAction(currentStatus);
+        if (action == null) {
+            lifecycleButton.setVisibility(View.GONE);
+            return;
+        }
+
+        lifecycleButton.setVisibility(View.VISIBLE);
+        switch (action) {
+            case "publish":
                 lifecycleButton.setText(R.string.publish_study);
                 break;
+            case "activate":
             case "activate":
                 lifecycleButton.setText(R.string.activate_study);
                 break;
             case "close":
+            case "close":
                 lifecycleButton.setText(R.string.close_study);
                 break;
         }
+        lifecycleButton.setOnClickListener(view -> runLifecycleAction(action));
         lifecycleButton.setOnClickListener(view -> runLifecycleAction(action));
     }
 

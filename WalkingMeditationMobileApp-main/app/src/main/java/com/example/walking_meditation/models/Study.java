@@ -8,6 +8,7 @@ public final class Study {
     private final int duration;
     private final String description;
     private final String status;
+    private final String scriptGenerationParameters;
 
     public Study(
             @NonNull String id,
@@ -16,11 +17,23 @@ public final class Study {
             @NonNull String description,
             @NonNull String status
     ) {
+        this(id, name, duration, description, status, "");
+    }
+
+    public Study(
+            @NonNull String id,
+            @NonNull String name,
+            int duration,
+            @NonNull String description,
+            @NonNull String status,
+            @NonNull String scriptGenerationParameters
+    ) {
         this.id = id;
         this.name = name;
         this.duration = duration;
         this.description = description;
         this.status = status;
+        this.scriptGenerationParameters = scriptGenerationParameters;
     }
 
     @NonNull
@@ -45,6 +58,11 @@ public final class Study {
     @NonNull
     public String getStatus() {
         return status;
+    }
+
+    @NonNull
+    public String getScriptGenerationParameters() {
+        return scriptGenerationParameters;
     }
 
     public boolean isOpen() {

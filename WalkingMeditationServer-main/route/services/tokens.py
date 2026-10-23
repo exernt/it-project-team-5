@@ -15,25 +15,29 @@ from route.config import (
 )
 
 
-def create_access_token(user_id: UUID) -> str:
+def create_access_token(user_id: UUID, session_version: int = 0) -> str:
     """Issue a short-lived, signed JWT identifying this user."""
     now = datetime.now(timezone.utc)
     payload = {
         "sub": str(user_id),
+        "session_version": session_version,
         "iat": now,
         "exp": now + timedelta(minutes=access_token_ttl_minutes()),
     }
     return jwt.encode(payload, jwt_secret_key(), algorithm=jwt_algorithm())
 
 
-def decode_access_token(token: str) -> UUID:
-    """Verify and decode an access token, returning the user id it identifies.
+def decode_access_token(token: str) -> tuple[UUID, int]:
+    """Verify and decode an access token, returning its user and session version.
 
     Raises jwt.PyJWTError (or a subclass) if the token is invalid, expired,
     or has been tampered with.
     """
     payload = jwt.decode(token, jwt_secret_key(), algorithms=[jwt_algorithm()])
-    return UUID(payload["sub"])
+    # Tokens issued before session-version support are equivalent to version
+    # zero. Once a password reset increments the user's version, they fail the
+    # same comparison as every other pre-reset access token.
+    return UUID(payload["sub"]), int(payload.get("session_version", 0))
 
 
 def generate_refresh_token() -> str:

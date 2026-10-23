@@ -17,6 +17,12 @@
             android:text="Server script response"
             android:textSize="20sp" />
 
+        <Button
+            android:id="@+id/btn_start_navigation"
+            style="@style/App.PrimaryButton"
+            android:layout_marginTop="@dimen/space_12"
+            android:text="Start walk" />
+
         <TextView
             android:id="@+id/tv_audio_status"
             android:layout_width="match_parent"

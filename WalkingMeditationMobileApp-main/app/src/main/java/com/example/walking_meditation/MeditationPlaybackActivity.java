@@ -12,12 +12,17 @@ import android.os.Bundle;
 import android.os.Looper;
 import android.view.View;
 import android.widget.Button;
+import android.view.View;
+import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
@@ -51,6 +56,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /** Full-screen selected-route navigation with prepared local narration. */
 public class MeditationPlaybackActivity extends AppCompatActivity {
@@ -94,9 +100,17 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_meditation_playback);
 
+        mapView = findViewById(R.id.navigation_map);
+        instructionView = findViewById(R.id.tv_navigation_instruction);
+        routeStatusView = findViewById(R.id.tv_route_status);
+        playbackLogView = findViewById(R.id.tv_playback_log);
+        pauseButton = findViewById(R.id.btn_pause_walk);
+        recenterButton = findViewById(R.id.btn_recenter);
+        locationClient = LocationServices.getFusedLocationProviderClient(this);
         mapView = findViewById(R.id.navigation_map);
         instructionView = findViewById(R.id.tv_navigation_instruction);
         routeStatusView = findViewById(R.id.tv_route_status);
@@ -219,7 +233,30 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
         if (hasLocationPermission()) {
             enableLocationLayer();
             if (!walkPaused) startLocationUpdates();
+        if (hasLocationPermission()) {
+            enableLocationLayer();
+            if (!walkPaused) startLocationUpdates();
         } else {
+            permissionLauncher.launch(new String[]{
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+            });
+        }
+    }
+
+    private boolean hasLocationPermission() {
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED
+                || ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void enableLocationLayer() {
+        if (googleMap == null || !hasLocationPermission()) return;
+        try {
+            googleMap.setMyLocationEnabled(true);
+        } catch (SecurityException ignored) {
+            // Permission can change between the explicit check and this call.
             permissionLauncher.launch(new String[]{
                     Manifest.permission.ACCESS_FINE_LOCATION,
                     Manifest.permission.ACCESS_COARSE_LOCATION
@@ -244,6 +281,11 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
     }
 
     private void startLocationUpdates() {
+        if (!hasLocationPermission() || locationCallback != null || walkPaused) return;
+        LocationRequest request = new LocationRequest.Builder(
+                Priority.PRIORITY_HIGH_ACCURACY,
+                LOCATION_INTERVAL_MS
+        ).setMinUpdateIntervalMillis(750L).build();
         if (!hasLocationPermission() || locationCallback != null || walkPaused) return;
         LocationRequest request = new LocationRequest.Builder(
                 Priority.PRIORITY_HIGH_ACCURACY,
@@ -518,7 +560,12 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
         mapView.onDestroy();
         super.onDestroy();
     }
+    }
 
+    @Override
+    public void onLowMemory() {
+        super.onLowMemory();
+        mapView.onLowMemory();
     @Override
     public void onLowMemory() {
         super.onLowMemory();
@@ -526,6 +573,9 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        mapView.onSaveInstanceState(outState);
+        super.onSaveInstanceState(outState);
     protected void onSaveInstanceState(@NonNull Bundle outState) {
         mapView.onSaveInstanceState(outState);
         super.onSaveInstanceState(outState);
