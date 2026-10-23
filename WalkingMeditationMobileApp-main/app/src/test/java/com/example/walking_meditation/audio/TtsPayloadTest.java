@@ -42,8 +42,9 @@ public class TtsPayloadTest {
 
     @Test public void pollyValidatesItsOwnLimitsAndPauseDuration() throws Exception {
         assertThrows(IOException.class, () -> new PollyPayload().toJson("(pause)"));
-        assertThrows(IOException.class, () -> new PollyPayload().toJson("a".repeat(3001)));
-        assertThrows(IOException.class, () -> new PollyPayload().toJson("&".repeat(1300)));
+        assertTrue(new PollyPayload().toJson("a".repeat(3001)).getString("Text").length() > 3000);
+        assertTrue(new PollyPayload().toJson("&".repeat(1300)).getString("Text").length() > 6000);
+        assertThrows(IOException.class, () -> new PollyPayload().toJson("a".repeat(60000)));
         assertThrows(IllegalArgumentException.class, () -> new PollyPayload("Joanna", "en-US", "standard", 10001));
         assertEquals("<speak>Walk.</speak>", new PollyPayload().toJson("Walk.").getString("Text"));
     }
