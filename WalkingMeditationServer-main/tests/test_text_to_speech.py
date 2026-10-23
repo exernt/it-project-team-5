@@ -1,83 +1,109 @@
 import asyncio
+import io
 import unittest
-from pathlib import Path
-from unittest.mock import AsyncMock, Mock, patch
-
+from unittest.mock import Mock, patch
+from botocore.exceptions import ClientError, NoCredentialsError
 from fastapi.testclient import TestClient
-
 import main
-from route.errors import TTSNotReadyError
-from route.services.text_to_speech import generate_tts_mp3
+from route.models import TTSRequest
+from route.services.text_to_speech import generate_tts_mp3, create_polly_client
+
+PAYLOAD = {"Text": '<speak>Walk.<break time="2500ms"/>Breathe.</speak>',
+           "TextType": "ssml", "VoiceId": "Joanna", "LanguageCode": "en-US",
+           "Engine": "standard", "OutputFormat": "mp3"}
 
 
 class TtsServiceTests(unittest.IsolatedAsyncioTestCase):
-    async def test_returns_audio_and_cleans_temporary_files(self):
-        model = Mock()
-        model.generate_custom_voice.return_value = ([[0.0] * 100], 24000)
-        paths = []
-
-        def convert(wav, mp3, bitrate):
-            self.assertTrue(wav.is_file())
-            self.assertEqual(bitrate, "192k")
-            paths.extend([wav, mp3])
-            mp3.write_bytes(b"test-mp3")
-
-        response = await generate_tts_mp3(
-            model, asyncio.Semaphore(1), "Walk gently.", "English", "Ryan",
-            "Calm and clear", convert_wav_to_mp3=convert,
-        )
+    async def test_returns_mp3_closes_stream_and_client(self):
+        stream = io.BytesIO(b"test-mp3")
+        client = Mock()
+        client.synthesize_speech.return_value = {"AudioStream": stream}
+        with patch("route.services.text_to_speech.create_polly_client", return_value=client):
+            response = await generate_tts_mp3(TTSRequest.model_validate(PAYLOAD), asyncio.Semaphore(1))
         self.assertEqual(response.body, b"test-mp3")
         self.assertEqual(response.media_type, "audio/mpeg")
-        model.generate_custom_voice.assert_called_once_with(
-            text="Walk gently.", language="English", speaker="Ryan",
-            instruct="Calm and clear",
-        )
-        self.assertTrue(all(not path.exists() for path in paths))
+        client.synthesize_speech.assert_called_once_with(**PAYLOAD)
+        self.assertTrue(stream.closed)
+        client.close.assert_called_once()
 
-    async def test_missing_model_is_rejected(self):
-        with self.assertRaises(TTSNotReadyError):
-            await generate_tts_mp3(
-                None, asyncio.Semaphore(1), "Walk.", "English", "Ryan", "",
-            )
-
-    async def test_empty_model_audio_is_rejected(self):
-        model = Mock()
-        model.generate_custom_voice.return_value = ([], 24000)
-        with self.assertRaisesRegex(RuntimeError, "no audio"):
-            await generate_tts_mp3(
-                model, asyncio.Semaphore(1), "Walk.", "English", "Ryan", "",
-            )
+    async def test_empty_audio_and_read_failure_close_resources(self):
+        for stream in [io.BytesIO(), Mock()]:
+            if isinstance(stream, Mock):
+                stream.read.side_effect = IOError("read failed")
+            client = Mock()
+            client.synthesize_speech.return_value = {"AudioStream": stream}
+            with patch("route.services.text_to_speech.create_polly_client", return_value=client):
+                with self.assertRaises((RuntimeError, IOError)):
+                    await generate_tts_mp3(TTSRequest.model_validate(PAYLOAD), asyncio.Semaphore(1))
+            client.close.assert_called_once()
+            if isinstance(stream, Mock):
+                stream.close.assert_called_once()
+            else:
+                self.assertTrue(stream.closed)
 
 
 class TtsEndpointTests(unittest.TestCase):
-    def test_android_payload_reaches_service_and_returns_audio(self):
-        model = Mock()
-        model.generate_custom_voice.return_value = ([[0.0] * 100], 24000)
+    @patch.dict("os.environ", {"AWS_REGION": "ap-southeast-2"})
+    def test_client_uses_region_bounded_timeouts_and_sdk_credential_chain(self):
+        with patch("boto3.client") as factory:
+            create_polly_client()
+        args, options = factory.call_args
+        self.assertEqual(args, ("polly",))
+        self.assertEqual(options["region_name"], "ap-southeast-2")
+        self.assertEqual(options["config"].connect_timeout, 10)
+        self.assertEqual(options["config"].read_timeout, 120)
+        self.assertEqual(options["config"].retries["total_max_attempts"], 3)
+        self.assertNotIn("aws_access_key_id", options)
 
-        def convert(wav, mp3, bitrate):
-            Path(mp3).write_bytes(b"test-mp3")
+    def post(self, payload=PAYLOAD, token="test-token"):
+        # Do not start the database lifespan or contact AWS in these tests.
+        return TestClient(main.app).post("/tts", json=payload, headers={"X-App-Token": token})
 
-        async def synthesize(**kwargs):
-            # Call the real service with its actual signature. This catches
-            # unsupported endpoint keywords, including the removed speed field.
-            return await generate_tts_mp3(**kwargs, convert_wav_to_mp3=convert)
-
-        with patch.object(main, "get_tts_model", AsyncMock(return_value=model)), \
-             patch("route.services.text_to_speech.generate_tts_mp3", side_effect=synthesize), \
-             patch.dict("os.environ", {"APP_API_TOKEN": "test-token"}):
-            # No lifespan context: tests do not connect to the configured database.
-            client = TestClient(main.app)
-            response = client.post("/tts", headers={"X-App-Token": "test-token"}, json={
-                "text": "Walk gently.", "language": "English", "speaker": "Ryan",
-                "instruct": "Calm and clear", "bitrate": "192k",
-            })
+    @patch.dict("os.environ", {"APP_API_TOKEN": "test-token"})
+    def test_android_ssml_payload_reaches_polly(self):
+        client = Mock()
+        client.synthesize_speech.return_value = {"AudioStream": io.BytesIO(b"mp3")}
+        with patch("route.services.text_to_speech.create_polly_client", return_value=client):
+            response = self.post()
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.content, b"test-mp3")
+        self.assertEqual(response.content, b"mp3")
         self.assertEqual(response.headers["content-type"], "audio/mpeg")
+        client.synthesize_speech.assert_called_once_with(**PAYLOAD)
 
-    def test_provider_failure_is_reported_without_internal_details(self):
-        with patch.object(main, "get_tts_model", AsyncMock(side_effect=RuntimeError("private detail"))), \
-             patch.dict("os.environ", {"APP_API_TOKEN": ""}):
-            response = TestClient(main.app).post("/tts", json={"text": "Walk."})
-        self.assertEqual(response.status_code, 500)
-        self.assertEqual(response.json(), {"detail": "TTS generation failed"})
+    @patch.dict("os.environ", {"APP_API_TOKEN": "test-token"})
+    def test_rejects_unauthorized_requests_before_aws(self):
+        with patch("route.services.text_to_speech.create_polly_client") as factory:
+            self.assertEqual(self.post(token="wrong").status_code, 401)
+            factory.assert_not_called()
+
+    @patch.dict("os.environ", {"APP_API_TOKEN": "test-token"})
+    def test_validates_limits_ssml_and_mp3_contract_before_aws(self):
+        invalid = [
+            {"text": "legacy Qwen payload"},
+            {**PAYLOAD, "Text": "<speak>broken"},
+            {**PAYLOAD, "Text": "<wrong>Walk.</wrong>"},
+            {**PAYLOAD, "Text": "<speak><break time='1s'/></speak>"},
+            {**PAYLOAD, "Text": "<speak>" + "a" * 3001 + "</speak>"},
+            {**PAYLOAD, "TextType": "text", "Text": "a" * 3001},
+            {**PAYLOAD, "Text": "<speak>" + "&amp;" * 1300 + "</speak>"},
+            {**PAYLOAD, "Text": '<!DOCTYPE speak [<!ENTITY x "Walk">]><speak>&x;</speak>'},
+            {**PAYLOAD, "OutputFormat": "pcm"},
+        ]
+        with patch("route.services.text_to_speech.create_polly_client") as factory:
+            for payload in invalid:
+                with self.subTest(payload=str(payload)[:80]):
+                    self.assertEqual(self.post(payload).status_code, 422)
+            factory.assert_not_called()
+
+    @patch.dict("os.environ", {"APP_API_TOKEN": "test-token"})
+    def test_maps_provider_errors_without_exposing_details(self):
+        for error, status, detail in [
+            (NoCredentialsError(), 503, "Speech service unavailable"),
+            (ClientError({"Error": {"Code": "EngineNotSupportedException", "Message": "private"}}, "SynthesizeSpeech"), 422, "Polly rejected the speech settings or text"),
+            (ClientError({"Error": {"Code": "ThrottlingException", "Message": "private"}}, "SynthesizeSpeech"), 503, "Speech service unavailable"),
+            (RuntimeError("private"), 502, "TTS generation failed"),
+        ]:
+            with patch("route.services.text_to_speech.create_polly_client", side_effect=error):
+                response = self.post()
+            self.assertEqual(response.status_code, status)
+            self.assertEqual(response.json(), {"detail": detail})

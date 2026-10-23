@@ -1,4 +1,3 @@
-import warnings
 import os
 import asyncio
 import logging
@@ -6,7 +5,7 @@ import secrets
 from dataclasses import asdict
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from sqlalchemy.exc import SQLAlchemyError
-from typing import Any, Optional
+from typing import Optional
 
 from contextlib import asynccontextmanager
 
@@ -21,12 +20,10 @@ from route.errors import OpenaiAPIError
 from route.models import WalkRouteRequest, WalkRouteResponse, ScriptWithParkRequest, ScriptWithParkResponse
 from route.models import ScriptWithoutParkRequest, ScriptWithoutParkResponse, TTSRequest
 from database.core import create_configured_database
-from route.utils.utils import _ensure_ffmpeg
+from route.services.text_to_speech import generate_tts_mp3, PollyRequestError, PollyUnavailableError
 
 logger = logging.getLogger(__name__)
 
-MODEL: Optional[Any] = None
-MODEL_LOAD_LOCK = asyncio.Lock()
 TTS_SEMAPHORE = asyncio.Semaphore(1)
 ROUTE_REQUEST_SEMAPHORE = asyncio.Semaphore(4)
 SCRIPT_REQUEST_SEMAPHORE = asyncio.Semaphore(2)
@@ -40,35 +37,8 @@ def require_app_token(x_app_token: Optional[str] = Header(default=None)) -> None
         raise HTTPException(status_code=401, detail="Invalid application token")
 
 
-def _load_tts_model_sync():
-    # Keep TTS dependencies and ffmpeg out of the route-only startup path.
-    import torch
-    from qwen_tts import Qwen3TTSModel
-
-    warnings.filterwarnings("ignore", message=".*flash-attn.*")
-    _ensure_ffmpeg()
-
-    use_cuda = torch.cuda.is_available()
-    return Qwen3TTSModel.from_pretrained(
-        "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
-        device_map="cuda:0" if use_cuda else "cpu",
-        dtype=torch.bfloat16 if use_cuda else torch.float32,
-    )
-
-
-async def get_tts_model():
-    global MODEL
-    if MODEL is not None:
-        return MODEL
-
-    async with MODEL_LOAD_LOCK:
-        if MODEL is None:
-            MODEL = await asyncio.to_thread(_load_tts_model_sync)
-    return MODEL
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global MODEL
     database = create_configured_database()
     app.state.database = database
     try:
@@ -76,7 +46,6 @@ async def lifespan(app: FastAPI):
     finally:
         if database is not None:
             await database.close()
-        MODEL = None
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(auth_router)
@@ -191,32 +160,21 @@ async def generate_script_wo_park(
         raise HTTPException(status_code=502, detail="Script generation failed") from e
 
 
-@app.post("/tts")#, response_model=Response)
+@app.post("/tts")
 async def text_to_speech_endpoint(
         payload: TTSRequest,
         _auth: None = Depends(require_app_token),
 ):
-
     try:
-        from route.services.text_to_speech import generate_tts_mp3
-
-        model = await get_tts_model()
-        result = await generate_tts_mp3(
-            model=model,
-            semaphore=TTS_SEMAPHORE,
-            text=payload.text,
-            language=payload.language,
-            speaker=payload.speaker,
-            instruct=payload.instruct,
-            bitrate=payload.bitrate,
-            offload_model_to_thread=True,
-        )
+        return await generate_tts_mp3(payload, TTS_SEMAPHORE)
+    except PollyRequestError as e:
+        raise HTTPException(status_code=422, detail="Polly rejected the speech settings or text") from e
+    except PollyUnavailableError as e:
+        logger.exception("Polly is unavailable")
+        raise HTTPException(status_code=503, detail="Speech service unavailable") from e
     except Exception as e:
         logger.exception("TTS generation failed")
-        raise HTTPException(status_code=500, detail="TTS generation failed") from e
-
-    return result
-
+        raise HTTPException(status_code=502, detail="TTS generation failed") from e
 
 
 if __name__ == "__main__":

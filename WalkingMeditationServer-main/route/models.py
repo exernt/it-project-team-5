@@ -263,11 +263,33 @@ class WalkRouteRequest(BaseModel):
     total_travel_time: int = Field(..., ge=0, le=14_400)
 
 class TTSRequest(BaseModel):
-    text: str = Field(..., min_length=1, max_length=5000)
-    language: str = "English"   # or "Auto"
-    speaker: str = "Ryan"
-    instruct: str = ""
-    bitrate: Literal["96k", "128k", "160k", "192k", "256k", "320k"] = "192k"
+    """Polly SynthesizeSpeech fields accepted by the Android payload adapter."""
+    model_config = ConfigDict(extra="forbid")
+    text: str = Field(..., alias="Text", min_length=1, max_length=6000)
+    text_type: Literal["text", "ssml"] = Field(default="text", alias="TextType")
+    voice_id: str = Field(default="Joanna", alias="VoiceId", pattern=r"^[A-Za-z]+$", max_length=64)
+    language_code: str | None = Field(default=None, alias="LanguageCode", min_length=2, max_length=16, pattern=r"^[A-Za-z-]+$")
+    engine: Literal["standard", "neural", "long-form", "generative"] = Field(default="standard", alias="Engine")
+    output_format: Literal["mp3"] = Field(default="mp3", alias="OutputFormat")
+
+    @model_validator(mode="after")
+    def validate_speech_text(self):
+        spoken = self.text
+        if self.text_type == "ssml":
+            import xml.etree.ElementTree as ET
+            # Accept ordinary SSML, never DTDs or entity declarations.
+            if "<!DOCTYPE" in self.text.upper() or "<!ENTITY" in self.text.upper():
+                raise ValueError("SSML declarations are unsupported")
+            try:
+                root = ET.fromstring(self.text)
+            except ET.ParseError as exc:
+                raise ValueError("Invalid SSML") from exc
+            if root.tag != "speak":
+                raise ValueError("SSML must have a speak root")
+            spoken = "".join(root.itertext())
+        if not spoken.strip() or len(spoken) > 3000:
+            raise ValueError("Speech must contain 1-3000 spoken characters")
+        return self
 
 class TTSResponse(BaseModel):
     content: bytes
