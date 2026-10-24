@@ -19,7 +19,6 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.example.walking_meditation.models.Study;
 import com.example.walking_meditation.utils.StudyApiClient;
 import com.example.walking_meditation.utils.StudyLifecycle;
-import com.example.walking_meditation.utils.StudyLifecycle;
 
 import okhttp3.OkHttpClient;
 
@@ -98,6 +97,11 @@ public class ResearcherStudyDetailActivity extends AppCompatActivity {
             intent.putExtra("study_id", studyId);
             startActivity(intent);
         });
+        findViewById(R.id.btnResearcherDetailFeedback).setOnClickListener(view ->
+                startActivity(ResearcherFeedbackActivity.createIntentForStudy(
+                        this, studyId, nameField.getText().toString()
+                ))
+        );
         findViewById(R.id.btnResearcherDetailShare).setOnClickListener(view -> shareInviteLink());
         findViewById(R.id.btnResearcherDetailScriptParameters).setOnClickListener(view ->
                 scriptParametersLauncher.launch(ResearcherScriptParametersActivity.createIntent(
@@ -165,27 +169,15 @@ public class ResearcherStudyDetailActivity extends AppCompatActivity {
         lifecycleButton.setVisibility(View.VISIBLE);
         switch (action) {
             case "publish":
-        String action = StudyLifecycle.nextAction(currentStatus);
-        if (action == null) {
-            lifecycleButton.setVisibility(View.GONE);
-            return;
-        }
-
-        lifecycleButton.setVisibility(View.VISIBLE);
-        switch (action) {
-            case "publish":
                 lifecycleButton.setText(R.string.publish_study);
                 break;
-            case "activate":
             case "activate":
                 lifecycleButton.setText(R.string.activate_study);
                 break;
             case "close":
-            case "close":
                 lifecycleButton.setText(R.string.close_study);
                 break;
         }
-        lifecycleButton.setOnClickListener(view -> runLifecycleAction(action));
         lifecycleButton.setOnClickListener(view -> runLifecycleAction(action));
     }
 

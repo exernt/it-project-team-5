@@ -93,6 +93,10 @@ public final class UserApiClient {
                         refreshAndRetry(context, client, listener);
                         return;
                     }
+                    if (closedResponse.code() == 401) {
+                        listener.onSessionExpired();
+                        return;
+                    }
                     if (closedResponse.body() == null) {
                         listener.onFailure("Unable to load account info (" + closedResponse.code() + ")");
                         return;
@@ -179,7 +183,11 @@ public final class UserApiClient {
     ) {
         String accessToken = SessionManager.getAccessToken(context);
         if (accessToken == null || accessToken.isEmpty()) {
-            listener.onFailure("Your session has expired. Please sign in again.");
+            if (allowRefresh) {
+                refreshAndRetryRegisterResearcher(context, client, institution, listener);
+            } else {
+                listener.onFailure("Your session has expired. Please sign in again.");
+            }
             return;
         }
 
@@ -265,8 +273,12 @@ public final class UserApiClient {
                 @Override
                 public void onResponse(@NonNull Call call, @NonNull Response response) {
                     try (Response closedResponse = response) {
-                        if (!closedResponse.isSuccessful() || closedResponse.body() == null) {
+                        if (closedResponse.code() == 401) {
                             listener.onFailure("Your session has expired. Please sign in again.");
+                            return;
+                        }
+                        if (!closedResponse.isSuccessful() || closedResponse.body() == null) {
+                            listener.onFailure("Unable to refresh session (" + closedResponse.code() + ")");
                             return;
                         }
                         JSONObject body = new JSONObject(closedResponse.body().string());

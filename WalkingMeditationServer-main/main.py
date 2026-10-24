@@ -2,7 +2,6 @@ import asyncio
 import logging
 logging.basicConfig(level=logging.INFO)
 from dataclasses import asdict
-from dataclasses import asdict
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
@@ -16,7 +15,6 @@ from route.feedback import router as feedback_router
 from route.questionnaires import router as questionnaires_router
 from route.studies import router as studies_router
 from route.study_questionnaires import router as study_questionnaires_router
-from route.services.generate_script import GeneratedScript, generate_script_with_park, generate_script_without_park
 from route.services.generate_script import GeneratedScript, generate_script_with_park, generate_script_without_park
 from route.services.get_route import generate_walk_route
 from route.errors import OpenaiAPIError

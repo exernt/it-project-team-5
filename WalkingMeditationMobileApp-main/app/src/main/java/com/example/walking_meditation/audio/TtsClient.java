@@ -3,6 +3,7 @@ package com.example.walking_meditation.audio;
 import android.content.Context;
 
 import com.example.walking_meditation.BuildConfig;
+import com.example.walking_meditation.utils.AuthenticatedHttpClient;
 
 import org.json.JSONObject;
 import org.json.JSONArray;
@@ -35,7 +36,8 @@ public class TtsClient {
     private static final MediaType JSON =
             MediaType.get("application/json; charset=utf-8");
 
-    private static OkHttpClient defaultClient() { return new OkHttpClient.Builder()
+    private static OkHttpClient defaultClient(Context context) {
+        return AuthenticatedHttpClient.configure(context, new OkHttpClient.Builder())
             .connectTimeout(20, TimeUnit.SECONDS)
             .readTimeout(300, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
@@ -57,8 +59,6 @@ public class TtsClient {
         if (output.isFile() && output.length() > 0) return output;
         Request.Builder request = new Request.Builder().url(endpoint)
                 .post(RequestBody.create(payload.toString(), JSON));
-        if (!BuildConfig.SERVER_ACCESS_TOKEN.isEmpty())
-            request.header("X-App-Token", BuildConfig.SERVER_ACCESS_TOKEN);
         File temporary = new File(cacheDirectory, output.getName() + ".part");
         try (Response response = httpClient.newCall(request.build()).execute()) {
             ResponseBody body = response.body();
@@ -84,7 +84,7 @@ public class TtsClient {
     }
 
     public TtsClient(Context context, TtsPayload payloadFactory, String endpoint) {
-        this(new File(context.getFilesDir(), "current_walk"), defaultClient(), endpoint, payloadFactory);
+        this(new File(context.getFilesDir(), "current_walk"), defaultClient(context), endpoint, payloadFactory);
     }
 
     TtsClient(File directory, OkHttpClient httpClient, String endpoint, TtsPayload payloadFactory) {

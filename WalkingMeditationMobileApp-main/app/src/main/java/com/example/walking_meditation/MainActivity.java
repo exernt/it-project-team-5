@@ -2,6 +2,7 @@ package com.example.walking_meditation;
 
 import android.content.Intent;
 import com.example.walking_meditation.audio.CurrentWalk;
+import com.example.walking_meditation.BuildConfig;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -95,6 +96,16 @@ public class MainActivity extends AppCompatActivity {
     private void performLogout() {
         String refreshToken = SessionManager.getRefreshToken(this);
         btnLogOut.setEnabled(false);
+
+        try {
+            new CurrentWalk(getFilesDir()).clear();
+        } catch (IOException error) {
+            // Keep the session active so cleanup can be retried before completing logout.
+            Toast.makeText(this, "Unable to delete saved walk. Please retry logout.",
+                    Toast.LENGTH_LONG).show();
+            btnLogOut.setEnabled(true);
+            return;
+        }
 
         // Remove all account, study, route, script, and generated-audio data immediately.
         SessionManager.clearSession(this);

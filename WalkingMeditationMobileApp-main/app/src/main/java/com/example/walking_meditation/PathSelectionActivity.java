@@ -155,7 +155,6 @@ public class PathSelectionActivity extends AppCompatActivity
     @Nullable private RouteOption selectedRoute;
     @Nullable private String routeResponsePath;
     @Nullable private String selectedRoutePlanPath;
-    @Nullable private String selectedRoutePlanPath;
     private String lastMeditationContext = "";
 
     private boolean participatingInStudy;

@@ -4,6 +4,9 @@ import unittest
 from unittest.mock import Mock, patch
 from botocore.exceptions import ClientError, NoCredentialsError
 from fastapi.testclient import TestClient
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from route.dependencies import get_current_user
 import main
 from route.models import TTSRequest
 from route.services.text_to_speech import generate_tts_mp3, create_polly_client
@@ -57,9 +60,17 @@ class TtsEndpointTests(unittest.TestCase):
 
     def post(self, payload=PAYLOAD, token="test-token"):
         # Do not start the database lifespan or contact AWS in these tests.
-        return TestClient(main.app).post("/tts", json=payload, headers={"X-App-Token": token})
+        async def authenticated_user(
+            credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer())
+        ):
+            if credentials.credentials != "test-token":
+                raise HTTPException(status_code=401, detail="Invalid credentials")
+            return object()
 
-    @patch.dict("os.environ", {"APP_API_TOKEN": "test-token"})
+        headers = {"Authorization": "Bearer " + token} if token else {}
+        with patch.dict(main.app.dependency_overrides, {get_current_user: authenticated_user}):
+            return TestClient(main.app).post("/tts", json=payload, headers=headers)
+
     def test_android_ssml_payload_reaches_polly(self):
         client = Mock()
         client.synthesize_speech.return_value = {"AudioStream": io.BytesIO(b"mp3")}
@@ -70,13 +81,12 @@ class TtsEndpointTests(unittest.TestCase):
         self.assertEqual(response.headers["content-type"], "audio/mpeg")
         client.synthesize_speech.assert_called_once_with(**PAYLOAD)
 
-    @patch.dict("os.environ", {"APP_API_TOKEN": "test-token"})
     def test_rejects_unauthorized_requests_before_aws(self):
         with patch("route.services.text_to_speech.create_polly_client") as factory:
             self.assertEqual(self.post(token="wrong").status_code, 401)
+            self.assertEqual(self.post(token="").status_code, 401)
             factory.assert_not_called()
 
-    @patch.dict("os.environ", {"APP_API_TOKEN": "test-token"})
     def test_validates_limits_ssml_and_mp3_contract_before_aws(self):
         invalid = [
             {"text": "legacy Qwen payload"},
@@ -93,7 +103,6 @@ class TtsEndpointTests(unittest.TestCase):
                     self.assertEqual(self.post(payload).status_code, 422)
             factory.assert_not_called()
 
-    @patch.dict("os.environ", {"APP_API_TOKEN": "test-token"})
     def test_maps_provider_errors_without_exposing_details(self):
         for error, status, detail in [
             (NoCredentialsError(), 503, "Speech service unavailable"),

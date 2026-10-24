@@ -83,18 +83,9 @@ public class ScriptResultActivity extends AppCompatActivity {
             return;
         }
 
-        startNavigation.setEnabled(routePlanPath != null && !routePlanPath.trim().isEmpty());
-        startNavigation.setOnClickListener(view -> {
-            Intent intent = new Intent(this, MeditationPlaybackActivity.class);
-            intent.putExtra(EXTRA_SCRIPT_JSON_PATH, path);
-            intent.putExtra(EXTRA_ROUTE_PLAN_PATH, routePlanPath);
-            startActivity(intent);
-            finish();
-        });
-
         try {
             scriptJson = CacheFiles.readText(scriptJsonPath);
-            routePlan = RoutePlanFiles.read(routePlanPath);
+            routePlan = RoutePlanFiles.read(this, routePlanPath);
 
             responseView.setText(formatResponse(scriptJson));
 
