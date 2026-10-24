@@ -111,6 +111,12 @@
             android:name=".ResearcherRosterActivity"
             android:exported="false" />
         <activity
+            android:name=".ResearcherFeedbackActivity"
+            android:exported="false" />
+        <activity
+            android:name=".AdminDashboardActivity"
+            android:exported="false" />
+        <activity
             android:name=".EmailAuthenticationActivity"
             android:exported="false" />
         <activity

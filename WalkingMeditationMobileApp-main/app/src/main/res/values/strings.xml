@@ -123,6 +123,10 @@
     <string name="admin_approve_researcher">Approve</string>
     <string name="admin_approving">Approving…</string>
     <string name="admin_approved_researcher">Approved %1$s</string>
+    <string name="admin_reject_researcher">Reject</string>
+    <string name="admin_rejecting">Rejecting…</string>
+    <string name="admin_reject_researcher_confirmation">Reject the researcher request from %1$s? Their account will remain available as a participant.</string>
+    <string name="admin_rejected_researcher">Rejected %1$s</string>
 
     <string name="become_researcher">Become a Researcher</string>
     <string name="become_researcher_heading">Become a Researcher</string>

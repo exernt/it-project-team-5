@@ -25,7 +25,7 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 /**
- * Admin-only actions: reviewing and approving pending researcher
+ * Admin-only actions: reviewing, approving, and rejecting pending researcher
  * registrations, so this can be done from the app instead of the database.
  */
 public final class AdminApiClient {
@@ -34,6 +34,8 @@ public final class AdminApiClient {
             BuildConfig.SERVER_BASE_URL + "/auth/admin/researchers/pending";
     private static final String VERIFY_RESEARCHER_URL_TEMPLATE =
             BuildConfig.SERVER_BASE_URL + "/auth/admin/researchers/%s/verify";
+    private static final String REJECT_RESEARCHER_URL_TEMPLATE =
+            BuildConfig.SERVER_BASE_URL + "/auth/admin/researchers/%s/reject";
     private static final String REFRESH_URL = BuildConfig.SERVER_BASE_URL + "/auth/refresh";
 
     public static final class PendingResearcher {
@@ -60,8 +62,8 @@ public final class AdminApiClient {
         void onFailure(@NonNull String message);
     }
 
-    public interface ApproveListener {
-        void onApproved();
+    public interface ResearcherActionListener {
+        void onSuccess();
         void onFailure(@NonNull String message);
     }
 
@@ -79,9 +81,24 @@ public final class AdminApiClient {
             @NonNull Context context,
             @NonNull OkHttpClient client,
             @NonNull String userId,
-            @NonNull ApproveListener listener
+            @NonNull ResearcherActionListener listener
     ) {
-        executeApprove(context.getApplicationContext(), client, userId, true, listener);
+        executeAction(
+                context.getApplicationContext(), client, userId,
+                VERIFY_RESEARCHER_URL_TEMPLATE, true, listener
+        );
+    }
+
+    public static void rejectResearcher(
+            @NonNull Context context,
+            @NonNull OkHttpClient client,
+            @NonNull String userId,
+            @NonNull ResearcherActionListener listener
+    ) {
+        executeAction(
+                context.getApplicationContext(), client, userId,
+                REJECT_RESEARCHER_URL_TEMPLATE, true, listener
+        );
     }
 
     // --- GET pending researchers ---------------------------------------
@@ -146,14 +163,15 @@ public final class AdminApiClient {
         return researchers;
     }
 
-    // --- POST approve researcher -----------------------------------------
+    // --- POST researcher action -----------------------------------------
 
-    private static void executeApprove(
+    private static void executeAction(
             @NonNull Context context,
             @NonNull OkHttpClient client,
             @NonNull String userId,
+            @NonNull String urlTemplate,
             boolean allowRefresh,
-            @NonNull ApproveListener listener
+            @NonNull ResearcherActionListener listener
     ) {
         String accessToken = SessionManager.getAccessToken(context);
         if (accessToken == null || accessToken.isEmpty()) {
@@ -161,7 +179,7 @@ public final class AdminApiClient {
             return;
         }
 
-        String url = String.format(VERIFY_RESEARCHER_URL_TEMPLATE, userId);
+        String url = String.format(urlTemplate, userId);
         Request request = new Request.Builder()
                 .url(url)
                 .header("Authorization", "Bearer " + accessToken)
@@ -178,11 +196,11 @@ public final class AdminApiClient {
             public void onResponse(@NonNull Call call, @NonNull Response response) {
                 try (Response closedResponse = response) {
                     if (closedResponse.code() == 401 && allowRefresh) {
-                        refreshAndRetryApprove(context, client, userId, listener);
+                        refreshAndRetryAction(context, client, userId, urlTemplate, listener);
                         return;
                     }
                     if (closedResponse.isSuccessful()) {
-                        listener.onApproved();
+                        listener.onSuccess();
                         return;
                     }
                     String body = closedResponse.body() == null ? "" : closedResponse.body().string();
@@ -214,16 +232,17 @@ public final class AdminApiClient {
         });
     }
 
-    private static void refreshAndRetryApprove(
+    private static void refreshAndRetryAction(
             @NonNull Context context,
             @NonNull OkHttpClient client,
             @NonNull String userId,
-            @NonNull ApproveListener listener
+            @NonNull String urlTemplate,
+            @NonNull ResearcherActionListener listener
     ) {
         refreshAccessToken(context, client, new RefreshCallback() {
             @Override
             public void onRefreshed() {
-                executeApprove(context, client, userId, false, listener);
+                executeAction(context, client, userId, urlTemplate, false, listener);
             }
 
             @Override
