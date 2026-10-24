@@ -72,11 +72,15 @@ public final class CurrentWalk {
 
     private void validateAudio(Manifest manifest) throws IOException {
         for (ScheduledNarration narration : manifest.narrations) {
-            if (narration.audioFilePath == null) throw new IOException("Missing narration audio");
-            File audio = new File(narration.audioFilePath);
-            if (!directory.getCanonicalFile().equals(audio.getCanonicalFile().getParentFile())
-                    || !audio.isFile() || audio.length() == 0)
+            if (narration.audioFilePaths == null || narration.audioFilePaths.isEmpty())
                 throw new IOException("Missing narration audio");
+            for (String path : narration.audioFilePaths) {
+                File audio = path == null ? null : new File(path);
+                if (audio == null
+                        || !directory.getCanonicalFile().equals(audio.getCanonicalFile().getParentFile())
+                        || !audio.isFile() || audio.length() == 0)
+                    throw new IOException("Missing narration audio");
+            }
         }
     }
 

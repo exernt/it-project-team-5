@@ -89,6 +89,7 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
     private boolean isNarrationPlaying = false;
     private int navigationStepIndex;
     private int narrationBlockIndex = 0;
+    private int narrationAudioIndex = 0;
     private long activeWalkingMs;
     private long lastLocationRealtimeMs;
 
@@ -385,8 +386,14 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
     }
 
     private void playScheduledNarration(ScheduledNarration narration) {
-        File audio = narration.audioFilePath == null
-                ? null : new File(narration.audioFilePath);
+        narrationAudioIndex = 0;
+        playNarrationAudio(narration);
+    }
+
+    private void playNarrationAudio(ScheduledNarration narration) {
+        File audio = narration.audioFilePaths == null
+                || narrationAudioIndex >= narration.audioFilePaths.size()
+                ? null : new File(narration.audioFilePaths.get(narrationAudioIndex));
         if (audio == null || !audio.isFile() || audio.length() == 0) {
             setWalkPaused(true);
             routeStatusView.setText("Prepared narration audio is missing");
@@ -401,7 +408,13 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
         });
         player.setOnCompletionListener(completed -> {
             releaseNarrationPlayer();
-            onNarrationCompleted();
+            narrationAudioIndex++;
+            if (narrationAudioIndex < narration.audioFilePaths.size()) {
+                playNarrationAudio(narration);
+            } else {
+                narrationAudioIndex = 0;
+                onNarrationCompleted();
+            }
         });
         player.setOnErrorListener((failed, what, extra) -> {
             releaseNarrationPlayer();

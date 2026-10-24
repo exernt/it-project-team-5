@@ -27,12 +27,12 @@ public class WalkAudioPreparerTest {
         Runnable afterDownload = () -> {};
         Source(CurrentWalk store) { this.store = store; }
         public String cacheKey(String text) { return text; }
-        public File prepare(String text) throws Exception {
+        public List<File> prepare(String text) throws Exception {
             calls++;
             File file = new File(store.directory, text + ".mp3");
             Files.write(file.toPath(), new byte[]{1});
             afterDownload.run();
-            return file;
+            return Collections.singletonList(file);
         }
         public void cancel() { cancelled = true; }
     }

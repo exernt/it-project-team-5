@@ -12,6 +12,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -30,6 +32,11 @@ import okhttp3.ResponseBody;
 
 public class TtsClient implements WalkAudioPreparer.AudioSource {
 
+    // Leave headroom below the API's 3,000-character validation limit.
+    static final int MAX_CHUNK_CODE_POINTS = 2800;
+    private static final int SERVER_MAX_CODE_POINTS = 3000;
+    private static final Pattern PAUSE = Pattern.compile("\\(pause\\)", Pattern.CASE_INSENSITIVE);
+
     private static final String TTS_URL =
             BuildConfig.SERVER_BASE_URL + "/tts";
 
@@ -38,10 +45,10 @@ public class TtsClient implements WalkAudioPreparer.AudioSource {
 
     private static OkHttpClient defaultClient(Context context) {
         return AuthenticatedHttpClient.configure(context, new OkHttpClient.Builder())
-            .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(300, TimeUnit.SECONDS)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
-            .callTimeout(600, TimeUnit.SECONDS)
+            .callTimeout(35, TimeUnit.SECONDS)
             .build(); }
 
     private final OkHttpClient httpClient;
@@ -52,12 +59,21 @@ public class TtsClient implements WalkAudioPreparer.AudioSource {
     public void cancel() { httpClient.dispatcher().cancelAll(); }
 
     /** Blocking preparation API; call only on the preparation worker. */
-    public File prepare(String text) throws Exception {
-        if (Thread.currentThread().isInterrupted()) throw new IOException("Preparation cancelled");
-        JSONObject payload = payloadFactory.toJson(text);
+    public List<File> prepare(String text) throws Exception {
+        List<File> audio = new ArrayList<>();
+        for (String chunk : splitNarration(text)) {
+            if (Thread.currentThread().isInterrupted())
+                throw new IOException("Preparation cancelled");
+            audio.add(prepareChunk(payloadFactory.toJson(chunk)));
+        }
+        return audio;
+    }
+
+    private File prepareChunk(JSONObject payload) throws Exception {
         File output = new File(cacheDirectory, requestKey(payload) + ".mp3");
         if (output.isFile() && output.length() > 0) return output;
         Request.Builder request = new Request.Builder().url(endpoint)
+                .header("Accept", "audio/mpeg")
                 .post(RequestBody.create(payload.toString(), JSON));
         File temporary = new File(cacheDirectory, output.getName() + ".part");
         try (Response response = httpClient.newCall(request.build()).execute()) {
@@ -99,7 +115,62 @@ public class TtsClient implements WalkAudioPreparer.AudioSource {
 
     /** Also included in the walk identity, so saved manifests cannot bypass configuration changes. */
     public String cacheKey(String narration) throws Exception {
-        return requestKey(payloadFactory.toJson(narration));
+        List<String> chunkKeys = new ArrayList<>();
+        for (String chunk : splitNarration(narration))
+            chunkKeys.add(requestKey(payloadFactory.toJson(chunk)));
+        return sha256(String.join("\n", chunkKeys));
+    }
+
+    /** Split locally so each Lambda invocation remains bounded and returns one MP3 response. */
+    static List<String> splitNarration(String narration) throws IOException {
+        String remaining = narration == null ? "" : narration.trim();
+        if (!hasSpokenText(remaining)) throw new IOException("Narration must contain spoken text");
+        List<String> chunks = new ArrayList<>();
+        while (remaining.codePointCount(0, remaining.length()) > MAX_CHUNK_CODE_POINTS) {
+            int hardLimit = remaining.offsetByCodePoints(0, MAX_CHUNK_CODE_POINTS);
+            Matcher marker = PAUSE.matcher(remaining);
+            while (marker.find()) {
+                if (marker.start() < hardLimit && hardLimit < marker.end()) {
+                    hardLimit = marker.start();
+                    break;
+                }
+                if (marker.start() >= hardLimit) break;
+            }
+            int split = naturalBoundary(remaining, hardLimit);
+            String chunk = remaining.substring(0, split).trim();
+            if (!hasSpokenText(chunk))
+                throw new IOException("Narration cannot be split into valid spoken chunks");
+            chunks.add(chunk);
+            remaining = remaining.substring(split).trim();
+        }
+        if (hasSpokenText(remaining)) {
+            chunks.add(remaining);
+        } else if (!remaining.isEmpty() && !chunks.isEmpty()) {
+            int last = chunks.size() - 1;
+            String combined = chunks.get(last) + remaining;
+            if (combined.codePointCount(0, combined.length()) > SERVER_MAX_CODE_POINTS)
+                throw new IOException("Trailing pause markers exceed the server request limit");
+            chunks.set(last, combined);
+        }
+        return chunks;
+    }
+
+    private static boolean hasSpokenText(String text) {
+        return text != null && !PAUSE.matcher(text).replaceAll("").trim().isEmpty();
+    }
+
+    private static int naturalBoundary(String text, int hardLimit) {
+        int hardCodePoints = text.codePointCount(0, hardLimit);
+        int minimum = text.offsetByCodePoints(0, Math.max(1, hardCodePoints - 800));
+        for (int index = hardLimit; index > minimum; ) {
+            int point = text.codePointBefore(index);
+            int width = Character.charCount(point);
+            if (Character.isWhitespace(point)) return index;
+            if (point == '.' || point == '!' || point == '?' || point == ';'
+                    || point == ':' || point == ',') return index;
+            index -= width;
+        }
+        return hardLimit;
     }
 
     private String requestKey(JSONObject payload) throws Exception {

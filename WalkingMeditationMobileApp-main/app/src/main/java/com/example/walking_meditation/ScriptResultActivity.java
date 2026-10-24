@@ -7,7 +7,7 @@ import android.content.Intent;
 import com.example.walking_meditation.audio.CurrentWalk;
 import com.example.walking_meditation.audio.TtsClient;
 import com.example.walking_meditation.audio.WalkAudioPreparer;
-import com.example.walking_meditation.audio.PollyPayload;
+import com.example.walking_meditation.audio.ServerTtsPayload;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -112,7 +112,7 @@ public class ScriptResultActivity extends AppCompatActivity {
         final WalkAudioPreparer current;
         try {
             current = new WalkAudioPreparer(new CurrentWalk(getFilesDir()),
-                    new TtsClient(getApplicationContext(), new PollyPayload()));
+                    new TtsClient(getApplicationContext(), new ServerTtsPayload()));
             preparer = current;
         } catch (Exception error) {
             status.setText("Audio preparation failed: " + error.getMessage());

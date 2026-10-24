@@ -5,6 +5,8 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import okhttp3.*;
 import okio.Buffer;
@@ -14,7 +16,7 @@ import static org.junit.Assert.*;
 public class TtsClientTest {
     @Rule public TemporaryFolder temp = new TemporaryFolder();
 
-    @Test public void sendsBackendContractRemovesPauseMarkersAndReusesCompletedAudio() throws Exception {
+    @Test public void sendsNeutralContractPreservesPausesAndReusesCompletedAudio() throws Exception {
         AtomicInteger requests = new AtomicInteger();
         OkHttpClient http = new OkHttpClient.Builder().addInterceptor(chain -> {
             requests.incrementAndGet();
@@ -22,18 +24,18 @@ public class TtsClientTest {
             chain.request().body().writeTo(buffer);
             try {
                 JSONObject payload = new JSONObject(buffer.readUtf8());
-                assertEquals("Welcome.\n\n Walk.", payload.getString("text"));
-                assertEquals("Ryan", payload.getString("speaker"));
-                assertEquals("192k", payload.getString("bitrate"));
-                assertFalse(payload.has("speed"));
+                assertEquals("Welcome.(pause) Walk.", payload.getString("text"));
+                assertEquals(1, payload.length());
             } catch (org.json.JSONException error) { throw new IOException(error); }
             return new Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1)
                     .code(200).message("OK").header("Content-Type", "audio/mpeg")
                     .body(ResponseBody.create(new byte[]{1, 2, 3}, MediaType.get("audio/mpeg"))).build();
         }).build();
-        TtsClient client = new TtsClient(temp.getRoot(), http, "http://localhost/tts", new QwenPayload());
-        File first = client.prepare("Welcome.(pause) Walk.");
-        assertEquals(3, first.length());
+        TtsClient client = new TtsClient(temp.getRoot(), http, "http://localhost/tts",
+                new ServerTtsPayload());
+        List<File> first = client.prepare("Welcome.(pause) Walk.");
+        assertEquals(1, first.size());
+        assertEquals(3, first.get(0).length());
         assertEquals(first, client.prepare("Welcome.(pause) Walk."));
         assertEquals(1, requests.get());
         assertEquals(1, temp.getRoot().listFiles().length);
@@ -46,44 +48,44 @@ public class TtsClientTest {
                         new Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1)
                                 .code(code).message("test").header("Content-Type", type)
                                 .body(ResponseBody.create(new byte[0], MediaType.get(type))).build()).build();
-                TtsClient client = new TtsClient(temp.getRoot(), http, "http://localhost/tts", new QwenPayload());
+                TtsClient client = new TtsClient(temp.getRoot(), http, "http://localhost/tts",
+                        new ServerTtsPayload());
                 assertThrows(IOException.class, () -> client.prepare("Welcome."));
                 assertEquals(0, temp.getRoot().listFiles().length);
             }
         }
     }
 
-    @Test public void cacheIdentityIncludesProviderEndpointVoiceAndPauseSettings() throws Exception {
+    @Test public void cacheIdentityIncludesEndpointContractAndEveryChunk() throws Exception {
         OkHttpClient http = new OkHttpClient();
-        String text = "One.(pause)Two.";
-        TtsClient qwen = new TtsClient(temp.getRoot(), http, "http://localhost/tts", new QwenPayload());
-        assertNotEquals(qwen.cacheKey(text), new TtsClient(temp.getRoot(), http,
-                "http://localhost/tts", new QwenPayload("English", "Ryan", "Gentle", "192k")).cacheKey(text));
-        assertNotEquals(qwen.cacheKey(text), new TtsClient(temp.getRoot(), http,
-                "http://localhost/other", new QwenPayload()).cacheKey(text));
-        TtsClient polly = new TtsClient(temp.getRoot(), http, "http://localhost/tts", new PollyPayload());
-        assertNotEquals(qwen.cacheKey(text), polly.cacheKey(text));
-        assertNotEquals(polly.cacheKey(text), new TtsClient(temp.getRoot(), http,
-                "http://localhost/tts", new PollyPayload("Joanna", "en-US", "standard", 1000)).cacheKey(text));
+        TtsClient client = new TtsClient(temp.getRoot(), http, "http://localhost/tts",
+                new ServerTtsPayload());
+        assertNotEquals(client.cacheKey("One."), client.cacheKey("Two."));
+        assertNotEquals(client.cacheKey("One."), new TtsClient(temp.getRoot(), http,
+                "http://localhost/other", new ServerTtsPayload()).cacheKey("One."));
+        assertNotEquals(client.cacheKey("a".repeat(2800)), client.cacheKey("a".repeat(2801)));
     }
 
-    @Test public void clientSupportsPollyWithoutChangingTransportOrOriginalNarration() throws Exception {
-        AtomicInteger requests = new AtomicInteger();
+    @Test public void splitsLongNarrationWithoutLosingPauseTokens() throws Exception {
+        String narration = "a".repeat(2790) + "(pause)" + "b".repeat(100);
+        List<String> sent = new ArrayList<>();
         OkHttpClient http = new OkHttpClient.Builder().addInterceptor(chain -> {
-            requests.incrementAndGet();
             Buffer buffer = new Buffer();
             chain.request().body().writeTo(buffer);
             try {
-                JSONObject json = new JSONObject(buffer.readUtf8());
-                assertEquals("<speak>One.<break time=\"2500ms\"/>Two.</speak>", json.getString("Text"));
+                sent.add(new JSONObject(buffer.readUtf8()).getString("text"));
             } catch (org.json.JSONException error) { throw new IOException(error); }
             return new Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1)
                     .code(200).message("OK").header("Content-Type", "audio/mpeg")
                     .body(ResponseBody.create(new byte[]{1}, MediaType.get("audio/mpeg"))).build();
         }).build();
-        TtsClient client = new TtsClient(temp.getRoot(), http, "http://localhost/polly", new PollyPayload());
-        assertEquals(1, client.prepare("One.(pause)Two.").length());
-        client.prepare("One.(pause)Two.");
-        assertEquals(1, requests.get());
+        TtsClient client = new TtsClient(temp.getRoot(), http, "http://localhost/tts",
+                new ServerTtsPayload());
+        List<File> files = client.prepare(narration);
+        assertEquals(2, files.size());
+        assertEquals(narration, String.join("", sent));
+        assertTrue(sent.stream().allMatch(text ->
+                text.codePointCount(0, text.length()) <= TtsClient.MAX_CHUNK_CODE_POINTS));
+        assertTrue(sent.stream().anyMatch(text -> text.contains("(pause)")));
     }
 }

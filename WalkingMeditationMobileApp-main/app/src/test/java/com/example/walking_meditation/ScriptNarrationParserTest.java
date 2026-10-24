@@ -80,7 +80,7 @@ public class ScriptNarrationParserTest {
         assertEquals(ScheduledNarration.Anchor.LEG_START, narrations.get(7).anchor);
         assertEquals("park_to_destination", narrations.get(7).routeLegId);
         assertEquals(ScheduledNarration.Anchor.ROUTE_END, narrations.get(12).anchor);
-        assertNull(narrations.get(1).audioFilePath);
+        assertTrue(narrations.get(1).audioFilePaths.isEmpty());
         assertEquals(before, new Gson().toJson(plan));
     }
 

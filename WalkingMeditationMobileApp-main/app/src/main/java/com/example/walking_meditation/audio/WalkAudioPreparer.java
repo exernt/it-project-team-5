@@ -2,14 +2,13 @@ package com.example.walking_meditation.audio;
 
 import com.example.walking_meditation.models.RoutePlan;
 import com.example.walking_meditation.models.ScheduledNarration;
-import java.io.File;
 import java.io.InterruptedIOException;
 import java.util.List;
 
 /** Blocking preparation lifecycle; callers supply the worker and UI dispatcher. */
 public final class WalkAudioPreparer {
     public interface AudioSource {
-        File prepare(String text) throws Exception;
+        List<java.io.File> prepare(String text) throws Exception;
         String cacheKey(String text) throws Exception;
         void cancel();
     }
@@ -40,9 +39,10 @@ public final class WalkAudioPreparer {
             checkCancelled();
             progress.update(i, manifest.narrations.size());
             ScheduledNarration narration = manifest.narrations.get(i);
-            File audio = source.prepare(narration.text);
+            List<java.io.File> audio = source.prepare(narration.text);
             checkCancelled();
-            narration.audioFilePath = audio.getAbsolutePath();
+            narration.audioFilePaths.clear();
+            for (java.io.File file : audio) narration.audioFilePaths.add(file.getAbsolutePath());
             store.save(manifest);
         }
         // Cancellation and publication have one ordering, even after the final download.

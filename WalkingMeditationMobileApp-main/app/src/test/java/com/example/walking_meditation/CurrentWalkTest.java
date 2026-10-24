@@ -29,7 +29,7 @@ public class CurrentWalkTest {
         assertThrows(IOException.class, () -> store.read(true));
         File audio = new File(store.directory, "opening.mp3");
         Files.write(audio.toPath(), new byte[]{1, 2, 3});
-        m.narrations.get(0).audioFilePath = audio.getAbsolutePath();
+        m.narrations.get(0).audioFilePaths.add(audio.getAbsolutePath());
         m.ready = true;
         m.nextNarration = 1;
         m.activeWalkingMs = 2000;
@@ -63,12 +63,13 @@ public class CurrentWalkTest {
         m.ready = true;
         File outside = temp.newFile("outside.mp3");
         Files.write(outside.toPath(), new byte[]{1});
-        m.narrations.get(0).audioFilePath = outside.getAbsolutePath();
+        m.narrations.get(0).audioFilePaths.add(outside.getAbsolutePath());
         store.save(m);
         assertThrows(IOException.class, () -> store.read(true));
         File empty = new File(store.directory, "empty.mp3");
         Files.write(empty.toPath(), new byte[0]);
-        m.narrations.get(0).audioFilePath = empty.getAbsolutePath();
+        m.narrations.get(0).audioFilePaths.clear();
+        m.narrations.get(0).audioFilePaths.add(empty.getAbsolutePath());
         store.save(m);
         assertThrows(IOException.class, () -> store.read(true));
     }
@@ -77,7 +78,7 @@ public class CurrentWalkTest {
         CurrentWalk.Manifest manifest = begin(store, "finished");
         File audio = new File(store.directory, "audio.mp3");
         Files.write(audio.toPath(), new byte[]{1});
-        manifest.narrations.get(0).audioFilePath = audio.getAbsolutePath();
+        manifest.narrations.get(0).audioFilePaths.add(audio.getAbsolutePath());
         store.markReady(manifest);
         java.io.FileInputStream playerHandle = new java.io.FileInputStream(audio);
         boolean[] released = {false};

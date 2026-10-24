@@ -6,7 +6,7 @@ import java.util.List;
 public class ScheduledNarration {
     public String id;
     public String text;
-    public String audioFilePath;
+    public List<String> audioFilePaths = new ArrayList<>();
 
     // Optional: null for narration without a route step
     public String routeStepId;
