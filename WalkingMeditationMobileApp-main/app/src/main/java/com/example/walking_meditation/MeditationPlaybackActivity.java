@@ -274,8 +274,8 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
         updateActiveWalkingTime(location);
         previousLocation = new Location(location);
         RouteProgressTracker.Match match = progressTracker.update(location);
-        reachedDestination = !match.offRoute
-                && match.progressM >= progressTracker.getTotalDistanceM() - 10;
+        reachedDestination = NarrationScheduler.hasArrived(
+                match.progressM, progressTracker.getTotalDistanceM(), match.offRoute);
         updateRouteLines(match);
         updateNavigationInstruction(match, location);
         updatePlayback(match);
@@ -473,9 +473,8 @@ public class MeditationPlaybackActivity extends AppCompatActivity {
 
     private void endWalk() {
         setWalkPaused(true);
-        releaseNarrationPlayer();
         try {
-            store.clear();
+            store.finish(this::releaseNarrationPlayer);
             walkEnded = true;
             Toast.makeText(this, "Walk ended. Downloaded audio deleted.", Toast.LENGTH_LONG).show();
             finish();

@@ -6,12 +6,12 @@ import static com.example.walking_meditation.nav.Extras.EXTRA_ROUTE_PLAN_PATH;
 import android.content.Intent;
 import com.example.walking_meditation.audio.CurrentWalk;
 import com.example.walking_meditation.audio.TtsClient;
+import com.example.walking_meditation.audio.WalkAudioPreparer;
 import com.example.walking_meditation.audio.PollyPayload;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import android.os.Bundle;
-import android.widget.Button;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -37,7 +37,7 @@ public class ScriptResultActivity extends AppCompatActivity {
     // A single worker prevents a cancelled activity writing into the next walk.
     private static final ExecutorService WORKER = Executors.newSingleThreadExecutor();
     private Future<?> preparation;
-    private volatile TtsClient client;
+    private WalkAudioPreparer preparer;
     private Button startButton;
     private Button retryButton;
     private TextView status;
@@ -59,7 +59,7 @@ public class ScriptResultActivity extends AppCompatActivity {
         findViewById(R.id.btn_discard_walk).setOnClickListener(v -> {
             cancelPreparation();
             WORKER.submit(() -> {
-                try { new CurrentWalk(getFilesDir()).clear(); }
+                try { new CurrentWalk(getFilesDir()).finish(() -> {}); }
                 catch (Exception e) { runOnUiThread(() -> Toast.makeText(this, e.getMessage(), Toast.LENGTH_LONG).show()); }
             });
             finish();
@@ -109,41 +109,32 @@ public class ScriptResultActivity extends AppCompatActivity {
         startButton.setEnabled(false);
         retryButton.setEnabled(false);
         status.setText("Preparing walk audio…");
+        final WalkAudioPreparer current;
+        try {
+            current = new WalkAudioPreparer(new CurrentWalk(getFilesDir()),
+                    new TtsClient(getApplicationContext(), new PollyPayload()));
+            preparer = current;
+        } catch (Exception error) {
+            status.setText("Audio preparation failed: " + error.getMessage());
+            retryButton.setEnabled(true);
+            return;
+        }
         preparation = WORKER.submit(() -> {
             try {
-                CurrentWalk store = new CurrentWalk(getFilesDir());
-                // Select the payload and backend endpoint here. Parsing and playback stay unchanged.
-                TtsClient tts = new TtsClient(getApplicationContext(), new PollyPayload());
-                client = tts;
-                StringBuilder preparationIdentity = new StringBuilder(routePlan.routeId)
-                        .append("\n").append(scriptJson);
-                for (ScheduledNarration narration : scheduledNarrations)
-                    preparationIdentity.append("\n").append(tts.cacheKey(narration.text));
-                CurrentWalk.Manifest manifest = store.begin(
-                        CurrentWalk.fingerprint(preparationIdentity.toString()), routePlan, scheduledNarrations);
-                manifest.ready = false;
-                store.save(manifest);
-                for (int i = 0; i < manifest.narrations.size(); i++) {
-                    if (Thread.currentThread().isInterrupted()) return;
-                    final int number = i + 1;
-                    runOnUiThread(() -> status.setText("Preparing audio " + number + " of " + manifest.narrations.size()));
-                    ScheduledNarration narration = manifest.narrations.get(i);
-                    narration.audioFilePath = tts.prepare(narration.text).getAbsolutePath();
-                    store.save(manifest);
-                }
-                if (Thread.currentThread().isInterrupted()) return;
-                manifest.ready = true;
-                store.save(manifest);
-                store.read(true);
+                current.prepare(routePlan, scriptJson, scheduledNarrations, (completed, total) ->
+                        runOnUiThread(() -> {
+                            if (!isDestroyed() && !isFinishing() && !current.isCancelled())
+                                status.setText("Preparing audio " + (completed + 1) + " of " + total);
+                        }));
                 runOnUiThread(() -> {
-                    if (isDestroyed() || isFinishing()) return;
+                    if (isDestroyed() || isFinishing() || current.isCancelled()) return;
                     status.setText("Audio ready. Start your walk.");
                     startButton.setEnabled(true);
                 });
             } catch (Exception error) {
-                if (Thread.currentThread().isInterrupted()) return;
+                if (Thread.currentThread().isInterrupted() || current.isCancelled()) return;
                 runOnUiThread(() -> {
-                    if (isDestroyed() || isFinishing()) return;
+                    if (isDestroyed() || isFinishing() || current.isCancelled()) return;
                     status.setText("Audio preparation failed: " + error.getMessage());
                     retryButton.setEnabled(true);
                 });
@@ -152,8 +143,8 @@ public class ScriptResultActivity extends AppCompatActivity {
     }
 
     private void cancelPreparation() {
+        if (preparer != null) preparer.cancel();
         if (preparation != null) preparation.cancel(true);
-        if (client != null) client.cancel();
     }
 
     @Override protected void onDestroy() {

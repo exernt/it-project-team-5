@@ -28,7 +28,7 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 
-public class TtsClient {
+public class TtsClient implements WalkAudioPreparer.AudioSource {
 
     private static final String TTS_URL =
             BuildConfig.SERVER_BASE_URL + "/tts";
