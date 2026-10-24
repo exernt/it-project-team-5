@@ -26,6 +26,7 @@ class LoginTests(unittest.IsolatedAsyncioTestCase):
             id=uuid4(),
             email="bob@example.com",
             password_hash="$argon2id$existing-hash",
+            session_version=2,
         )
         self.session.scalar.return_value = user
         payload = LoginRequest(email="Bob@Example.com", password="correcthorsebatterystaple")
@@ -37,6 +38,8 @@ class LoginTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("bearer", response.token_type)
         inserted_token = self.session.add.call_args.args[0]
         self.assertEqual(user.id, inserted_token.user_id)
+        self.assertIsNotNone(inserted_token.family_id)
+        self.assertIsNone(inserted_token.parent_id)
         self.session.commit.assert_awaited_once()
 
     @patch("route.auth.verify_password", new_callable=AsyncMock)
@@ -69,10 +72,18 @@ class LogoutTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.session = MagicMock()
         self.session.execute = AsyncMock()
+        self.session.scalar = AsyncMock()
+        self.session.scalar.return_value = None
         self.session.commit = AsyncMock()
 
     async def test_logout_revokes_token_and_returns_generic_message(self):
         payload = LogoutRequest(refresh_token="some-refresh-token")
+        self.session.scalar.return_value = RefreshToken(
+            user_id=uuid4(),
+            family_id=uuid4(),
+            token_hash="hash",
+            expires_at=datetime.now(timezone.utc) + timedelta(days=1),
+        )
 
         response = await logout(payload, self.session)
 
@@ -96,7 +107,12 @@ class GetCurrentUserTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_valid_token_returns_user(self):
         user_id = uuid4()
-        user = User(id=user_id, email="bob@example.com", password_hash="hash")
+        user = User(
+            id=user_id,
+            email="bob@example.com",
+            password_hash="hash",
+            session_version=0,
+        )
         self.session.get.return_value = user
         token = create_access_token(user_id)
         credentials = MagicMock(credentials=token)
@@ -107,6 +123,21 @@ class GetCurrentUserTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_invalid_token_rejected(self):
         credentials = MagicMock(credentials="not-a-real-jwt")
+
+        with self.assertRaises(HTTPException) as raised:
+            await get_current_user(credentials, self.session)
+
+        self.assertEqual(401, raised.exception.status_code)
+
+    async def test_old_session_version_is_rejected(self):
+        user_id = uuid4()
+        self.session.get.return_value = User(
+            id=user_id,
+            email="bob@example.com",
+            password_hash="hash",
+            session_version=3,
+        )
+        credentials = MagicMock(credentials=create_access_token(user_id, session_version=2))
 
         with self.assertRaises(HTTPException) as raised:
             await get_current_user(credentials, self.session)

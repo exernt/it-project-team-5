@@ -37,9 +37,13 @@ sudo service nginx restart
 Create a env file in the root folder and populate with the secrets. 
 ```env
 GOOGLE_MAPS_API_KEY = ""
+ENABLE_PARK_FALLBACK=false
 OPENAI_API_KEY= ""
 GIT_PERSONAL_ACCESS_TOKEN = ""
 ```
+`ENABLE_PARK_FALLBACK` is disabled by default. Set it to `true` to allow
+generic `park` Places results in addition to `city_park` and `garden` results.
+
 make sure to add env to gitignore
 
 ## Run the FastAPI

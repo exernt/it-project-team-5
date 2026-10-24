@@ -39,7 +39,7 @@
     <string name="consent_checkbox_label">I have read the consent form and agree to participate.</string>
     <string name="consent_agree_required">Please agree to the consent form to continue.</string>
     <string name="consent_details_error">Unable to load the consent form.</string>
-    <string name="researcher_dashboard">Researcher Dashboard</string>
+    <string name="researcher_dashboard">Study Dashboard</string>
     <string name="researcher_study_list_title">My Studies</string>
     <string name="no_owned_studies">You haven\'t created any studies yet.</string>
     <string name="researcher_study_row_label">%1$s — %2$s</string>
@@ -47,11 +47,27 @@
     <string name="researcher_field_duration">Duration (days)</string>
     <string name="researcher_field_description">Description</string>
     <string name="save_changes">Save changes</string>
+    <string name="set_script_parameters">Set Script Parameters</string>
+    <string name="script_parameters_title">Script Parameters</string>
+    <string name="script_parameters_hint">Enter script generation parameters</string>
+    <string name="confirm">Confirm</string>
+    <string name="cancel">Cancel</string>
     <string name="researcher_detail_error">Unable to load this study.</string>
     <string name="publish_study">Publish</string>
     <string name="activate_study">Activate</string>
     <string name="close_study">Close study</string>
     <string name="study_updated">Study updated.</string>
+    <string name="logout">Log Out</string>
+    <string name="login">Login</string>
+    <string name="restoring_session">Restoring session…</string>
+    <string name="password_reset_check_email_title">Check your email</string>
+    <string name="password_reset_check_email_message">If an account exists for that address, we sent a password-reset link. Open the link on this device to continue in the app.</string>
+    <string name="password_reset_resend">Resend email</string>
+    <string name="password_reset_resent">If that email is registered, a new reset link has been sent.</string>
+    <string name="password_reset_resend_failed">Unable to request another reset email. Please try again.</string>
+    <string name="password_reset_request_failed">Unable to request a reset email. Please try again.</string>
+    <string name="password_reset_back_to_login">Back to login</string>
+    <string name="password_reset_link_invalid">This password-reset link is invalid or incomplete. Request a new link.</string>
     <string name="create_study_title">New Study</string>
     <string name="create_study_button">Create study</string>
     <string name="new_study">+ New Study</string>
@@ -65,6 +81,9 @@
     <string name="move_to_control">Move to control</string>
     <string name="move_to_experimental">Move to experimental</string>
     <string name="view_roster">View Participants</string>
+    <string name="share_invite_link">Share Invite Link</string>
+    <string name="create_questionnaire">Create Questionnaire</string>
+    <string name="manage_questionnaires">Manage Questionnaires</string>
     <plurals name="study_duration_days">
         <item quantity="one">Duration: %d day</item>
         <item quantity="other">Duration: %d days</item>
@@ -95,6 +114,24 @@
     <string name="researcher_feedback_general_title">General Feedback</string>
     <string name="researcher_feedback_empty">No feedback yet.</string>
     <string name="researcher_feedback_error">Unable to load feedback.</string>
+
+    <string name="admin_dashboard_heading">Admin Dashboard</string>
+    <string name="admin_pending_researchers_heading">Pending Researcher Approvals</string>
+    <string name="admin_pending_researchers_empty">No pending researcher registrations.</string>
+    <string name="admin_pending_researchers_error">Unable to load pending researchers.</string>
+    <string name="admin_pending_requested_on">Requested %1$s</string>
+    <string name="admin_approve_researcher">Approve</string>
+    <string name="admin_approving">Approving…</string>
+    <string name="admin_approved_researcher">Approved %1$s</string>
+
+    <string name="become_researcher">Become a Researcher</string>
+    <string name="become_researcher_heading">Become a Researcher</string>
+    <string name="become_researcher_explanation">Request researcher access to create and run studies. An admin will need to approve your request before you can use the researcher dashboard.</string>
+    <string name="become_researcher_institution_label">Institution (optional)</string>
+    <string name="become_researcher_institution_hint">e.g. University of Example</string>
+    <string name="become_researcher_submit">Request Researcher Access</string>
+    <string name="become_researcher_submitting">Submitting…</string>
+    <string name="become_researcher_success">Request submitted! An admin will review it soon.</string>
     <string name="researcher_feedback_header">%1$s · %2$s</string>
     <string name="researcher_feedback_rating">%1$d / 5</string>
     <string name="researcher_feedback_no_rating">No rating</string>
@@ -135,4 +172,13 @@
         libero vel nunc consequat, quis tincidunt nisl eleifend. Cras bibendum enim a justo luctus
         vestibulum. Fusce dictum libero quis erat maximus, vitae volutpat diam dignissim.
     </string>
+    <string name="title_activity_login2">LoginActivity2</string>
+    <string name="prompt_email">Email</string>
+    <string name="prompt_password">Password</string>
+    <string name="action_sign_in">Sign in or register</string>
+    <string name="action_sign_in_short">Sign in</string>
+    <string name="welcome">"Welcome !"</string>
+    <string name="invalid_username">Not a valid username</string>
+    <string name="invalid_password">Password must be >5 characters</string>
+    <string name="login_failed">"Login failed"</string>
 </resources>

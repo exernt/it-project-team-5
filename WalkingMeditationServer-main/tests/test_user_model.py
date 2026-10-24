@@ -19,6 +19,7 @@ class UserModelTests(unittest.TestCase):
                 "id",
                 "email",
                 "password_hash",
+                "session_version",
                 "gender",
                 "age",
                 "role",
@@ -30,6 +31,7 @@ class UserModelTests(unittest.TestCase):
         self.assertTrue(table.c.id.primary_key)
         self.assertFalse(table.c.email.nullable)
         self.assertFalse(table.c.password_hash.nullable)
+        self.assertFalse(table.c.session_version.nullable)
         self.assertTrue(table.c.gender.nullable)
         self.assertTrue(table.c.age.nullable)
         self.assertFalse(table.c.email_verified.nullable)
@@ -73,6 +75,7 @@ class UserModelIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
             self.assertIsInstance(user.id, UUID)
             self.assertFalse(user.email_verified)
+            self.assertEqual(0, user.session_version)
             self.assertIsNotNone(user.created_on)
             self.assertIsNotNone(user.created_on.tzinfo)
 

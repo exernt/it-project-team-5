@@ -6,7 +6,7 @@ from sqlalchemy import select
 from datetime import datetime, timezone
 from database.models import Feedback, FeedbackCategory, Study
 from database.core import DatabaseSessionDependency
-from route.dependencies import CurrentUserDependency, StudyOwnerDependency, VerifiedResearcherDependency
+from route.dependencies import AdminOrVerifiedResearcherDependency, CurrentUserDependency
 from route.models import (
     FeedbackListResponse,
     FeedbackResponse,
@@ -62,11 +62,12 @@ async def submit_feedback(
     response_model=FeedbackListResponse,
 )
 async def list_general_feedback(
-        _researcher: VerifiedResearcherDependency,
+        _viewer: AdminOrVerifiedResearcherDependency,
         session: DatabaseSessionDependency,
 ) -> FeedbackListResponse:
-    """List feedback that isn't tied to any study. Researcher/admin-only,
-    since this can include feedback left by participants of any study."""
+    """List feedback that isn't tied to any study. Admin or verified
+    researcher only, since this can include feedback from participants of
+    any study."""
     result = await session.scalars(
         select(Feedback)
         .where(Feedback.study_id.is_(None))

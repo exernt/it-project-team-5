@@ -110,11 +110,10 @@ public class StudyConsentActivity extends AppCompatActivity {
             @Override
             public void onJoined() {
                 runOnUiThread(() -> {
-                    SessionManager.clearStudyConfiguration(StudyConsentActivity.this);
-                    startActivity(new Intent(
-                            StudyConsentActivity.this,
-                            StudyUserManageActivity.class
-                    ));
+                    Toast.makeText(StudyConsentActivity.this, "Successfully joined study!", Toast.LENGTH_SHORT).show();
+                    Intent intent = new Intent(StudyConsentActivity.this, MainActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                    startActivity(intent);
                     finish();
                 });
             }

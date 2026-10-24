@@ -3,7 +3,7 @@ from __future__ import annotations
 import httpx
 from typing import List
 from route.config import *
-from route.models import StepSegment, LatLng
+from route.models import StepSegment, LatLng, RouteStepInfo
 from route.clients.google_steps import compute_walking_steps
 from route.clients.google_elevation import fetch_elevation_samples_for_polyline
 from route.utils.route_hint import extract_street_hint
@@ -15,9 +15,33 @@ async def build_route_elevation_segments(
     dest: LatLng,
     *,
     per_step_samples: int = 2,   # 2 = start/end only; 10 = smoother per-step
+    selected_steps: List[RouteStepInfo] | None = None,
 ) -> List[StepSegment]:
     async with httpx.AsyncClient(timeout=40) as client:
-        steps = await compute_walking_steps(client, origin, dest)
+        if selected_steps:
+            steps = [
+                {
+                    "navigationInstruction": {"instructions": step.instruction},
+                    "startLocation": {
+                        "latLng": {
+                            "latitude": step.start.lat,
+                            "longitude": step.start.lon,
+                        }
+                    },
+                    "endLocation": {
+                        "latLng": {
+                            "latitude": step.end.lat,
+                            "longitude": step.end.lon,
+                        }
+                    },
+                    "polyline": {"encodedPolyline": step.polyline},
+                    "staticDurationSeconds": step.duration_s,
+                    "distanceMeters": step.distance_m,
+                }
+                for step in selected_steps
+            ]
+        else:
+            steps = await compute_walking_steps(client, origin, dest)
 
         segments: List[StepSegment] = []
         for i, st in enumerate(steps, start=1):
@@ -50,6 +74,8 @@ async def build_route_elevation_segments(
                     start= LatLng(lat=float(sp["latitude"]), lon=float(sp["longitude"])),
                     end= LatLng(lat=float(ep["latitude"]), lon=float(ep["longitude"])),
                     step_polyline=poly,
+                    duration_s=max(0, int(st.get("staticDurationSeconds") or 0)),
+                    distance_m=max(0, int(st.get("distanceMeters") or 0)),
                     elev_start_m=elev_start,
                     elev_end_m=elev_end,
                     elev_gain_m=gain,

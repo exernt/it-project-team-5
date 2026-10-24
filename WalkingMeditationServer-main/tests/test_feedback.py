@@ -105,6 +105,19 @@ class ListGeneralFeedbackTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(response.feedback[0].study_id)
         self.assertEqual(5, response.feedback[0].rating)
 
+    async def test_admin_can_also_list_general_feedback(self):
+        admin = User(
+            id=uuid4(),
+            email="admin@example.com",
+            password_hash="hash",
+            role=Role.ADMIN,
+        )
+        self.session.scalars.return_value = []
+
+        response = await list_general_feedback(admin, self.session)
+
+        self.assertEqual([], response.feedback)
+
 
 if __name__ == "__main__":
     unittest.main()
