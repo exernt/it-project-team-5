@@ -41,6 +41,7 @@ import com.example.walking_meditation.utils.AuthenticatedHttpClient;
 import com.example.walking_meditation.utils.CacheFiles;
 import com.example.walking_meditation.utils.PolylineDecoder;
 import com.example.walking_meditation.utils.RoutePlanFiles;
+import com.example.walking_meditation.utils.RoutePlanFiles;
 import com.example.walking_meditation.utils.SessionManager;
 import com.example.walking_meditation.utils.StudyConfigClient;
 import com.google.android.gms.location.FusedLocationProviderClient;
@@ -65,6 +66,7 @@ import com.google.android.libraries.places.api.net.PlacesClient;
 import com.google.gson.Gson;
 
 import org.json.JSONObject;
+import org.json.JSONArray;
 import org.json.JSONArray;
 
 import java.io.IOException;
@@ -138,6 +140,9 @@ public class PathSelectionActivity extends AppCompatActivity
     private LinearLayout resultsContainer;
     private RecyclerView routeOptionsView;
     private RouteOptionsAdapter routeOptionsAdapter;
+    private AutoCompleteTextView ddTtsSpeaker;
+
+    private EditText etTtsInstruct;
 
     private MapView mapView;
     @Nullable private GoogleMap googleMap;
@@ -847,10 +852,13 @@ public class PathSelectionActivity extends AppCompatActivity
         try {
             String path = CacheFiles.writeText(
                     this, "scripts", "script-response", ".json", responseBody);
+
             Intent intent = new Intent(this, ScriptResultActivity.class);
+
             intent.putExtra(EXTRA_SCRIPT_JSON_PATH, path);
             intent.putExtra(EXTRA_ROUTE_PLAN_PATH, selectedRoutePlanPath);
             startActivity(intent);
+
         } catch (IOException exception) {
             Toast.makeText(this,
                     "Unable to save script response: " + exception.getMessage(),

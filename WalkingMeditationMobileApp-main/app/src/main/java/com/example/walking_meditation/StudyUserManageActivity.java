@@ -1,6 +1,8 @@
 package com.example.walking_meditation;
 
 import static com.example.walking_meditation.nav.Extras.EXTRA_FROM_STUDY_MANAGE;
+import static com.example.walking_meditation.nav.Extras.EXTRA_STUDY_ID;
+import static com.example.walking_meditation.nav.Extras.EXTRA_STUDY_NAME;
 
 import android.content.Intent;
 import android.os.Bundle;
@@ -36,6 +38,7 @@ public class StudyUserManageActivity extends AppCompatActivity {
     private TextView messageView;
     private Button startButton;
     private Button leaveButton;
+    private Button feedbackButton;
     private @Nullable StudyEnrollment currentEnrollment;
     private boolean loadingStudy = false;
 
@@ -53,6 +56,7 @@ public class StudyUserManageActivity extends AppCompatActivity {
         messageView = findViewById(R.id.studyManageMessage);
         startButton = findViewById(R.id.btnStartStudyMeditation);
         leaveButton = findViewById(R.id.btnLeaveStudy);
+        feedbackButton = findViewById(R.id.btnStudyFeedback);
 
         Button questionnaireButton = findViewById(R.id.btnStudyQuestionnaire);
         questionnaireButton.setEnabled(true);
@@ -69,6 +73,18 @@ public class StudyUserManageActivity extends AppCompatActivity {
 
         startButton.setOnClickListener(view -> startStudyMeditation());
         leaveButton.setOnClickListener(view -> leaveStudy());
+        feedbackButton.setOnClickListener(view -> openFeedback());
+    }
+
+    private void openFeedback() {
+        StudyEnrollment enrollment = currentEnrollment;
+        if (enrollment == null) {
+            return;
+        }
+        Intent intent = new Intent(this, FeedbackActivity.class);
+        intent.putExtra(EXTRA_STUDY_ID, enrollment.getStudy().getId());
+        intent.putExtra(EXTRA_STUDY_NAME, enrollment.getStudy().getName());
+        startActivity(intent);
     }
 
     @Override

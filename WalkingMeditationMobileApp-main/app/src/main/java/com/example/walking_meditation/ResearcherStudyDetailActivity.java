@@ -97,6 +97,11 @@ public class ResearcherStudyDetailActivity extends AppCompatActivity {
             intent.putExtra("study_id", studyId);
             startActivity(intent);
         });
+        findViewById(R.id.btnResearcherDetailFeedback).setOnClickListener(view ->
+                startActivity(ResearcherFeedbackActivity.createIntentForStudy(
+                        this, studyId, nameField.getText().toString()
+                ))
+        );
         findViewById(R.id.btnResearcherDetailShare).setOnClickListener(view -> shareInviteLink());
         findViewById(R.id.btnResearcherDetailScriptParameters).setOnClickListener(view ->
                 scriptParametersLauncher.launch(ResearcherScriptParametersActivity.createIntent(

@@ -44,8 +44,8 @@ CurrentUserDependency = Annotated[User, Depends(get_current_user)]
 
 
 async def get_verified_researcher(
-    user: CurrentUserDependency,
-    session: DatabaseSessionDependency,
+        user: CurrentUserDependency,
+        session: DatabaseSessionDependency,
 ) -> User:
     """Require a researcher account that has been approved by an admin."""
     if user.role != Role.RESEARCHER:
@@ -65,6 +65,24 @@ async def get_verified_researcher(
 
 
 VerifiedResearcherDependency = Annotated[User, Depends(get_verified_researcher)]
+
+
+async def get_admin_or_verified_researcher(
+        user: CurrentUserDependency,
+        session: DatabaseSessionDependency,
+) -> User:
+    """Require an admin, or a researcher account approved by an admin.
+
+    Used for data (like general app feedback) that both roles should be
+    able to see, as opposed to study-specific data which stays scoped to
+    the owning researcher.
+    """
+    if user.role == Role.ADMIN:
+        return user
+    return await get_verified_researcher(user, session)
+
+
+AdminOrVerifiedResearcherDependency = Annotated[User, Depends(get_admin_or_verified_researcher)]
 
 def require_role(*allowed_roles: Role):
     """FastAPI dependency factory: reject with 403 unless the current user's

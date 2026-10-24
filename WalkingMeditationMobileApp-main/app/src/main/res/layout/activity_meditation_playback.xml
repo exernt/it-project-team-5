@@ -68,4 +68,12 @@
         android:elevation="10dp"
         android:text="Pause" />
 
+    <Button
+        android:id="@+id/btn_end_walk"
+        android:layout_width="wrap_content"
+        android:layout_height="48dp"
+        android:layout_gravity="bottom|start"
+        android:layout_marginBottom="92dp"
+        android:layout_marginStart="16dp"
+        android:text="End walk" />
 </FrameLayout>

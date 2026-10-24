@@ -64,12 +64,6 @@
             android:name=".MeditationPlaybackActivity"
             android:exported="false" />
         <activity
-            android:name=".ScriptActivity"
-            android:exported="false" />
-        <activity
-            android:name=".RouteOptionsActivity"
-            android:exported="false" />
-        <activity
             android:name=".ScriptResultActivity"
             android:exported="false" />
         <activity android:name=".PathSelectionActivity"

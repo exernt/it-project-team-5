@@ -80,7 +80,7 @@
                 android:hint="For example: prepare for a stressful meeting"
                 android:inputType="textCapSentences|textMultiLine"
                 android:maxLength="1000"
-                android:layout_marginBottom="@dimen/space_8" />
+                android:layout_marginBottom="@dimen/space_24" />
 
             <TextView
                 android:id="@+id/tv_study_status"
@@ -96,6 +96,8 @@
                 android:id="@+id/btn_find_path"
                 style="@style/App.PrimaryButton"
                 android:text="Generate routes" />
+
+
         </LinearLayout>
 
         <LinearLayout
@@ -135,5 +137,7 @@
                 android:layout_marginTop="@dimen/space_8"
                 android:text="Back" />
         </LinearLayout>
+
+
     </LinearLayout>
 </ScrollView>

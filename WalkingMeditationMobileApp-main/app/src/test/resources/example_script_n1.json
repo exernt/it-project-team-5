@@ -1,0 +1,248 @@
+{
+  "script": {
+    "duration_minutes": 14,
+    "language": "simple",
+    "includes_pauses": true,
+    "inputs": {
+      "context": "Mindfulness",
+      "weather_condition": "Mostly cloudy, 21.2°C",
+      "source": {
+        "lat": -37.8070279,
+        "lon": 144.96858899999998
+      },
+      "destination": {
+        "lat": -37.801833099999996,
+        "lon": 144.9744962
+      },
+      "park": {
+        "lat": -37.8054312,
+        "lon": 144.9714124
+      }
+    },
+    "sections": [
+      {
+        "type": "focused_attention",
+        "minimum_words": 868,
+        "opening_narration": {
+          "id": "focused_opening",
+          "text": "Welcome. As you begin this walk, let your attention arrive here, in this body, on this path, in this moment. There is no need to make the mind quiet or to feel a particular way. Simply notice what is already present. The sky is mostly cloudy, and the air is about 21.2 degrees Celsius. Let that be part of the experience: perhaps the soft light, the feel of the air on your face, or the way your clothing rests against your skin. (pause)\n\nBefore moving on, take a moment to look around. Notice the path, other people, vehicles, crossings, and anything that may affect your footing. Keep your eyes open and your awareness broad. This practice is not about withdrawing from your surroundings. It is about meeting them with care while walking safely. Follow the route and local signs, and pause whenever you need to check your way.\n\nFeel the contact of your feet with the ground. One foot lifts, moves, and settles; then the other. There is no need to change your pace. Let the steps find a comfortable rhythm. Notice the small shifts of weight through your legs and hips, and the way your arms move, or rest, as you walk. Feel the soles of your shoes, the pressure that comes and goes, and the ground supporting you. (pause)\n\nNow notice your breathing. You do not need to deepen it or control it. Feel where breath is easiest to sense: at the nostrils, in the chest, or through the gentle movement of the belly. Let a few steps accompany an inhale, and a few steps accompany an exhale, without forcing a pattern. If attention wanders, that is ordinary. Recognize that it has wandered, and kindly return to one step, one breath, one sensation.\n\nAs you continue, include the sounds around you. Let them come and go without needing to name or follow each one. Notice light and shadow, the colors nearby, and the space ahead. Keep enough attention for the practical task of walking: where you are going, what is underfoot, and who is sharing the way. Within that awareness, there is room to feel the simple fact of being here. (pause)"
+        },
+        "route_segments": [
+          {
+            "id": "source_to_park_1",
+            "route_phase": "source_to_park",
+            "index": 1,
+            "instruction": "Head east on Victoria St\/State Route 32 toward Rathdowne St\/State Route 46",
+            "route_label": "Victoria St\/State Route 32 toward Rathdowne St\/State Route 46",
+            "start": {
+              "lat": -37.8071306,
+              "lon": 144.9685716
+            },
+            "end": {
+              "lat": -37.8071802,
+              "lon": 144.9690224
+            },
+            "elevation": {
+              "classification": "low elevation (mostly flat)",
+              "gain_m": -1.5,
+              "start_m": 31.6,
+              "end_m": 30.2
+            },
+            "narration": "Continue east along Victoria Street toward Rathdowne Street. Keep a comfortable pace and stay attentive to the route, the pavement, and the people around you. The ground here is mostly flat, so notice the steady, repeating movement of each step. Feel one heel meet the ground, the foot roll forward, and the toes release. Then notice the other side. There is no need to make the steps perfectly even. Let them be as they are. (pause)\n\nBring gentle attention to the muscles of your legs. Sense the thighs and calves working in their own quiet way. Notice the ankles adjusting, the knees bending, and the hips shifting to carry you forward. You might feel warmth, effort, ease, or very little at all. All of these are welcome observations, not problems to solve. Keep your posture comfortable, and let your shoulders soften if they are holding unnecessary tension.\n\nNotice the breath again. Perhaps it moves more clearly with the rhythm of walking. Perhaps it feels unchanged. Let it be natural. You can sense an inhale arriving and an exhale leaving while still looking ahead and noticing the street. If something draws your attention—a sound, a thought, a change in the path—acknowledge it, then return to the physical experience of walking. Feel the next footfall. Feel the next breath. (pause)\n\nThe mostly cloudy sky may soften the brightness around you. Notice how the light falls across the street, without needing to turn your gaze away from the way ahead. The air is around 21.2 degrees Celsius; perhaps it feels mild on your skin. Let these details anchor you in this particular walk, rather than in an imagined place or a later moment. Continue with care, allowing awareness to include both your body and your surroundings."
+          },
+          {
+            "id": "source_to_park_2",
+            "route_phase": "source_to_park",
+            "index": 2,
+            "instruction": "Turn left onto Rathdowne St\/State Route 46",
+            "route_label": "Rathdowne St\/State Route 46",
+            "start": {
+              "lat": -37.8071802,
+              "lon": 144.9690224
+            },
+            "end": {
+              "lat": -37.8071546,
+              "lon": 144.96902699999998
+            },
+            "elevation": {
+              "classification": "low elevation (mostly flat)",
+              "gain_m": 0.1,
+              "start_m": 30.2,
+              "end_m": 30.3
+            },
+            "narration": "Turn left onto Rathdowne Street and continue with an easy, attentive pace. As you make the turn, take the time you need to check the way and remain aware of traffic, other walkers, and the surface beneath your feet. Once you are safely on your route, feel the body settle back into its walking rhythm. The ground remains mostly flat. Notice how your weight travels from one foot to the other, a small, dependable exchange. (pause)\n\nYou may feel the movement in your feet first, or perhaps in the legs, hips, or lower back. Let attention move through these sensations without judging them. Is there pressure, lightness, a little effort, or a sense of ease? Sensations can change from step to step. You do not have to hold on to any one of them. Simply notice what is here, then notice what comes next.\n\nLet the hands be comfortable. Feel whether they swing, rest, or hold something. Notice the shoulders and the space around the neck. If you discover tightness, you might allow a little softening, while keeping your balance and your attention on the path. There is no need to adjust anything that feels fine as it is. Walking meditation is not a special way of walking; it is ordinary walking with a little more care and awareness.\n\nListen to the sounds of the street as part of the present moment. Some sounds may be near, others farther away. Keep your gaze open and your attention ready to respond. Safety belongs within mindfulness. You can notice a breath and also notice a crossing, a person approaching, or a change in the pavement. Let awareness be spacious enough for both. (pause)\n\nFor a few steps, feel the whole movement together: the foot lifting, the body moving forward, the foot meeting the ground, and the breath continuing. Nothing needs to be added. Keep following the route, one step at a time, with patience toward yourself."
+          },
+          {
+            "id": "source_to_park_3",
+            "route_phase": "source_to_park",
+            "index": 3,
+            "instruction": "Turn right",
+            "route_label": "Turn right",
+            "start": {
+              "lat": -37.8071546,
+              "lon": 144.96902699999998
+            },
+            "end": {
+              "lat": -37.8055935,
+              "lon": 144.9711736
+            },
+            "elevation": {
+              "classification": "high elevation (uphill)",
+              "gain_m": 11.4,
+              "start_m": 30.3,
+              "end_m": 41.7
+            },
+            "narration": "As the route turns right, check your surroundings and make the turn safely. The way ahead rises uphill. Let your pace respond naturally to the slope; it is fine to slow down or pause. Notice how the legs meet the added effort. The calves may engage, the thighs may work more, and the body may lean slightly forward in a comfortable way. There is no need to push. Let each step be manageable. (pause)\n\nFeel the ground beneath you as you place each foot. Choose secure footing and keep attention on the path ahead. Notice the breath without asking it to match a particular rhythm. It may become more noticeable with the uphill walk. Let it move as it needs to. If you want to stop briefly, do so in a safe place, and allow the body to rest before continuing.\n\nAs you walk, sense the difference between effort and strain. You can respond kindly to what you feel: shorten a step, ease your pace, or take a pause. The purpose is not to conquer the hill. It is to experience this part of the walk clearly and safely. Notice how the body adjusts, how weight shifts, and how one step creates the possibility of the next.\n\nKeep some attention on the world around you. The mostly cloudy light may change as you move. The air remains about 21.2 degrees Celsius, though it may feel different in motion. Hear the nearby sounds, notice the space ahead, and stay aware of others using the route. (pause)\n\nWhen the mind runs ahead to the top or back to where you began, gently recognize that movement of thought. Then return to what is immediate: a foot lifting, a breath passing, the muscles working, the ground meeting your shoe. There is no need to hurry through the uphill section. Continue at a pace that allows you to remain present and attentive."
+          },
+          {
+            "id": "source_to_park_4",
+            "route_phase": "source_to_park",
+            "index": 4,
+            "instruction": "Turn right",
+            "route_label": "Turn right",
+            "start": {
+              "lat": -37.8055935,
+              "lon": 144.9711736
+            },
+            "end": {
+              "lat": -37.8054718,
+              "lon": 144.97165049999998
+            },
+            "elevation": {
+              "classification": "low elevation (mostly flat)",
+              "gain_m": -0.1,
+              "start_m": 41.7,
+              "end_m": 41.6
+            },
+            "narration": "Turn right when it is safe, then continue along the mostly flat way. Notice the change in effort after the uphill stretch. Perhaps the legs feel lighter, or perhaps they still carry some work. Let the sensations be exactly what they are. Feel the feet meeting the ground and the body moving forward, supported by a steady sequence of small actions. (pause)\n\nAllow the breath to find its own pace. You might notice an inhale, a brief turning point, and an exhale. There is no need to count or hold the breath. Let breathing remain easy and natural. If your attention drifts into planning or remembering, meet that kindly. The mind is allowed to wander; each return is simply another moment of practice.\n\nNotice the muscles around the face and jaw. Let them rest if they can, while keeping your eyes open and responsive. Feel the arms move with the steps. Sense the contact between clothing and skin, and the air on any uncovered part of the body. These small details can bring attention back to the walk without taking you away from the route.\n\nKeep looking where you are going. Be mindful of crossings, uneven surfaces, other people, and any changes in direction. Let the practical awareness of walking be part of the meditation. The sky is mostly cloudy; perhaps the light feels even and gentle. The mild air, around 21.2 degrees Celsius, accompanies you for these steps. (pause)\n\nAs you near the park, notice any anticipation without needing to follow it. Feel the present step before the next one. The walk is made of these simple moments: lifting, moving, placing, breathing, noticing. Continue gently, with care for your body and the shared path."
+          }
+        ],
+        "closing_narration": {
+          "id": "focused_closing",
+          "text": "As you arrive at the park, take a moment to notice the transition. You have moved through streets and changing terrain, and now you are entering a different space. Keep checking your surroundings as you choose a safe place to pause. Let your eyes take in the park without needing to search for anything special. Notice the shapes, colors, and sounds that are here. (pause)\n\nFeel both feet on the ground. Sense the support beneath you and the way your weight rests. Notice the breath arriving and leaving. Your body has carried you here through many small movements. You might feel energy, tiredness, warmth, or no particular sensation. Let the experience be simple and unforced. There is nothing you need to accomplish in this moment.\n\nIf it feels comfortable, allow your attention to widen. Include the body, the breath, the sounds of the park, and the open space around you. Let each part belong. When you are ready, continue into the next part of your walk with a gentle awareness of the present moment."
+        }
+      },
+      {
+        "type": "compassion_meditation",
+        "minimum_words": 0,
+        "narration": {
+          "id": "compassion",
+          "text": "In the park, find a safe and comfortable place to pause. You may sit or stand, keeping aware of the people and activity around you. Let the body be as it is. Notice the ground supporting you and the breath moving naturally. (pause)\n\nBring to mind a simple wish for yourself: May I meet this moment with kindness. You do not have to feel especially calm or loving. Let the words be an intention, offered gently. Perhaps add: May I be patient with myself. May I treat my body with care. May I allow myself to be human, with changing thoughts and feelings. (pause)\n\nNotice how it feels to offer yourself these wishes. There may be warmth, resistance, neutrality, or nothing distinct. There is no correct response. If the words do not fit, let them pass and rest with the breath or the feeling of your feet on the ground.\n\nNow bring to mind someone who has been kind to you, or someone whose presence feels easy to remember. Offer them the same simple wish: May you meet this moment with kindness. May you have support and ease. Let the wish be quiet and sincere, without needing to imagine how they receive it. (pause)\n\nIf it feels right, widen the circle to include people nearby: those walking through the park, those working, resting, traveling, or caring for someone. Each person has a life you cannot fully see. You might offer: May we treat one another with patience. May we move through this day with care. Let this be a gentle possibility, not a demand that you feel the same toward everyone.\n\nReturn to yourself for a breath. Kindness can include boundaries, rest, and attention to safety. It does not require you to ignore your needs. Feel the ground beneath you, notice the air and the sounds around you, and let the practice settle. When you are ready, continue your walk carrying only what feels useful: a little patience, a little care, and the knowledge that kindness can begin with the next small action."
+        }
+      },
+      {
+        "type": "closing_meditation",
+        "minimum_words": 1255,
+        "opening_narration": {
+          "id": "closing_opening",
+          "text": "As you leave the park and continue toward your destination, let mindfulness accompany you in an ordinary, practical way. Mindfulness does not mean closing yourself off from the world. Keep your eyes open, follow the route, and stay alert to traffic, crossings, other people, and the condition of the path. You can be aware of your breath while also making careful choices about where to step. (pause)\n\nTake a moment to feel the body as it is now. Notice the feet, legs, hips, and the movement of your arms. Perhaps the muscles carry a trace of the walk so far. Perhaps they feel ready for more. There is no need to label the body as good or bad. Simply sense what is present and let that information guide a comfortable pace.\n\nNotice the breath in its natural rhythm. Feel an inhale, then an exhale, without trying to make either one longer. Let the sounds around you come and go. Notice the light beneath the mostly cloudy sky and the air, about 21.2 degrees Celsius, touching your skin. These details are not distractions from mindfulness; they are part of the moment you are actually living.\n\nThe route ahead may bring familiar streets and small changes in direction. Take each turn with care, checking where you are going. If you need to pause to orient yourself, choose a safe place and do so. Let the next few steps be enough. You do not have to arrive in your mind before you arrive with your body. (pause)\n\nAs you walk, practice including more than one thing at a time. Feel a foot meet the ground and hear a sound nearby. Notice the breath and the space ahead. Sense the body moving and remain aware of others sharing the way. Attention can be steady without becoming narrow. When it wanders, return without criticism. This gentle return is the heart of the practice."
+        },
+        "route_segments": [
+          {
+            "id": "park_to_destination_1",
+            "route_phase": "park_to_destination",
+            "index": 1,
+            "instruction": "Head east toward Nicholson St",
+            "route_label": "Nicholson St",
+            "start": {
+              "lat": -37.8054718,
+              "lon": 144.97165049999998
+            },
+            "end": {
+              "lat": -37.805644099999995,
+              "lon": 144.9734246
+            },
+            "elevation": {
+              "classification": "low elevation (mostly flat)",
+              "gain_m": 3.1,
+              "start_m": 41.6,
+              "end_m": 44.8
+            },
+            "narration": "Head east toward Nicholson Street, keeping a pace that feels sustainable. The ground is mostly flat. Notice the simple sequence of walking: one foot lifts, the body moves, and the foot settles again. Feel the surface through your shoes. Sense the shift of weight from side to side, and the small adjustments your ankles and hips make to keep you moving. (pause)\n\nLet the breath remain natural. You might notice it in the chest, the belly, or around the nose. There is no need to follow every breath. Let awareness move between breathing and the feel of your steps, while keeping your gaze on the way ahead. If a person, vehicle, crossing, or change in the path needs your attention, give it that attention. Mindfulness includes responding to what is happening.\n\nNotice the sounds around you without needing to sort them into important and unimportant. A sound appears, changes, and fades. The same is true of many sensations in the body. Perhaps one step feels firm and the next feels softer. Perhaps the legs feel relaxed or a little tired. Let each sensation be temporary, and meet it with curiosity rather than a demand that it stay the same.\n\nYou may notice thoughts about where you are going or what comes next. There is nothing wrong with planning. When it is useful, plan; when it is not, let the thought pass and return to the immediate walk. Feel the next step, the air on your face, and the steady movement of breath. (pause)\n\nThe mostly cloudy sky and mild air are part of this particular moment. Notice them briefly, then return to the path. Continue with a broad, calm awareness, caring for your body and remaining attentive to the shared surroundings."
+          },
+          {
+            "id": "park_to_destination_2",
+            "route_phase": "park_to_destination",
+            "index": 2,
+            "instruction": "Turn left onto Nicholson St",
+            "route_label": "Nicholson St",
+            "start": {
+              "lat": -37.805644099999995,
+              "lon": 144.9734246
+            },
+            "end": {
+              "lat": -37.8053186,
+              "lon": 144.973483
+            },
+            "elevation": {
+              "classification": "low elevation (mostly flat)",
+              "gain_m": 0.2,
+              "start_m": 44.8,
+              "end_m": 44.9
+            },
+            "narration": "Turn left onto Nicholson Street when it is safe to do so. Take the turn at a comfortable pace, keeping aware of the route and the people around you. Once you are moving along the street, notice how the body continues through the change in direction. The ground remains mostly flat. Feel the feet place themselves, one after another, and the body follow. (pause)\n\nMindfulness can be as simple as knowing that you are walking while you walk. Notice the pressure beneath each foot, the movement through the knees, and the gentle work of the muscles. You do not need to inspect every sensation. Let attention rest lightly on the body, then widen to include the street, the sounds, and the space ahead.\n\nIf you find yourself hurrying, notice the impulse without scolding yourself. You can choose a pace that allows you to stay attentive and safe. If you are already moving comfortably, there is no need to change. Let the breath come and go in its own way. Feel how the body responds to the rhythm of your steps, without forcing them into a pattern.\n\nNotice the mind's tendency to move toward the destination. It may picture what you will do when you arrive, or replay something from earlier. Acknowledge those thoughts as part of being human. Then gently return to what is directly here: the next footfall, the air, a sound, the movement of your hands. (pause)\n\nKeep your eyes open and responsive. Attend to crossings, uneven ground, and anyone approaching. Let care for yourself and others be woven into the walk. Each safe, attentive step is a small expression of mindfulness."
+          },
+          {
+            "id": "park_to_destination_3",
+            "route_phase": "park_to_destination",
+            "index": 3,
+            "instruction": "Turn right onto Gertrude St",
+            "route_label": "Gertrude St",
+            "start": {
+              "lat": -37.8053186,
+              "lon": 144.973483
+            },
+            "end": {
+              "lat": -37.8053086,
+              "lon": 144.9737978
+            },
+            "elevation": {
+              "classification": "low elevation (mostly flat)",
+              "gain_m": -0.4,
+              "start_m": 44.9,
+              "end_m": 44.6
+            },
+            "narration": "Turn right onto Gertrude Street, taking a moment to check the way before and during the turn. Continue along the mostly flat route. Feel the ground beneath your feet and the steady support it offers. Notice whether your pace has changed since leaving the park. You may keep it as it is, or adjust it to suit the moment. (pause)\n\nBring awareness to the whole body moving through space. Feel the feet, legs, and hips working together. Notice the arms swinging or resting, the shoulders shifting, and the head balanced above the body. There is no need to make the posture perfect. Let it be comfortable and responsive. If a sensation asks for attention, listen to it in a practical way and make any needed adjustment safely.\n\nNow notice the breath and the environment together. Perhaps you can feel an exhale while hearing a sound nearby. Perhaps you notice the cloudy light and the movement of people around you. Let the senses receive what is here without needing to hold on to any one detail. Mindfulness is not a narrow beam; it can be an open awareness that includes many things.\n\nThoughts may come and go. Some may be useful, some may simply repeat. You can recognize a thought as a thought, without needing to argue with it or follow it. Then return to the present through a direct sensation: the sole of a foot meeting the ground, the breath moving, or the air touching your skin. (pause)\n\nAs you continue, remember that attention can be renewed at any moment. If you lose track, you have not failed. The next moment offers another chance to notice. Keep following the route, looking ahead, and moving with care for yourself and those around you."
+          },
+          {
+            "id": "park_to_destination_4",
+            "route_phase": "park_to_destination",
+            "index": 4,
+            "instruction": "Turn left onto Nicholson St\nDestination will be on the right",
+            "route_label": "the right",
+            "start": {
+              "lat": -37.8053086,
+              "lon": 144.9737978
+            },
+            "end": {
+              "lat": -37.8018213,
+              "lon": 144.9743881
+            },
+            "elevation": {
+              "classification": "low elevation (mostly flat)",
+              "gain_m": -6.5,
+              "start_m": 44.6,
+              "end_m": 38.1
+            },
+            "narration": "Turn left onto Nicholson Street, and continue toward your destination on the right. Check your surroundings and make the turn only when it is safe. Keep your attention on the route, the pavement, and the people nearby. The way is mostly flat. Feel the familiar rhythm of walking, while allowing each step to be its own event rather than something to rush through. (pause)\n\nNotice the body as it moves through this final part of the walk. Feel the feet meet the ground, the legs carry your weight, and the muscles make small adjustments. You may sense tiredness, energy, or a mixture. Let those sensations inform your pace. There is no need to hurry simply because you are close to arriving. Let the body complete the walk with steadiness and care.\n\nNotice the breath, just as it is. Feel an inhale arrive and an exhale leave. The breath does not need to be special to bring you into the present. The ordinary sounds of the street, the light under the cloudy sky, and the mild air are also here. Let them be noticed without turning away from the practical task of navigating safely.\n\nAs the destination comes into view, you may notice anticipation or relief. Let those feelings be present without needing to move ahead of yourself. You are here for these steps, too. Keep your eyes open, check for the destination on your right, and remain aware of the path and anyone sharing it. (pause)\n\nWhen you arrive, pause in a safe place if that is appropriate. Feel your feet on the ground and take one natural breath. Notice that the walk has been made of many small moments of attention: sensing, adjusting, choosing, and returning. You can carry this simple mindfulness into whatever comes next—not as a task to perform perfectly, but as an invitation to meet the next moment with care. Let the walk come to a gentle close."
+          }
+        ],
+        "closing_narration": {
+          "id": "closing_closing",
+          "text": "As you reach your destination, take a moment to arrive with your attention as well as your body. Move to a safe place, and let the feet settle. Notice the ground beneath you, the breath moving naturally, and the sounds that remain around you. There is no need to review the walk or decide whether you did it well. You were here for many small moments, and each moment was enough. (pause)\n\nMindfulness can continue in simple ways: noticing a breath before beginning a task, feeling your feet while waiting, or listening fully when someone speaks. It does not require perfect focus. When attention wanders, you can return with patience. Let the next thing you do begin gently, with awareness of yourself and the people around you.\n\nTake one last easy breath. Feel the body supported, and allow the walk to be complete. May you carry a little steadiness and care into what comes next."
+        }
+      }
+    ]
+  },
+  "generation_cost_usd": 0.00250755,
+  "usage": {
+    "model": "gpt-6-luna",
+    "service_tier": "default",
+    "input_tokens": 1077,
+    "cached_input_tokens": 0,
+    "cache_write_tokens": 1074,
+    "output_tokens": 4746,
+    "reasoning_tokens": 0,
+    "total_tokens": 5823
+  }
+}
