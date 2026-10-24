@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 
 from route.models import TTSRequest
 from route.services.speech_chunks import split_speech
-from route.services.text_to_speech import generate_tts_mp3, encode_pcm_mp3, PollyUnavailableError
+from route.services.text_to_speech import generate_tts_mp3, encode_pcm_mp3, PollyUnavailableError, PollyRequestError, MAX_SYNTHESIS_CHUNKS
 
 
 class SpeechChunkTests(unittest.TestCase):
@@ -88,6 +88,25 @@ class ChunkSynthesisTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(stream.closed for stream in streams))
         client.close.assert_called_once()
 
+    async def test_chunk_cap_rejects_before_encoder_or_aws_and_accepts_boundary(self):
+        from route.services.speech_chunks import SPOKEN_LIMIT
+        oversized = TTSRequest.model_validate({"Text": "a" * (SPOKEN_LIMIT * MAX_SYNTHESIS_CHUNKS + 1)})
+        with patch("route.services.text_to_speech.create_polly_client") as factory, \
+             patch("route.services.text_to_speech.require_encoder") as encoder:
+            with self.assertRaises(PollyRequestError):
+                await generate_tts_mp3(oversized, asyncio.Semaphore(1))
+            factory.assert_not_called()
+            encoder.assert_not_called()
+        client = Mock()
+        client.synthesize_speech.side_effect = lambda **kw: {"AudioStream": io.BytesIO(b"\x00\x00")}
+        boundary = TTSRequest.model_validate({"Text": "a" * (SPOKEN_LIMIT * MAX_SYNTHESIS_CHUNKS)})
+        with patch("route.services.text_to_speech.create_polly_client", return_value=client), \
+             patch("route.services.text_to_speech.require_encoder", return_value="ffmpeg"), \
+             patch("route.services.text_to_speech.encode_pcm_mp3", return_value=b"joined"):
+            response = await generate_tts_mp3(boundary, asyncio.Semaphore(1))
+        self.assertEqual(MAX_SYNTHESIS_CHUNKS, client.synthesize_speech.call_count)
+        self.assertEqual(b"joined", response.body)
+
     async def test_missing_encoder_fails_before_any_aws_request(self):
         payload = TTSRequest.model_validate({"Text": "a" * 5000})
         with patch("route.services.text_to_speech.shutil.which", return_value=None), \
@@ -112,10 +131,7 @@ class ChunkSynthesisTests(unittest.IsolatedAsyncioTestCase):
 
 class AudioEncodingTests(unittest.TestCase):
     def test_real_encoder_produces_decodable_audio_with_combined_duration(self):
-        try:
-            import imageio_ffmpeg
-        except ImportError:
-            self.skipTest("optional imageio-ffmpeg test tool is not installed")
+        import imageio_ffmpeg
         encoder = imageio_ffmpeg.get_ffmpeg_exe()
         # Two different tones, each half a second; no AWS or network access.
         pcm = b"".join(struct.pack("<h", int(4000 * math.sin(2 * math.pi * hz * i / 16000)))
