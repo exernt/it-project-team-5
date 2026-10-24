@@ -62,18 +62,35 @@ public final class CurrentWalk {
                     || manifest.narrations.isEmpty()) throw new IOException("Invalid walk manifest");
             if (requireReady) {
                 if (!manifest.ready) throw new IOException("Walk audio is not ready");
-                for (ScheduledNarration narration : manifest.narrations) {
-                    if (narration.audioFilePath == null) throw new IOException("Missing narration audio");
-                    File audio = new File(narration.audioFilePath);
-                    if (!directory.getCanonicalFile().equals(audio.getCanonicalFile().getParentFile())
-                            || !audio.isFile() || audio.length() == 0)
-                        throw new IOException("Missing narration audio");
-                }
+                validateAudio(manifest);
             }
             return manifest;
         } catch (RuntimeException exception) {
             throw new IOException("Invalid walk manifest", exception);
         }
+    }
+
+    private void validateAudio(Manifest manifest) throws IOException {
+        for (ScheduledNarration narration : manifest.narrations) {
+            if (narration.audioFilePath == null) throw new IOException("Missing narration audio");
+            File audio = new File(narration.audioFilePath);
+            if (!directory.getCanonicalFile().equals(audio.getCanonicalFile().getParentFile())
+                    || !audio.isFile() || audio.length() == 0)
+                throw new IOException("Missing narration audio");
+        }
+    }
+
+    public void markReady(Manifest manifest) throws IOException {
+        validateAudio(manifest);
+        manifest.ready = true;
+        try { save(manifest); }
+        catch (IOException failure) { manifest.ready = false; throw failure; }
+    }
+
+    /** Release file handles before deleting audio; preserve files if release fails. */
+    public void finish(Runnable releasePlayback) throws IOException {
+        releasePlayback.run();
+        clear();
     }
 
     public void clear() throws IOException { delete(directory); }

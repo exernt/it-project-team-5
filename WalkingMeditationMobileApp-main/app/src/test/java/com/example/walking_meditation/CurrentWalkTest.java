@@ -72,4 +72,36 @@ public class CurrentWalkTest {
         store.save(m);
         assertThrows(IOException.class, () -> store.read(true));
     }
+    @Test public void completionReleasesPlaybackBeforeDeletingManifestAndAudio() throws Exception {
+        CurrentWalk store = new CurrentWalk(temp.getRoot());
+        CurrentWalk.Manifest manifest = begin(store, "finished");
+        File audio = new File(store.directory, "audio.mp3");
+        Files.write(audio.toPath(), new byte[]{1});
+        manifest.narrations.get(0).audioFilePath = audio.getAbsolutePath();
+        store.markReady(manifest);
+        java.io.FileInputStream playerHandle = new java.io.FileInputStream(audio);
+        boolean[] released = {false};
+        store.finish(() -> {
+            assertTrue(audio.exists());
+            assertTrue(new File(store.directory, "manifest.json").isFile());
+            try { playerHandle.close(); } catch (IOException e) { throw new RuntimeException(e); }
+            released[0] = true;
+        });
+        assertTrue(released[0]);
+        assertFalse(store.directory.exists());
+        assertThrows(IOException.class, () -> store.read(true));
+    }
+
+    @Test public void discardRemovesIncompleteDownloadsAndReleaseFailurePreservesRetry() throws Exception {
+        CurrentWalk store = new CurrentWalk(temp.getRoot());
+        begin(store, "unfinished");
+        Files.write(new File(store.directory, "audio.part").toPath(), new byte[]{1});
+        assertThrows(IllegalStateException.class, () -> store.finish(() -> {
+            throw new IllegalStateException("Playback still holds a file");
+        }));
+        assertTrue(store.directory.exists());
+        store.finish(() -> {});
+        assertFalse(store.directory.exists());
+        store.finish(() -> {});
+    }
 }
