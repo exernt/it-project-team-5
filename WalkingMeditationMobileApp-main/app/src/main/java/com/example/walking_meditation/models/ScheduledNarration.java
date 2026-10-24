@@ -17,6 +17,7 @@ public class ScheduledNarration {
     public Anchor anchor;
     public String routeLegId;
     public boolean allowTimeFallback;
+    public boolean routeEndAnchor;
     public double routeStartM;
     public long plannedStartMs;
 

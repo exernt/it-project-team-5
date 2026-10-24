@@ -7,6 +7,7 @@ import java.util.*;
 /** Resolves persistent anchors against the current, geometry-aligned route. */
 public final class NarrationScheduler {
     private static final double STEP_LEAD_M = 25;
+    private static final double ARRIVAL_TOLERANCE_M = 10;
     private static final long FALLBACK_DELAY_MS = 60_000;
     private NarrationScheduler() {}
 
@@ -36,6 +37,7 @@ public final class NarrationScheduler {
         }
         for (ScheduledNarration narration : narrations) {
             if (narration.anchor == null) throw new IOException("Missing narration anchor: " + narration.id);
+            narration.routeEndAnchor = narration.anchor == ScheduledNarration.Anchor.ROUTE_END;
             String key;
             switch (narration.anchor) {
                 case ROUTE_START:
@@ -57,13 +59,21 @@ public final class NarrationScheduler {
             narration.routeStartM = distances.get(key);
             narration.plannedStartMs = times.get(key);
             narration.allowTimeFallback = narration.anchor == ScheduledNarration.Anchor.STEP_START;
+            narration.routeEndAnchor = narration.anchor == ScheduledNarration.Anchor.LEG_END
+                    && narration.routeLegId.equals(route.legs.get(route.legs.size() - 1).id);
         }
+    }
+
+    public static boolean hasArrived(double progressM, double totalM, boolean offRoute) {
+        return !offRoute && progressM + ARRIVAL_TOLERANCE_M >= totalM;
     }
 
     /** Caller considers only the next block and waits for previous audio completion. */
     public static boolean isEligible(ScheduledNarration narration, double progressM,
                                      long activeWalkingMs, boolean offRoute) {
         if (offRoute || narration.anchor == null) return false;
+        if (narration.routeEndAnchor || narration.anchor == ScheduledNarration.Anchor.ROUTE_END)
+            return hasArrived(progressM, narration.routeStartM, offRoute);
         double lead = narration.anchor == ScheduledNarration.Anchor.STEP_START ? STEP_LEAD_M : 0;
         return progressM + lead >= narration.routeStartM
                 || (narration.allowTimeFallback

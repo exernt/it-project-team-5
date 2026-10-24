@@ -79,6 +79,19 @@ public class NarrationSchedulerTest {
         assertEquals(30_000, n.plannedStartMs);
     }
 
+    @Test public void finalNarrationSharesArrivalToleranceAndNeverFiresOffRoute() throws Exception {
+        ScheduledNarration closing = block(ScheduledNarration.Anchor.ROUTE_END, null, null);
+        ScheduledNarration finalLeg = block(ScheduledNarration.Anchor.LEG_END, "leg1", null);
+        NarrationScheduler.resolve(route(), Arrays.asList(closing, finalLeg));
+        for (ScheduledNarration narration : Arrays.asList(closing, finalLeg)) {
+            assertFalse(NarrationScheduler.isEligible(narration, 389.9, Long.MAX_VALUE, false));
+            assertTrue(NarrationScheduler.hasArrived(390, 400, false));
+            assertTrue(NarrationScheduler.isEligible(narration, 390, 0, false));
+            assertFalse(NarrationScheduler.hasArrived(400, 400, true));
+            assertFalse(NarrationScheduler.isEligible(narration, 400, Long.MAX_VALUE, true));
+        }
+    }
+
     @Test public void rejectsUnknownOrMissingAnchors() {
         for (ScheduledNarration n : Arrays.asList(block(null, null, null),
                 block(ScheduledNarration.Anchor.STEP_START, null, "missing"),
