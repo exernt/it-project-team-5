@@ -22,19 +22,22 @@ Open `WalkingMeditationMobileApp-main` in Android Studio and let Gradle sync.
 The default debug server URL is `http://10.0.2.2:8000`, the Android emulator
 alias for the host computer.
 
-The mobile app reads its API key, server URL, and optional access token from
-Gradle properties. For a PowerShell session, configure them without writing
-secrets into the repository:
+The mobile app reads its Maps API key and server URL from Gradle properties.
+For a PowerShell session, configure them without writing secrets into the
+repository:
 
 ```powershell
 $env:ORG_GRADLE_PROJECT_MAPS_API_KEY = "your-android-restricted-key"
 $env:ORG_GRADLE_PROJECT_SERVER_BASE_URL = "http://10.0.2.2:8000"
-$env:ORG_GRADLE_PROJECT_SERVER_ACCESS_TOKEN = "your-server-access-token"
 ```
 
-When server access-token protection is enabled, `SERVER_ACCESS_TOKEN` must
-match the token expected by the server. The app sends it in the `X-App-Token`
-header for route, script, and narration requests.
+Release builds also read `APP_LINK_HOST`, the HTTPS hostname authorized to
+open links in the app. Local password-reset testing uses the
+`walkingmeditation://` debug link and does not require this setting.
+
+Users must sign in before using route, script, and narration services. The app
+sends the user's short-lived JWT in the `Authorization: Bearer` header and
+rotates the refresh token automatically when the access token expires.
 
 For a physical device, use an HTTPS development endpoint or a host address
 reachable by the device. Release builds reject cleartext HTTP; debug builds
@@ -101,13 +104,23 @@ See `READList/Procedure.md` for the full set of database commands (inspecting mi
 | Variable | Purpose |
 |---|---|
 | `GOOGLE_MAPS_API_KEY` | Google Routes/Places/Elevation/Weather access |
+| `ENABLE_PARK_FALLBACK` | Defaults to `false`; set to `true` to supplement `city_park` and `garden` results with generic `park` results |
 | `OPENAI_API_KEY` | Meditation script generation |
-| `APP_API_TOKEN` | Optional shared secret checked against the mobile app's `X-App-Token` header (see [Authentication](#authentication) below) |
 | `DATABASE_URL` | PostgreSQL connection string (defaults match the local Docker Compose setup) |
 | `JWT_SECRET_KEY` | Signs access tokens — generate a real random value per environment, never reuse the placeholder |
 | `JWT_ALGORITHM` | Defaults to `HS256` |
 | `ACCESS_TOKEN_TTL_MINUTES` | Access token lifetime, default 15 |
 | `REFRESH_TOKEN_TTL_DAYS` | Refresh token lifetime, default 30 |
+| `EMAIL_BACKEND` | `file` for ignored local `.eml` captures or `ses` for Amazon SES |
+| `EMAIL_CAPTURE_DIRECTORY` | Local capture directory used by the `file` backend |
+| `PASSWORD_RESET_FROM_EMAIL` | Sender identity used for password-reset email |
+| `PASSWORD_RESET_REPLY_TO_EMAIL` | Optional reply-to address |
+| `PASSWORD_RESET_LINK_BASE` | Absolute reset-link base; the token is added as a URL fragment |
+| `PASSWORD_RESET_REQUEST_COOLDOWN_SECONDS` | Minimum interval between reset emails for one account |
+| `AWS_REGION` | SES region when `EMAIL_BACKEND=ses` |
+| `SES_CONFIGURATION_SET` | Optional SES configuration set for password-reset delivery events |
+| `ANDROID_APP_PACKAGE_NAME` | Android package exposed through Digital Asset Links |
+| `ANDROID_APP_SHA256_CERT_FINGERPRINTS` | Comma-separated release signing fingerprints for Digital Asset Links |
 
 ---
 
@@ -121,14 +134,33 @@ The server exposes account and session endpoints under `/auth`:
 | `POST /auth/login` | Exchange email + password for an access token and a refresh token |
 | `POST /auth/refresh` | Exchange a refresh token for a new access/refresh pair (rotates the refresh token) |
 | `POST /auth/logout` | Revoke a refresh token |
-| `POST /auth/password-reset/request` | Request a password reset token (emailed in production; logged to the server console in local development) |
+| `POST /auth/password-reset/request` | Request a single-use password-reset link; local email is captured under `var/dev-mail` |
 | `POST /auth/password-reset/confirm` | Complete a password reset with the token and a new password |
 | `POST /auth/register-researcher` | Upgrade the logged-in account to a researcher account pending admin verification |
 | `POST /auth/admin/researchers/{user_id}/verify` | Verify a researcher account (admin only) |
 
-This is separate from the `APP_API_TOKEN`/`X-App-Token` mechanism described in the Android setup section above — `X-App-Token` is a single shared secret gating access to the app's own routing/script/narration endpoints. Bearer login is also used to determine whether the current participant has study-controlled meditation settings.
+All authenticated account operations and all study, questionnaire, feedback,
+route-generation, script-generation, and narration endpoints require the
+user's bearer access token. Registration, login, password-reset, health, and
+study-link redirect endpoints remain public.
+
+### Android session and local-data security
+
+The Android app encrypts access and refresh tokens with an AES-GCM key held by
+Android Keystore. It restores a saved session at launch by validating the
+access token and, when necessary, rotating the refresh token. Session
+preferences and private generated files are excluded from both cloud backup
+and device-to-device transfer. Release builds reject cleartext HTTP; the debug
+build permits it only for local emulator development.
+
+Logout revokes the current refresh token when the server is reachable and
+immediately clears all local account, study, route, script, and generated-audio
+data. Route plans are stored in Android's no-backup directory, deleted when
+playback closes, and pruned after a maximum retention period of 24 hours.
 
 Details, worked PowerShell examples, and manual test steps for each of these live in `READList/`.
+The domain-free password-reset procedure is in
+[`Password_Reset_Emulator_Testing.md`](WalkingMeditationServer-main/READList/Password_Reset_Emulator_Testing.md).
 
 Account registration also accepts optional `gender` and `age` fields. Gender is
 a self-described string of up to 100 characters, and age must be between 0 and
@@ -314,19 +346,64 @@ $env:PYTHONPATH = (Resolve-Path .).Path
 python -m unittest discover -s tests -v
 ```
 
-## End-to-end check (for final tests)
+## Manual route-generation check
 
-With a configured server already running and reachable from the Android app:
+Live Google integration is intentionally tested manually; automated tests use
+mock clients and do not require an API key or consume Maps quota.
 
-1. Configure `MAPS_API_KEY`, `SERVER_BASE_URL`, and, when required,
-   `SERVER_ACCESS_TOKEN`.
-2. Launch the app and choose **Explore**.
-3. Select source and destination suggestions, enter the available time and a
-   meditation purpose, and request routes.
-4. Choose the direct route or a park route to generate the meditation.
-5. Download narration audio with the floating download button.
-6. When the download completes, start playback and walk along the selected
-   route.
+### Preparation
 
-Live integration checks require the corresponding service credentials and TTS
-model dependencies.
+1. In Google Cloud, enable **Maps SDK for Android**, **Places API (New)**, and
+   **Routes API**. Enable Elevation and Weather as well if testing the current
+   script generator.
+2. Use an Android-restricted key for the app (package name and debug/release
+   SHA-1 certificate restrictions) and a separate server-side key restricted
+   to the APIs called by the server.
+3. Set `GOOGLE_MAPS_API_KEY` and `ENABLE_PARK_FALLBACK=false` in the server
+   `.env`, then start FastAPI. Set the Android `MAPS_API_KEY` and
+   `SERVER_BASE_URL` Gradle properties as described above.
+4. Use an Android emulator with a configured location, or a physical device
+   that can reach the server. A physical device should use a reachable HTTPS
+   endpoint; the debug emulator can use `http://10.0.2.2:8000`.
+
+### Main flow
+
+1. Launch the app, choose **Explore**, and grant location permission. Confirm
+   that the map centres on the device location without filling the Source
+   field automatically.
+2. Press **Use current location**. Confirm that Source becomes “Current
+   location” and a start marker appears.
+3. Search for a destination, choose a Places suggestion, and confirm that its
+   marker appears and the map frames both endpoints. Also verify that manually
+   editing the selected text invalidates the old marker until another
+   suggestion is selected.
+4. Enter a time limit and meditation purpose, then press **Generate routes**.
+   Confirm that the button displays **Loading...** and cannot be submitted
+   twice.
+5. Confirm that no more than three park-constrained route cards are displayed;
+   the direct non-park baseline must not appear.
+6. Tap each card. Confirm that the selected card is highlighted, its route and
+   park marker are displayed on the map, and **Select Route** becomes enabled.
+7. Press **Back**. Confirm that the source, destination, time, purpose, and map
+   markers remain populated. Generate the routes again and also verify Android
+   system Back from the result state.
+8. Select a route and press **Select Route**. Confirm the button displays
+   **Loading...** and the next screen displays the server response. `{}` and an
+   empty response are valid for this temporary screen.
+
+### Failure and configuration cases
+
+1. Deny location permission. Confirm autocomplete remains usable and **Use
+   current location** explains that permission is required.
+2. Choose endpoints whose direct walking time exceeds a very short limit.
+   Confirm the app reports that the direct walk exceeds the limit and remains
+   on the input state.
+3. Choose a route corridor with no qualifying city-park or garden route.
+   Confirm the app reports that no urban-park route fits rather than offering
+   the baseline.
+4. Stop the server and retry route generation, then script generation. Confirm
+   each error leaves the current inputs or selected route available for retry.
+5. Test fallback disabled, then set `ENABLE_PARK_FALLBACK=true`, restart the
+   server, and repeat the same search. With fallback disabled, returned places
+   must have `primary_type` `city_park` or `garden`; with it enabled, generic
+   `park` candidates may supplement those results.

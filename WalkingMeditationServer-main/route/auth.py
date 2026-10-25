@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, update
@@ -32,7 +33,8 @@ from route.services.password_reset import (
     hash_reset_token,
     reset_token_expiry,
 )
-from route.services.email_sender import send_password_reset_email
+from route.config import password_reset_request_cooldown_seconds
+from route.services.email_sender import EmailDeliveryError, send_password_reset_email
 from route.services.tokens import (
     create_access_token,
     generate_refresh_token,
@@ -40,9 +42,10 @@ from route.services.tokens import (
     refresh_token_expiry,
 )
 from route.dependencies import CurrentUserDependency, require_role
-from uuid import UUID
+from uuid import UUID, uuid4
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
+logger = logging.getLogger(__name__)
 
 
 def _email_already_registered() -> HTTPException:
@@ -107,6 +110,22 @@ async def request_password_reset(
     user_id = await session.scalar(select(User.id).where(User.email == email))
 
     if user_id is not None:
+        cooldown_started_at = datetime.now(timezone.utc) - timedelta(
+            seconds=password_reset_request_cooldown_seconds()
+        )
+        recent_request_id = await session.scalar(
+            select(PasswordResetToken.id)
+            .where(
+                PasswordResetToken.user_id == user_id,
+                PasswordResetToken.created_on >= cooldown_started_at,
+            )
+            .limit(1)
+        )
+        if recent_request_id is not None:
+            return PasswordResetRequestResponse(
+                message="If that email is registered, a reset link has been sent."
+            )
+
         # Invalidate any outstanding tokens so only the newest link works.
         await session.execute(
             update(PasswordResetToken)
@@ -118,15 +137,21 @@ async def request_password_reset(
         )
 
         raw_token = generate_reset_token()
-        session.add(
-            PasswordResetToken(
-                user_id=user_id,
-                token_hash=hash_reset_token(raw_token),
-                expires_at=reset_token_expiry(),
-            )
+        reset_token = PasswordResetToken(
+            user_id=user_id,
+            token_hash=hash_reset_token(raw_token),
+            expires_at=reset_token_expiry(),
         )
+        session.add(reset_token)
         await session.commit()
-        await send_password_reset_email(email, raw_token)
+        try:
+            await send_password_reset_email(email, raw_token)
+        except EmailDeliveryError:
+            # Do not let delivery failures reveal whether an account exists.
+            # Retire the token because the user has no reliable way to obtain it.
+            reset_token.used_at = datetime.now(timezone.utc)
+            await session.commit()
+            logger.warning("Password reset email delivery failed")
 
     # Always 200, whether or not the email is registered — otherwise this
     # endpoint could be used to enumerate which emails have accounts.
@@ -145,7 +170,9 @@ async def confirm_password_reset(
 ) -> PasswordResetConfirmResponse:
     token_hash = hash_reset_token(payload.token)
     reset_token = await session.scalar(
-        select(PasswordResetToken).where(PasswordResetToken.token_hash == token_hash)
+        select(PasswordResetToken)
+        .where(PasswordResetToken.token_hash == token_hash)
+        .with_for_update()
     )
 
     if (
@@ -155,12 +182,21 @@ async def confirm_password_reset(
     ):
         raise _invalid_reset_token()
 
-    user = await session.get(User, reset_token.user_id)
+    user = await session.get(User, reset_token.user_id, with_for_update=True)
     if user is None:
         raise _invalid_reset_token()
 
     user.password_hash = await hash_password(payload.new_password)
+    user.session_version += 1
     reset_token.used_at = func.now()
+    await session.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.user_id == user.id,
+            RefreshToken.revoked_at.is_(None),
+        )
+        .values(revoked_at=func.now())
+    )
     await session.commit()
 
     return PasswordResetConfirmResponse(message="Password has been reset")
@@ -182,7 +218,9 @@ async def login(
         session: DatabaseSessionDependency,
 ) -> LoginResponse:
     email = str(payload.email)
-    user = await session.scalar(select(User).where(User.email == email))
+    user = await session.scalar(
+        select(User).where(User.email == email).with_for_update()
+    )
 
     if user is None:
         raise _invalid_credentials()
@@ -190,11 +228,13 @@ async def login(
     if not await verify_password(payload.password, user.password_hash):
         raise _invalid_credentials()
 
-    access_token = create_access_token(user.id)
+    access_token = create_access_token(user.id, user.session_version)
     raw_refresh_token = generate_refresh_token()
+    family_id = uuid4()
     session.add(
         RefreshToken(
             user_id=user.id,
+            family_id=family_id,
             token_hash=hash_refresh_token(raw_refresh_token),
             expires_at=refresh_token_expiry(),
         )
@@ -216,14 +256,20 @@ async def logout(
         session: DatabaseSessionDependency,
 ) -> LogoutResponse:
     token_hash = hash_refresh_token(payload.refresh_token)
-    await session.execute(
-        update(RefreshToken)
-        .where(
-            RefreshToken.token_hash == token_hash,
-            RefreshToken.revoked_at.is_(None),
-            )
-        .values(revoked_at=func.now())
+    refresh_token_row = await session.scalar(
+        select(RefreshToken)
+        .where(RefreshToken.token_hash == token_hash)
+        .with_for_update()
     )
+    if refresh_token_row is not None:
+        await session.execute(
+            update(RefreshToken)
+            .where(
+                RefreshToken.family_id == refresh_token_row.family_id,
+                RefreshToken.revoked_at.is_(None),
+            )
+            .values(revoked_at=func.now())
+        )
     await session.commit()
 
     # Same message whether or not the token existed/was already revoked —
@@ -250,11 +296,39 @@ async def refresh(
         select(RefreshToken).where(RefreshToken.token_hash == token_hash)
     )
 
-    if (
-            refresh_token_row is None
-            or refresh_token_row.revoked_at is not None
-            or refresh_token_row.expires_at < datetime.now(timezone.utc)
-    ):
+    if refresh_token_row is None:
+        raise _invalid_refresh_token()
+
+    # Always acquire the user lock before the refresh-token lock. Password
+    # reset uses the same order, preventing a reset from racing with rotation
+    # and leaving a newly-created successor alive.
+    user = await session.get(User, refresh_token_row.user_id, with_for_update=True)
+    if user is None:
+        raise _invalid_refresh_token()
+
+    refresh_token_row = await session.scalar(
+        select(RefreshToken)
+        .where(RefreshToken.token_hash == token_hash)
+        .with_for_update()
+    )
+    if refresh_token_row is None:
+        raise _invalid_refresh_token()
+
+    if refresh_token_row.revoked_at is not None:
+        # A rotated token being presented again is evidence of replay. Revoke
+        # the complete chain, including any successor held by an attacker.
+        await session.execute(
+            update(RefreshToken)
+            .where(
+                RefreshToken.family_id == refresh_token_row.family_id,
+                RefreshToken.revoked_at.is_(None),
+            )
+            .values(revoked_at=func.now())
+        )
+        await session.commit()
+        raise _invalid_refresh_token()
+
+    if refresh_token_row.expires_at < datetime.now(timezone.utc):
         raise _invalid_refresh_token()
 
     # Rotate: revoke the token that was just used, issue a brand new one.
@@ -263,11 +337,13 @@ async def refresh(
     # rather than the same token silently working for either party for 30 days.
     refresh_token_row.revoked_at = func.now()
 
-    new_access_token = create_access_token(refresh_token_row.user_id)
+    new_access_token = create_access_token(user.id, user.session_version)
     new_raw_refresh_token = generate_refresh_token()
     session.add(
         RefreshToken(
             user_id=refresh_token_row.user_id,
+            family_id=refresh_token_row.family_id,
+            parent_id=refresh_token_row.id,
             token_hash=hash_refresh_token(new_raw_refresh_token),
             expires_at=refresh_token_expiry(),
         )

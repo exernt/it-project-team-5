@@ -12,6 +12,8 @@ import androidx.annotation.NonNull;
 
 import com.example.walking_meditation.utils.SessionManager;
 import com.example.walking_meditation.utils.UserApiClient;
+import com.example.walking_meditation.utils.CacheFiles;
+import com.example.walking_meditation.utils.RoutePlanFiles;
 
 import org.json.JSONObject;
 
@@ -21,7 +23,7 @@ import java.io.IOException;
 
 public class LoginActivity extends AppCompatActivity {
 
-    Button btnLogin, btnSignUp;
+    Button btnLogin, btnSignUp, btnForgotPassword, btnResearcherLoginNav;
     AutoCompleteTextView emailField, passwordField;
 
     @Override
@@ -29,8 +31,12 @@ public class LoginActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
 
+        RoutePlanFiles.cleanupExpired(this);
+        CacheFiles.cleanupExpiredSensitiveFiles(this, RoutePlanFiles.RETENTION_MS);
+
         btnLogin = findViewById(R.id.btnLogin);
         btnSignUp = findViewById(R.id.btnSignUp);
+        btnForgotPassword = findViewById(R.id.btnForgotPassword);
 
         emailField = findViewById(R.id.emailField);
         passwordField = findViewById(R.id.passwordField);
@@ -54,6 +60,76 @@ public class LoginActivity extends AppCompatActivity {
             }
         });
 
+        btnForgotPassword.setOnClickListener(view -> {
+            Intent intent = new Intent(LoginActivity.this, ForgotPasswordActivity.class);
+            startActivity(intent);
+        });
+
+        btnResearcherLoginNav = findViewById(R.id.btnResearcherLoginNav);
+        btnResearcherLoginNav.setOnClickListener(view -> {
+            Intent intent = new Intent(LoginActivity.this, ResearcherLoginActivity.class);
+            startActivity(intent);
+        });
+
+        restoreSessionIfAvailable();
+    }
+
+    private void restoreSessionIfAvailable() {
+        if (!SessionManager.hasSessionCredentials(this)) {
+            return;
+        }
+
+        setRestoringSession(true);
+        UserApiClient.fetchCurrentUser(this, new OkHttpClient(), new UserApiClient.CurrentUserListener() {
+            @Override
+            public void onLoaded(@NonNull String role, boolean researcherVerified) {
+                SessionManager.saveUserInfo(LoginActivity.this, role, researcherVerified);
+                goToMain();
+            }
+
+            @Override
+            public void onFailure(@NonNull String message) {
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    setRestoringSession(false);
+                    Toast.makeText(
+                            LoginActivity.this,
+                            "Unable to restore session: " + message,
+                            Toast.LENGTH_LONG
+                    ).show();
+                });
+            }
+
+            @Override
+            public void onSessionExpired() {
+                clearLocalSession();
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    setRestoringSession(false);
+                    Toast.makeText(
+                            LoginActivity.this,
+                            "Your session has expired. Please sign in again.",
+                            Toast.LENGTH_LONG
+                    ).show();
+                });
+            }
+        });
+    }
+
+    private void setRestoringSession(boolean restoring) {
+        btnLogin.setEnabled(!restoring);
+        btnSignUp.setEnabled(!restoring);
+        btnForgotPassword.setEnabled(!restoring);
+        btnResearcherLoginNav.setEnabled(!restoring);
+        emailField.setEnabled(!restoring);
+        passwordField.setEnabled(!restoring);
+        btnLogin.setText(restoring ? R.string.restoring_session : R.string.login);
+    }
+
+    private void clearLocalSession() {
+        SessionManager.clearSession(this);
+        RoutePlanFiles.clearAll(this);
+        CacheFiles.clearSensitiveFiles(this);
     }
     private void performLogin(String email, String password) {
         OkHttpClient client = new OkHttpClient();
@@ -140,7 +216,9 @@ public class LoginActivity extends AppCompatActivity {
 
     private void goToMain() {
         runOnUiThread(() -> {
+            if (isFinishing() || isDestroyed()) return;
             Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
             finish();
         });

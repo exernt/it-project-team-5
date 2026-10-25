@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/white">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/screen_padding_horizontal">
+
+        <TextView
+            style="@style/App.Label"
+            android:layout_width="match_parent"
+            android:layout_marginTop="@dimen/space_24"
+            android:text="Server script response"
+            android:textSize="20sp" />
+
+        <TextView
+            android:id="@+id/tv_audio_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Preparing walk audio…" />
+        <Button
+            android:id="@+id/btn_retry_audio"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Retry audio preparation" />
+        <Button
+            android:id="@+id/btn_discard_walk"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Discard walk" />
+        <Button
+            android:id="@+id/btn_start_navigation"
+            style="@style/App.PrimaryButton"
+            android:layout_marginTop="@dimen/space_12"
+            android:text="Start walk" />
+
+        <TextView
+            android:id="@+id/tv_script_response"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_24"
+            android:layout_marginBottom="@dimen/space_24"
+            android:fontFamily="monospace"
+            android:textColor="@color/black"
+            android:textIsSelectable="true"
+            android:textSize="13sp" />
+    </LinearLayout>
+</ScrollView>

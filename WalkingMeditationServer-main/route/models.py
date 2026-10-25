@@ -2,6 +2,7 @@ from typing import List, Literal, Tuple
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 from datetime import datetime
 from uuid import UUID
+from route.services.speech_chunks import MAX_BLOCK_CHARACTERS
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -30,6 +31,16 @@ class RegisterResponse(BaseModel):
 class LatLng(BaseModel):
     lat: float = Field(..., ge=-90, le=90)
     lon: float = Field(..., ge=-180, le=180)
+
+
+class RouteStepInfo(BaseModel):
+    index: int = Field(..., ge=1)
+    instruction: str = ""
+    start: LatLng
+    end: LatLng
+    duration_s: int = Field(default=0, ge=0)
+    distance_m: int = Field(default=0, ge=0)
+    polyline: str
 
 class RouteRequest(BaseModel):
     origin: LatLng
@@ -112,9 +123,90 @@ class ScriptWithParkRequest(BaseModel):
     park_to_destination_time: int = Field(..., ge=0, le=14_400)
     context: str = Field(..., min_length=1, max_length=1_000)
     study_parameters: str = Field(default="", max_length=10_000)
+    source_to_park_steps: List[RouteStepInfo] = Field(default_factory=list)
+    park_to_destination_steps: List[RouteStepInfo] = Field(default_factory=list)
+
+
+class ScriptGenerationUsage(BaseModel):
+    model: str
+    service_tier: str
+    input_tokens: int = Field(..., ge=0)
+    cached_input_tokens: int = Field(..., ge=0)
+    cache_write_tokens: int = Field(..., ge=0)
+    output_tokens: int = Field(..., ge=0)
+    reasoning_tokens: int = Field(..., ge=0)
+    total_tokens: int = Field(..., ge=0)
+
+
+class ScriptNarration(BaseModel):
+    id: str
+    text: str
+
+
+class ScriptElevation(BaseModel):
+    classification: str
+    gain_m: float
+    start_m: float
+    end_m: float
+
+
+class ScriptRouteSegment(BaseModel):
+    id: str
+    route_phase: Literal[
+        "source_to_destination",
+        "source_to_park",
+        "park_to_destination",
+    ]
+    index: int = Field(..., ge=1)
+    instruction: str
+    route_label: str
+    start: LatLng
+    end: LatLng
+    polyline: str = ""
+    duration_s: int = Field(default=0, ge=0)
+    distance_m: int = Field(default=0, ge=0)
+    elevation: ScriptElevation
+    nearby_features: List[str] = Field(default_factory=list)
+    narration: str
+
+
+class ScriptWalkingSection(BaseModel):
+    type: Literal["focused_attention", "closing_meditation"]
+    minimum_words: int = Field(..., ge=0)
+    opening_narration: ScriptNarration
+    route_segments: List[ScriptRouteSegment] = Field(default_factory=list)
+    closing_narration: ScriptNarration
+
+
+class ScriptCompassionSection(BaseModel):
+    type: Literal["compassion_meditation"]
+    minimum_words: int = Field(..., ge=0)
+    narration: ScriptNarration
+
+
+class ScriptInputs(BaseModel):
+    context: str
+    weather_condition: str
+    source: LatLng
+    destination: LatLng
+    park: LatLng | None = None
+
+
+class MeditationScript(BaseModel):
+    duration_minutes: int = Field(..., ge=1)
+    language: str
+    includes_pauses: bool
+    prompt_version: str = ""
+    model: str = ""
+    fallback: bool = False
+    inputs: ScriptInputs
+    sections: List[ScriptWalkingSection | ScriptCompassionSection]
+
 
 class ScriptWithParkResponse(BaseModel):
-    script: str
+    script: MeditationScript
+    generation_cost_usd: float = Field(..., ge=0)
+    usage: ScriptGenerationUsage
 
 class ScriptWithoutParkRequest(BaseModel):
     source: LatLng
@@ -122,22 +214,29 @@ class ScriptWithoutParkRequest(BaseModel):
     total_walking_time: int = Field(..., ge=0, le=14_400)
     context: str = Field(..., min_length=1, max_length=1_000)
     study_parameters: str = Field(default="", max_length=10_000)
+    route_steps: List[RouteStepInfo] = Field(default_factory=list)
+
 
 class ScriptWithoutParkResponse(BaseModel):
-    script: str
+    script: MeditationScript
+    generation_cost_usd: float = Field(..., ge=0)
+    usage: ScriptGenerationUsage
 
 
 class RouteInfo(BaseModel):
     duration_s: int
     distance_m: int
     polyline: str
+    steps: List[RouteStepInfo] = Field(default_factory=list)
 
 class ParkPlace(BaseModel):
     place_id: str
     name: str
     lat: float
     lon: float
-    
+    primary_type: str | None = None
+    types: List[str] = Field(default_factory=list)
+
 
 class ParkDetourResult(BaseModel):
     park: ParkPlace
@@ -149,6 +248,8 @@ class ParkDetourResult(BaseModel):
     slack_s: int
     polyline_to_park: str
     polyline_from_park: str
+    steps_to_park: List[RouteStepInfo] = Field(default_factory=list)
+    steps_from_park: List[RouteStepInfo] = Field(default_factory=list)
 
 class WalkRouteResponse(BaseModel):
     origin: LatLng
@@ -163,11 +264,33 @@ class WalkRouteRequest(BaseModel):
     total_travel_time: int = Field(..., ge=0, le=14_400)
 
 class TTSRequest(BaseModel):
-    text: str = Field(..., min_length=1, max_length=5000)
-    language: str = "English"   # or "Auto"
-    speaker: str = "Ryan"
-    instruct: str = ""
-    bitrate: Literal["96k", "128k", "160k", "192k", "256k", "320k"] = "192k"
+    """Polly SynthesizeSpeech fields accepted by the Android payload adapter."""
+    model_config = ConfigDict(extra="forbid")
+    text: str = Field(..., alias="Text", min_length=1, max_length=MAX_BLOCK_CHARACTERS)
+    text_type: Literal["text", "ssml"] = Field(default="text", alias="TextType")
+    voice_id: str = Field(default="Joanna", alias="VoiceId", pattern=r"^[A-Za-z]+$", max_length=64)
+    language_code: str | None = Field(default=None, alias="LanguageCode", min_length=2, max_length=16, pattern=r"^[A-Za-z-]+$")
+    engine: Literal["standard", "neural", "long-form", "generative"] = Field(default="standard", alias="Engine")
+    output_format: Literal["mp3"] = Field(default="mp3", alias="OutputFormat")
+
+    @model_validator(mode="after")
+    def validate_speech_text(self):
+        spoken = self.text
+        if self.text_type == "ssml":
+            import xml.etree.ElementTree as ET
+            # Accept ordinary SSML, never DTDs or entity declarations.
+            if "<!DOCTYPE" in self.text.upper() or "<!ENTITY" in self.text.upper():
+                raise ValueError("SSML declarations are unsupported")
+            try:
+                root = ET.fromstring(self.text)
+            except ET.ParseError as exc:
+                raise ValueError("Invalid SSML") from exc
+            if root.tag != "speak":
+                raise ValueError("SSML must have a speak root")
+            spoken = "".join(root.itertext())
+        if not spoken.strip():
+            raise ValueError("Speech must contain spoken characters")
+        return self
 
 class TTSResponse(BaseModel):
     content: bytes
@@ -180,6 +303,8 @@ class StepSegment(BaseModel):
     start: LatLng
     end: LatLng
     step_polyline: str
+    duration_s: int = Field(default=0, ge=0)
+    distance_m: int = Field(default=0, ge=0)
     elev_start_m: float
     elev_end_m: float
     elev_gain_m: float
@@ -201,7 +326,7 @@ class PasswordResetRequestResponse(BaseModel):
 
 
 class PasswordResetConfirmRequest(BaseModel):
-    token: str
+    token: str = Field(..., min_length=1, max_length=128)
     new_password: str = Field(..., min_length=8, max_length=1_024)
 
 

@@ -9,11 +9,14 @@ def extract_street_hint(instruction: str) -> str:
     Best-effort street name hint from the human-readable instruction.
     Example: "Turn left onto Swanston St" -> "Swanston St"
     """
-    m = _STREET_RE.search(instruction.strip())
+    lines = [line.strip() for line in instruction.splitlines() if line.strip()]
+    primary_instruction = lines[0] if lines else ""
+
+    m = _STREET_RE.search(primary_instruction)
     if not m:
-        return instruction.strip()
+        return primary_instruction
     # pick first non-empty group
     for g in m.groups():
         if g:
             return g.strip()
-    return instruction.strip()
+    return primary_instruction

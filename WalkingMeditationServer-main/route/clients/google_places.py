@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 
 import httpx
 
-from route.config import google_maps_api_key
+from route.config import google_maps_api_key, park_fallback_enabled
 from route.models import ParkPlace
 
 PLACES_TEXTSEARCH_NEW_URL = "https://places.googleapis.com/v1/places:searchText"
@@ -16,43 +16,84 @@ async def search_parks_along_route(
     route_polyline: str,
     max_results: int = 20,
 ) -> List[ParkPlace]:
+    """Find city parks and gardens, optionally adding generic parks."""
+    city_parks = await _search_parks_by_type(
+        client,
+        route_polyline=route_polyline,
+        place_type="city_park",
+        text_query="city park",
+    )
+    gardens = await _search_parks_by_type(
+        client,
+        route_polyline=route_polyline,
+        place_type="garden",
+        text_query="garden",
+    )
+
+    results = city_parks + gardens
+    if park_fallback_enabled():
+        generic_parks = await _search_parks_by_type(
+            client,
+            route_polyline=route_polyline,
+            place_type="park",
+            text_query="park",
+        )
+        results += generic_parks
+
+    unique: Dict[str, ParkPlace] = {park.place_id: park for park in results}
+    return list(unique.values())[:max_results]
+
+
+async def _search_parks_by_type(
+    client: httpx.AsyncClient,
+    *,
+    route_polyline: str,
+    place_type: str,
+    text_query: str,
+) -> List[ParkPlace]:
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": google_maps_api_key(),
-        "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location",
+        "X-Goog-FieldMask": (
+            "places.id,places.displayName,places.formattedAddress,places.location,"
+            "places.primaryType,places.types"
+        ),
     }
 
     body: Dict[str, Any] = {
-        "textQuery": "park",
+        "textQuery": text_query,
+        "includedType": place_type,
+        "strictTypeFiltering": True,
         "searchAlongRouteParameters": {
             "polyline": {"encodedPolyline": route_polyline},
         },
-        # "pageSize": max_results,  # depending on Places API version/behavior
     }
 
-    r = await client.post(PLACES_TEXTSEARCH_NEW_URL, headers=headers, json=body)
-    r.raise_for_status()
-    data = r.json()
+    response = await client.post(PLACES_TEXTSEARCH_NEW_URL, headers=headers, json=body)
+    response.raise_for_status()
+    data = response.json()
 
-    places = data.get("places") or []
     results: List[ParkPlace] = []
-
-    for p in places:
-        pid = p.get("id") or ""
-        if not pid:
+    for place in data.get("places") or []:
+        place_id = place.get("id") or ""
+        if not place_id:
             continue
 
-        display = (p.get("displayName") or {}).get("text") or "(unnamed park)"
-        loc = p.get("location") or {}
-        lat = loc.get("latitude")
-        lon = loc.get("longitude")
+        location = place.get("location") or {}
+        lat = location.get("latitude")
+        lon = location.get("longitude")
         if lat is None or lon is None:
             continue
 
         results.append(
-            ParkPlace(place_id=pid, name=display, lat=float(lat), lon=float(lon))
+            ParkPlace(
+                place_id=place_id,
+                name=(place.get("displayName") or {}).get("text") or "(unnamed park)",
+                lat=float(lat),
+                lon=float(lon),
+                primary_type=place.get("primaryType"),
+                types=list(place.get("types") or []),
+            )
         )
 
-    # Dedup by place_id
-    uniq: Dict[str, ParkPlace] = {p.place_id: p for p in results}
-    return list(uniq.values())[:max_results]
+    return results
