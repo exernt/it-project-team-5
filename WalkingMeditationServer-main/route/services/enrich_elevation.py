@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import httpx
 from typing import List
-from route.config import *
 from route.models import StepSegment, LatLng, RouteStepInfo
 from route.clients.google_steps import compute_walking_steps
 from route.clients.google_elevation import fetch_elevation_samples_for_polyline

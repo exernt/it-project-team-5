@@ -5,7 +5,6 @@ from dataclasses import asdict
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
-from typing import Optional
 
 from contextlib import asynccontextmanager
 
