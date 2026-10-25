@@ -26,6 +26,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-test.txt
 
+      - name: Lint with ruff
+        working-directory: WalkingMeditationServer-main
+        run: |
+          pip install ruff
+          ruff check .
+
       - name: Run unit tests
         working-directory: WalkingMeditationServer-main
         run: python -m pytest
