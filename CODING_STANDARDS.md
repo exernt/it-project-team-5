@@ -59,7 +59,7 @@ When you change behaviour, update the matching page in the same PR: the API refe
 | Server tests pass | `python -m pytest` in CI (workflow "Server Unit Tests") | Automatic, blocks merge once required in branch protection |
 | Android unit tests pass | `./gradlew test` in CI (workflow "Android Tests") | Automatic, blocks merge once required in branch protection |
 | No unused imports, undefined names, redefinitions, syntax errors (server) | `ruff check .` in CI (`ruff.toml`) | Automatic, blocks merge once required in branch protection |
-| Android Lint | `./gradlew lintDebug` | **Planned:** not yet run in CI |
+| Android Lint | `./gradlew lintDebug` in CI, report uploaded | Automatic report; becomes blocking once the existing warnings are cleared |
 | One reviewer approval, no direct pushes to `main`, CI required | GitHub branch protection on `main` | Automatic once enabled in repository settings |
 | Naming, layering, auth dependencies, error handling, docs updated, tests added | PR template checklist and reviewer | By review |
 
