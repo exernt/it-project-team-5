@@ -103,10 +103,10 @@
     <string name="feedback_category_general">General</string>
     <string name="feedback_category_study">This study</string>
     <string name="feedback_category_technical">Technical issue</string>
-    <string name="feedback_rating_label">Rating (optional)</string>
+    <string name="feedback_rating_label">Rating (required)</string>
     <string name="feedback_comment_label">Comments (optional)</string>
     <string name="feedback_comment_hint">Tell us what\'s working well or what could be better…</string>
-    <string name="feedback_missing_input">Please add a rating, a comment, or both.</string>
+    <string name="feedback_missing_input">Please give a star rating before submitting.</string>
     <string name="feedback_submit">Submit Feedback</string>
     <string name="feedback_submitting">Submitting…</string>
     <string name="feedback_thanks">Thanks for your feedback!</string>
@@ -127,7 +127,8 @@
     <string name="become_researcher">Become a Researcher</string>
     <string name="become_researcher_heading">Become a Researcher</string>
     <string name="become_researcher_explanation">Request researcher access to create and run studies. An admin will need to approve your request before you can use the researcher dashboard.</string>
-    <string name="become_researcher_institution_label">Institution (optional)</string>
+    <string name="become_researcher_institution_label">Institution</string>
+    <string name="become_researcher_institution_required">Please enter your institution name.</string>
     <string name="become_researcher_institution_hint">e.g. University of Example</string>
     <string name="become_researcher_submit">Request Researcher Access</string>
     <string name="become_researcher_submitting">Submitting…</string>
