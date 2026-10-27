@@ -150,6 +150,18 @@
         <receiver
             android:name=".utils.ActivityRecognitionReceiver"
             android:exported="false"/>
+        <activity
+            android:name=".AdminDashboardActivity"
+            android:exported="false" />
+        <activity
+            android:name=".BecomeResearcherActivity"
+            android:exported="false" />
+        <activity
+            android:name=".FeedbackActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ResearcherFeedbackActivity"
+            android:exported="false" />
     </application>
 
 </manifest>
