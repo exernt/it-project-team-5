@@ -21,3 +21,16 @@ jobs:
       - name: Run Android unit tests
         working-directory: WalkingMeditationMobileApp-main
         run: ./gradlew test
+
+      - name: Run Android Lint
+        working-directory: WalkingMeditationMobileApp-main
+        continue-on-error: true
+        run: ./gradlew lintDebug
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-lint-report
+          path: WalkingMeditationMobileApp-main/app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore

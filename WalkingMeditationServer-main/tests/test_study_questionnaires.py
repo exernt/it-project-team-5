@@ -12,7 +12,6 @@ from database.models import (
     QuestionnaireStatus,
     Role,
     Study,
-    StudyCreatedBy,
     StudyGroup,
     StudyQuestionnaire,
     StudyRegistration,
