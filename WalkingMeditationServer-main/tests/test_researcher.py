@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from route.auth import list_pending_researchers, register_researcher, verify_researcher
 from route.dependencies import require_role
@@ -39,16 +40,19 @@ class RegisterResearcherTests(unittest.IsolatedAsyncioTestCase):
             await register_researcher(payload, user, self.session)
 
         self.assertEqual(409, raised.exception.status_code)
+        
+    def test_rejects_missing_institution(self):
+        with self.assertRaises(ValidationError):
+            RegisterResearcherRequest()
 
-    async def test_creates_profile_without_institution(self):
-        user = User(id=uuid4(), email="alice@example.com", password_hash="hash", role=Role.PARTICIPANT)
-        self.session.get.return_value = None
-        payload = RegisterResearcherRequest(institution=None)
+    def test_rejects_blank_institution(self):
+        for blank in ("", "   "):
+            with self.assertRaises(ValidationError):
+                RegisterResearcherRequest(institution=blank)
 
-        response = await register_researcher(payload, user, self.session)
-
-        self.assertEqual(Role.RESEARCHER, user.role)
-        self.assertIsNone(response.institution)
+    def test_trims_institution(self):
+        payload = RegisterResearcherRequest(institution="  University of Example  ")
+        self.assertEqual("University of Example", payload.institution)
 
 
 class VerifyResearcherTests(unittest.IsolatedAsyncioTestCase):

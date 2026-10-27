@@ -79,7 +79,7 @@ public class FeedbackActivity extends AppCompatActivity {
                 ? ""
                 : commentField.getText().toString().trim();
 
-        if (ratingValue == 0 && comment.isEmpty()) {
+        if (ratingValue == 0) {
             showMessage(getString(R.string.feedback_missing_input));
             return;
         }
@@ -93,7 +93,7 @@ public class FeedbackActivity extends AppCompatActivity {
                 httpClient,
                 category.equals("study") ? studyId : null,
                 category,
-                ratingValue == 0 ? null : ratingValue,
+                ratingValue,
                 comment.isEmpty() ? null : comment,
                 new FeedbackApiClient.SubmitListener() {
                     @Override
