@@ -41,6 +41,7 @@ class SubmitFeedbackTests(unittest.IsolatedAsyncioTestCase):
         payload = SubmitFeedbackRequest(
             study_id=study.id,
             category="study",
+            rating=5,
             comment="Really enjoyed this.",
         )
 
@@ -71,10 +72,17 @@ class SubmitFeedbackTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValidationError):
             SubmitFeedbackRequest(category="general", rating=6)
 
-    def test_rejects_feedback_with_neither_rating_nor_comment(self):
+    def test_rejects_feedback_without_rating(self):
         with self.assertRaises(ValidationError):
             SubmitFeedbackRequest(category="general")
 
+    def test_rejects_comment_only_feedback(self):
+        with self.assertRaises(ValidationError):
+            SubmitFeedbackRequest(category="general", comment="Great app")
+
+    def test_accepts_rating_with_optional_comment(self):
+        payload = SubmitFeedbackRequest(category="general", rating=4, comment="Nice")
+        self.assertEqual(4, payload.rating)
 
 class ListGeneralFeedbackTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):

@@ -46,6 +46,11 @@ public class BecomeResearcherActivity extends AppCompatActivity {
                 ? ""
                 : institutionField.getText().toString().trim();
 
+        if (institution.isEmpty()) {
+            showMessage(getString(R.string.become_researcher_institution_required));
+            return;
+        }
+
         hideMessage();
         submitButton.setEnabled(false);
         submitButton.setText(R.string.become_researcher_submitting);
@@ -53,7 +58,7 @@ public class BecomeResearcherActivity extends AppCompatActivity {
         UserApiClient.registerAsResearcher(
                 this,
                 httpClient,
-                institution.isEmpty() ? null : institution,
+                institution,
                 new UserApiClient.RegisterResearcherListener() {
                     @Override
                     public void onRegistered() {

@@ -1,4 +1,4 @@
-from typing import List, Literal, Tuple
+from typing import List, Literal
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 from datetime import datetime
 from uuid import UUID
@@ -368,7 +368,15 @@ class RefreshResponse(BaseModel):
     token_type: str = "bearer"
 
 class RegisterResearcherRequest(BaseModel):
-    institution: str | None = None
+    institution: str = Field(min_length=1)
+
+    @field_validator("institution")
+    @classmethod
+    def institution_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("institution must not be blank")
+        return value
 
 
 class ResearcherProfileResponse(BaseModel):
@@ -552,7 +560,7 @@ class MyStudiesResponse(BaseModel):
 class SubmitFeedbackRequest(BaseModel):
     study_id: UUID | None = None
     category: str
-    rating: int | None = Field(default=None, ge=1, le=5)
+    rating: int = Field(ge=1, le=5)
     comment: str | None = None
 
     @field_validator("category")
@@ -562,12 +570,6 @@ class SubmitFeedbackRequest(BaseModel):
         if value not in allowed:
             raise ValueError(f"category must be one of {sorted(allowed)}")
         return value
-
-    @model_validator(mode="after")
-    def require_rating_or_comment(self) -> "SubmitFeedbackRequest":
-        if self.rating is None and self.comment is None:
-            raise ValueError("Feedback must include a rating, a comment, or both")
-        return self
 
 
 class FeedbackResponse(BaseModel):

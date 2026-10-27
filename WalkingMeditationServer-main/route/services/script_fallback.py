@@ -5,7 +5,7 @@ segments, so it never depends on the OpenAI API or on user-provided free text.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Dict, Sequence, Tuple
 
 # (segment_id, route_label, terrain_label) for each route segment.
 FallbackSegment = Tuple[str, str, str]
