@@ -15,6 +15,7 @@ import com.example.walking_meditation.utils.StudyConfigClient;
 import com.example.walking_meditation.utils.SessionManager;
 import com.example.walking_meditation.utils.CacheFiles;
 import com.example.walking_meditation.utils.RoutePlanFiles;
+import com.example.walking_meditation.utils.UserApiClient;
 
 import org.json.JSONObject;
 
@@ -48,27 +49,14 @@ public class MainActivity extends AppCompatActivity {
         btnAdminDashboard = findViewById(R.id.btnAdminDashboard);
         btnBecomeResearcher = findViewById(R.id.btnBecomeResearcher);
 
-        if (SessionManager.isVerifiedResearcher(this)) {
-            btnResearcherDashboard.setVisibility(View.VISIBLE);
-            btnResearcherDashboard.setOnClickListener(view -> {
-                Intent intent = new Intent(MainActivity.this, ResearcherStudyListActivity.class);
-                startActivity(intent);
-            });
-        }
+        btnResearcherDashboard.setOnClickListener(view ->
+                startActivity(new Intent(MainActivity.this, ResearcherStudyListActivity.class)));
+        btnAdminDashboard.setOnClickListener(view ->
+                startActivity(new Intent(MainActivity.this, AdminDashboardActivity.class)));
+        btnBecomeResearcher.setOnClickListener(view ->
+                startActivity(new Intent(MainActivity.this, BecomeResearcherActivity.class)));
 
-        if (SessionManager.isAdmin(this)) {
-            btnAdminDashboard.setVisibility(View.VISIBLE);
-            btnAdminDashboard.setOnClickListener(view ->
-                    startActivity(new Intent(MainActivity.this, AdminDashboardActivity.class))
-            );
-        }
-
-        if (!SessionManager.isAdmin(this) && !"researcher".equals(SessionManager.getUserRole(this))) {
-            btnBecomeResearcher.setVisibility(View.VISIBLE);
-            btnBecomeResearcher.setOnClickListener(view ->
-                    startActivity(new Intent(MainActivity.this, BecomeResearcherActivity.class))
-            );
-        }
+        applyRoleVisibility();
 
         btnExplore.setOnClickListener(view -> {
             Intent intent = new Intent(MainActivity.this, PathSelectionActivity.class);
@@ -91,6 +79,43 @@ public class MainActivity extends AppCompatActivity {
         catch (Exception ignored) { ready = false; }
         findViewById(R.id.btnResumeWalk).setVisibility(ready ? View.VISIBLE : View.GONE);
         btnLogOut.setOnClickListener(view -> performLogout());
+        refreshRole();
+    }
+
+    private void applyRoleVisibility() {
+        boolean admin = SessionManager.isAdmin(this);
+        boolean researcher = "researcher".equals(SessionManager.getUserRole(this));
+
+        btnResearcherDashboard.setVisibility(
+                SessionManager.isVerifiedResearcher(this) ? View.VISIBLE : View.GONE);
+        btnAdminDashboard.setVisibility(admin ? View.VISIBLE : View.GONE);
+        btnBecomeResearcher.setVisibility(
+                !admin && !researcher ? View.VISIBLE : View.GONE);
+    }
+
+    /** Re-checks role and approval status so changes made elsewhere show up without re-login. */
+    private void refreshRole() {
+        UserApiClient.fetchCurrentUser(this, httpClient, new UserApiClient.CurrentUserListener() {
+            @Override
+            public void onLoaded(@NonNull String role, boolean researcherVerified) {
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) {
+                        return;
+                    }
+                    String token = SessionManager.getAccessToken(MainActivity.this);
+                    if (token == null || token.isEmpty()) {
+                        return; // logged out while the request was in flight
+                    }
+                    SessionManager.saveUserInfo(MainActivity.this, role, researcherVerified);
+                    applyRoleVisibility();
+                });
+            }
+
+            @Override
+            public void onFailure(@NonNull String message) {
+                // Keep showing the cached role if the refresh fails (offline, etc.).
+            }
+        });
     }
 
     private void performLogout() {
