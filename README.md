@@ -56,6 +56,40 @@ The Android build and local unit tests do not require credentials. With no
 `MAPS_API_KEY`, route search is disabled and the app displays a configuration
 message.
 
+### Installable AWS-connected debug APK
+
+Use the debug variant for outdoor field testing: it is automatically signed by
+the local Android debug certificate and can be installed directly. In a fresh
+PowerShell session:
+
+```powershell
+cd WalkingMeditationMobileApp-main
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+$env:ORG_GRADLE_PROJECT_SERVER_BASE_URL = "https://j6qory41cc.execute-api.ap-southeast-2.amazonaws.com/dev"
+$env:ORG_GRADLE_PROJECT_MAPS_API_KEY = "your-android-restricted-key"
+.\gradlew.bat clean testDebugUnitTest assembleDebug
+adb install -r app\build\outputs\apk\debug\app-debug.apk
+```
+
+If Android Studio is installed elsewhere, point `JAVA_HOME` at its bundled JBR
+25. The project currently pins the Gradle daemon toolchain to Java 25.
+
+Create a dedicated Google key for the APK. Give it the **Android apps**
+application restriction with package name `com.example.walking_meditation` and
+the SHA-1 fingerprint of the certificate that signs the APK. Restrict its APIs
+to **Maps SDK for Android** and **Places API (New)**. Obtain the debug SHA-1 with:
+
+```powershell
+keytool -list -v -alias androiddebugkey `
+  -keystore "$env:USERPROFILE\.android\debug.keystore" `
+  -storepass android -keypass android
+```
+
+Do not put the backend Google key in the APK. Keep that separate key in AWS
+Secrets Manager and restrict it to **Routes API**, **Places API (New)**,
+**Elevation API**, and **Weather API**. A future release-signed APK needs a
+separate Android-key restriction entry using the release certificate SHA-1.
+
 ## Server setup
 
 Requirements:

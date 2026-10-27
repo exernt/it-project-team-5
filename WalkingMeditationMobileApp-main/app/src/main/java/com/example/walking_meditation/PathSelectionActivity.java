@@ -41,7 +41,6 @@ import com.example.walking_meditation.utils.AuthenticatedHttpClient;
 import com.example.walking_meditation.utils.CacheFiles;
 import com.example.walking_meditation.utils.PolylineDecoder;
 import com.example.walking_meditation.utils.RoutePlanFiles;
-import com.example.walking_meditation.utils.RoutePlanFiles;
 import com.example.walking_meditation.utils.SessionManager;
 import com.example.walking_meditation.utils.StudyConfigClient;
 import com.google.android.gms.location.FusedLocationProviderClient;
@@ -65,14 +64,14 @@ import com.google.android.libraries.places.api.net.FindAutocompletePredictionsRe
 import com.google.android.libraries.places.api.net.PlacesClient;
 import com.google.gson.Gson;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
-import org.json.JSONArray;
-import org.json.JSONArray;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.Call;
@@ -88,9 +87,9 @@ public class PathSelectionActivity extends AppCompatActivity
 
     private static final long AUTOCOMPLETE_DEBOUNCE_MS = 350;
     private static final LatLng DEFAULT_MAP_CENTRE = new LatLng(-37.8136, 144.9631);
-    private static final String ROUTE_URL = BuildConfig.SERVER_BASE_URL + "/route/generate-path";
-    private static final String SCRIPT_WITH_PARK_URL =
-            BuildConfig.SERVER_BASE_URL + "/route/generate-script/park";
+    private static final String ROUTE_URL = serverUrl("/route/generate-path");
+    private static final String GENERATION_JOBS_URL = serverUrl("/v1/generation-jobs");
+    private static final long DEFAULT_JOB_POLL_DELAY_MS = 2_000;
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
     private static final String STATE_SOURCE_PLACE_ID = "source_place_id";
@@ -104,6 +103,10 @@ public class PathSelectionActivity extends AppCompatActivity
     private static final String STATE_RESULTS_VISIBLE = "results_visible";
     private static final String STATE_ROUTE_RESPONSE_PATH = "route_response_path";
     private static final String STATE_CONTEXT = "route_context";
+    private static final String STATE_GENERATION_IDEMPOTENCY_KEY =
+            "generation_idempotency_key";
+    private static final String STATE_GENERATION_JOB_ID = "generation_job_id";
+    private static final String STATE_ROUTE_PLAN_PATH = "route_plan_path";
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final List<AutocompletePrediction> sourcePredictions = new ArrayList<>();
@@ -155,6 +158,9 @@ public class PathSelectionActivity extends AppCompatActivity
     @Nullable private RouteOption selectedRoute;
     @Nullable private String routeResponsePath;
     @Nullable private String selectedRoutePlanPath;
+    @Nullable private String generationIdempotencyKey;
+    @Nullable private UUID generationJobId;
+    @Nullable private Runnable generationPollRunnable;
     private String lastMeditationContext = "";
 
     private boolean participatingInStudy;
@@ -579,6 +585,7 @@ public class PathSelectionActivity extends AppCompatActivity
         }
 
         lastMeditationContext = context;
+        resetGenerationJob();
         setRouteBusy(true);
         callRouteApi(selectedSourceLocation, selectedDestinationLocation, totalMinutes * 60);
     }
@@ -598,7 +605,7 @@ public class PathSelectionActivity extends AppCompatActivity
                     .url(ROUTE_URL)
                     .post(RequestBody.create(payload.toString(), JSON))
                     .build();
-            enqueueRequest(request, false);
+            enqueueRouteRequest(request);
         } catch (Exception exception) {
             setRouteBusy(false);
             Toast.makeText(this,
@@ -607,7 +614,7 @@ public class PathSelectionActivity extends AppCompatActivity
         }
     }
 
-    private void enqueueRequest(@NonNull Request request, boolean scriptRequest) {
+    private void enqueueRouteRequest(@NonNull Request request) {
         if (inFlightCall != null) inFlightCall.cancel();
         inFlightCall = httpClient.newCall(request);
         inFlightCall.enqueue(new Callback() {
@@ -616,10 +623,9 @@ public class PathSelectionActivity extends AppCompatActivity
                 runOnUiThread(() -> {
                     if (call.isCanceled() || isFinishing() || isDestroyed()) return;
                     inFlightCall = null;
-                    if (scriptRequest) setScriptBusy(false); else setRouteBusy(false);
+                    setRouteBusy(false);
                     Toast.makeText(PathSelectionActivity.this,
-                            (scriptRequest ? "Script" : "Route")
-                                    + " request failed: " + exception.getMessage(),
+                            "Route request failed: " + exception.getMessage(),
                             Toast.LENGTH_LONG).show();
                 });
             }
@@ -641,7 +647,7 @@ public class PathSelectionActivity extends AppCompatActivity
                 runOnUiThread(() -> {
                     inFlightCall = null;
                     if (isFinishing() || isDestroyed()) return;
-                    if (scriptRequest) setScriptBusy(false); else setRouteBusy(false);
+                    setRouteBusy(false);
 
                     if (!ok) {
                         Toast.makeText(PathSelectionActivity.this,
@@ -650,11 +656,7 @@ public class PathSelectionActivity extends AppCompatActivity
                         return;
                     }
 
-                    if (scriptRequest) {
-                        openScriptResponse(responseBody);
-                    } else {
-                        handleRouteResponse(responseBody);
-                    }
+                    handleRouteResponse(responseBody);
                 });
             }
         });
@@ -694,6 +696,7 @@ public class PathSelectionActivity extends AppCompatActivity
     private void showResultsState() {
         showingResults = true;
         selectedRoute = null;
+        resetGenerationJob();
         inputControls.setVisibility(View.GONE);
         resultsContainer.setVisibility(View.VISIBLE);
         setEndpointEditingEnabled(false);
@@ -711,6 +714,7 @@ public class PathSelectionActivity extends AppCompatActivity
     private void showInputState() {
         showingResults = false;
         selectedRoute = null;
+        resetGenerationJob();
         resultsContainer.setVisibility(View.GONE);
         inputControls.setVisibility(View.VISIBLE);
         setEndpointEditingEnabled(true);
@@ -732,6 +736,7 @@ public class PathSelectionActivity extends AppCompatActivity
     @Override
     public void onRouteClicked(RouteOption option) {
         if (scriptBusy) return;
+        resetGenerationJob();
         selectedRoute = option;
         btnSelectRoute.setEnabled(true);
         displaySelectedRoute(option);
@@ -805,6 +810,12 @@ public class PathSelectionActivity extends AppCompatActivity
             return;
         }
 
+        if (generationJobId != null) {
+            setScriptBusy(true);
+            scheduleGenerationPoll(0);
+            return;
+        }
+
         ParkItem parkItem = findParkItem(selectedRoute.parkPlaceId);
         if (parkItem == null || parkItem.park == null) {
             Toast.makeText(this, "Selected route has no park information.", Toast.LENGTH_LONG).show();
@@ -833,19 +844,178 @@ public class PathSelectionActivity extends AppCompatActivity
 
             RoutePlan routePlan = RoutePlan.forParkRoute(routeResponse, parkItem);
             selectedRoutePlanPath = RoutePlanFiles.save(this, routePlan);
-
-            Request request = new Request.Builder()
-                    .url(SCRIPT_WITH_PARK_URL)
-                    .post(RequestBody.create(payload.toString(), JSON))
-                    .build();
-            setScriptBusy(true);
-            enqueueRequest(request, true);
+            submitGenerationJob(payload);
         } catch (Exception exception) {
             setScriptBusy(false);
             Toast.makeText(this,
                     "Unable to build script request: " + exception.getMessage(),
                     Toast.LENGTH_LONG).show();
         }
+    }
+
+    private void submitGenerationJob(@NonNull JSONObject payload) throws Exception {
+        if (generationIdempotencyKey == null) {
+            generationIdempotencyKey = UUID.randomUUID().toString();
+        }
+        JSONObject requestBody = new JSONObject();
+        requestBody.put("kind", "park");
+        requestBody.put("payload", payload);
+
+        Request request = new Request.Builder()
+                .url(GENERATION_JOBS_URL)
+                .header("Idempotency-Key", generationIdempotencyKey)
+                .post(RequestBody.create(requestBody.toString(), JSON))
+                .build();
+        setScriptBusy(true);
+        executeGenerationSubmission(request);
+    }
+
+    private void executeGenerationSubmission(@NonNull Request request) {
+        if (inFlightCall != null) inFlightCall.cancel();
+        inFlightCall = httpClient.newCall(request);
+        inFlightCall.enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException exception) {
+                runOnUiThread(() -> {
+                    if (call.isCanceled() || isFinishing() || isDestroyed()) return;
+                    inFlightCall = null;
+                    setScriptBusy(false);
+                    Toast.makeText(PathSelectionActivity.this,
+                            "Generation request failed: " + exception.getMessage()
+                                    + ". Tap Select Route to retry safely.",
+                            Toast.LENGTH_LONG).show();
+                });
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response)
+                    throws IOException {
+                String body;
+                int statusCode;
+                try (Response closedResponse = response) {
+                    body = closedResponse.body() == null
+                            ? "" : closedResponse.body().string();
+                    statusCode = closedResponse.code();
+                }
+
+                runOnUiThread(() -> {
+                    inFlightCall = null;
+                    if (isFinishing() || isDestroyed()) return;
+                    if (statusCode != 202) {
+                        setScriptBusy(false);
+                        if (statusCode == 409) clearGenerationTracking();
+                        Toast.makeText(PathSelectionActivity.this,
+                                "Generation server error (" + statusCode + "): "
+                                        + safePreview(body),
+                                Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    try {
+                        generationJobId = UUID.fromString(
+                                new JSONObject(body).getString("job_id"));
+                        scheduleGenerationPoll(DEFAULT_JOB_POLL_DELAY_MS);
+                    } catch (Exception exception) {
+                        setScriptBusy(false);
+                        clearGenerationTracking();
+                        Toast.makeText(PathSelectionActivity.this,
+                                "Invalid generation response: " + exception.getMessage(),
+                                Toast.LENGTH_LONG).show();
+                    }
+                });
+            }
+        });
+    }
+
+    private void scheduleGenerationPoll(long delayMillis) {
+        if (generationPollRunnable != null) {
+            mainHandler.removeCallbacks(generationPollRunnable);
+        }
+        generationPollRunnable = this::pollGenerationResult;
+        mainHandler.postDelayed(generationPollRunnable, delayMillis);
+    }
+
+    private void pollGenerationResult() {
+        UUID jobId = generationJobId;
+        if (jobId == null || isFinishing() || isDestroyed()) return;
+        generationPollRunnable = null;
+
+        Request request = new Request.Builder()
+                .url(serverUrl("/v1/generation-jobs/" + jobId + "/result"))
+                .get()
+                .build();
+        if (inFlightCall != null) inFlightCall.cancel();
+        inFlightCall = httpClient.newCall(request);
+        inFlightCall.enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException exception) {
+                runOnUiThread(() -> {
+                    if (call.isCanceled() || isFinishing() || isDestroyed()) return;
+                    inFlightCall = null;
+                    setScriptBusy(false);
+                    Toast.makeText(PathSelectionActivity.this,
+                            "Unable to check generation: " + exception.getMessage()
+                                    + ". Tap Select Route to resume.",
+                            Toast.LENGTH_LONG).show();
+                });
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response)
+                    throws IOException {
+                String body;
+                int statusCode;
+                String retryAfter;
+                try (Response closedResponse = response) {
+                    body = closedResponse.body() == null
+                            ? "" : closedResponse.body().string();
+                    statusCode = closedResponse.code();
+                    retryAfter = closedResponse.header("Retry-After");
+                }
+
+                runOnUiThread(() -> {
+                    inFlightCall = null;
+                    if (isFinishing() || isDestroyed()) return;
+                    if (statusCode == 202) {
+                        scheduleGenerationPoll(retryAfterMillis(retryAfter));
+                    } else if (statusCode == 200) {
+                        clearGenerationTracking();
+                        setScriptBusy(false);
+                        openScriptResponse(body);
+                    } else {
+                        setScriptBusy(false);
+                        clearGenerationTracking();
+                        Toast.makeText(PathSelectionActivity.this,
+                                "Generation server error (" + statusCode + "): "
+                                        + safePreview(body),
+                                Toast.LENGTH_LONG).show();
+                    }
+                });
+            }
+        });
+    }
+
+    private static long retryAfterMillis(@Nullable String retryAfter) {
+        if (retryAfter == null) return DEFAULT_JOB_POLL_DELAY_MS;
+        try {
+            long seconds = Long.parseLong(retryAfter.trim());
+            return Math.max(1, Math.min(10, seconds)) * 1_000;
+        } catch (NumberFormatException ignored) {
+            return DEFAULT_JOB_POLL_DELAY_MS;
+        }
+    }
+
+    private void clearGenerationTracking() {
+        if (generationPollRunnable != null) {
+            mainHandler.removeCallbacks(generationPollRunnable);
+            generationPollRunnable = null;
+        }
+        generationIdempotencyKey = null;
+        generationJobId = null;
+    }
+
+    private void resetGenerationJob() {
+        clearGenerationTracking();
+        selectedRoutePlanPath = null;
     }
 
     private void openScriptResponse(@NonNull String responseBody) {
@@ -882,6 +1052,14 @@ public class PathSelectionActivity extends AppCompatActivity
         value.put("lat", latitude);
         value.put("lon", longitude);
         return value;
+    }
+
+    private static String serverUrl(@NonNull String path) {
+        String base = BuildConfig.SERVER_BASE_URL.trim();
+        while (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        return base + (path.startsWith("/") ? path : "/" + path);
     }
 
     private void setRouteBusy(boolean busy) {
@@ -999,6 +1177,19 @@ public class PathSelectionActivity extends AppCompatActivity
                 showInputState();
             }
         }
+
+        generationIdempotencyKey = state.getString(STATE_GENERATION_IDEMPOTENCY_KEY);
+        selectedRoutePlanPath = state.getString(STATE_ROUTE_PLAN_PATH);
+        String savedJobId = state.getString(STATE_GENERATION_JOB_ID);
+        if (savedJobId != null && selectedRoutePlanPath != null) {
+            try {
+                generationJobId = UUID.fromString(savedJobId);
+                setScriptBusy(true);
+                scheduleGenerationPoll(0);
+            } catch (IllegalArgumentException ignored) {
+                clearGenerationTracking();
+            }
+        }
     }
 
     @Override
@@ -1030,6 +1221,10 @@ public class PathSelectionActivity extends AppCompatActivity
         outState.putBoolean(STATE_RESULTS_VISIBLE, showingResults);
         outState.putString(STATE_ROUTE_RESPONSE_PATH, routeResponsePath);
         outState.putString(STATE_CONTEXT, lastMeditationContext);
+        outState.putString(STATE_GENERATION_IDEMPOTENCY_KEY, generationIdempotencyKey);
+        outState.putString(STATE_GENERATION_JOB_ID,
+                generationJobId == null ? null : generationJobId.toString());
+        outState.putString(STATE_ROUTE_PLAN_PATH, selectedRoutePlanPath);
         mapView.onSaveInstanceState(outState);
         super.onSaveInstanceState(outState);
     }

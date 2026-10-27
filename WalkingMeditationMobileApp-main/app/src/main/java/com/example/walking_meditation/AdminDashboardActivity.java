@@ -9,6 +9,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.walking_meditation.utils.AdminApiClient;
@@ -22,7 +23,7 @@ import okhttp3.OkHttpClient;
 
 /**
  * Admin-only screen: jump to general (non-study) app feedback, and review
- * + approve researcher registrations that are still pending, without
+ * + approve or reject researcher registrations that are still pending, without
  * needing direct database access.
  */
 public class AdminDashboardActivity extends AppCompatActivity {
@@ -138,12 +139,30 @@ public class AdminDashboardActivity extends AppCompatActivity {
 
         Button approveButton = new Button(this);
         approveButton.setText(R.string.admin_approve_researcher);
-        approveButton.setOnClickListener(view -> approve(researcher, approveButton, card));
-        LinearLayout.LayoutParams buttonParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        Button rejectButton = new Button(this);
+        rejectButton.setText(R.string.admin_reject_researcher);
+
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams actionsParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         );
-        buttonParams.topMargin = getResources().getDimensionPixelSize(R.dimen.space_12);
-        card.addView(approveButton, buttonParams);
+        actionsParams.topMargin = getResources().getDimensionPixelSize(R.dimen.space_12);
+        LinearLayout.LayoutParams actionButtonParams = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1
+        );
+        LinearLayout.LayoutParams rejectButtonParams = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1
+        );
+        rejectButtonParams.setMarginStart(getResources().getDimensionPixelSize(R.dimen.space_8));
+        actions.addView(approveButton, actionButtonParams);
+        actions.addView(rejectButton, rejectButtonParams);
+        card.addView(actions, actionsParams);
+
+        approveButton.setOnClickListener(view ->
+                approve(researcher, approveButton, rejectButton, card));
+        rejectButton.setOnClickListener(view -> confirmReject(
+                researcher, approveButton, rejectButton, card));
 
         return card;
     }
@@ -159,18 +178,20 @@ public class AdminDashboardActivity extends AppCompatActivity {
     private void approve(
             @NonNull AdminApiClient.PendingResearcher researcher,
             @NonNull Button approveButton,
+            @NonNull Button rejectButton,
             @NonNull View card
     ) {
         approveButton.setEnabled(false);
+        rejectButton.setEnabled(false);
         approveButton.setText(R.string.admin_approving);
 
         AdminApiClient.approveResearcher(
                 this,
                 httpClient,
                 researcher.userId,
-                new AdminApiClient.ApproveListener() {
+                new AdminApiClient.ResearcherActionListener() {
                     @Override
-                    public void onApproved() {
+                    public void onSuccess() {
                         runOnUiThread(() -> {
                             if (isFinishing() || isDestroyed()) {
                                 return;
@@ -180,11 +201,7 @@ public class AdminDashboardActivity extends AppCompatActivity {
                                     getString(R.string.admin_approved_researcher, researcher.email),
                                     Toast.LENGTH_SHORT
                             ).show();
-                            container.removeView(card);
-                            if (container.getChildCount() == 0) {
-                                message.setText(R.string.admin_pending_researchers_empty);
-                                message.setVisibility(View.VISIBLE);
-                            }
+                            removeResolvedCard(card);
                         });
                     }
 
@@ -195,12 +212,82 @@ public class AdminDashboardActivity extends AppCompatActivity {
                                 return;
                             }
                             approveButton.setEnabled(true);
+                            rejectButton.setEnabled(true);
                             approveButton.setText(R.string.admin_approve_researcher);
                             Toast.makeText(AdminDashboardActivity.this, errorMessage, Toast.LENGTH_LONG).show();
                         });
                     }
                 }
         );
+    }
+
+    private void confirmReject(
+            @NonNull AdminApiClient.PendingResearcher researcher,
+            @NonNull Button approveButton,
+            @NonNull Button rejectButton,
+            @NonNull View card
+    ) {
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.admin_reject_researcher)
+                .setMessage(getString(R.string.admin_reject_researcher_confirmation, researcher.email))
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton(R.string.admin_reject_researcher, (dialog, which) ->
+                        reject(researcher, approveButton, rejectButton, card))
+                .show();
+    }
+
+    private void reject(
+            @NonNull AdminApiClient.PendingResearcher researcher,
+            @NonNull Button approveButton,
+            @NonNull Button rejectButton,
+            @NonNull View card
+    ) {
+        approveButton.setEnabled(false);
+        rejectButton.setEnabled(false);
+        rejectButton.setText(R.string.admin_rejecting);
+
+        AdminApiClient.rejectResearcher(
+                this,
+                httpClient,
+                researcher.userId,
+                new AdminApiClient.ResearcherActionListener() {
+                    @Override
+                    public void onSuccess() {
+                        runOnUiThread(() -> {
+                            if (isFinishing() || isDestroyed()) {
+                                return;
+                            }
+                            Toast.makeText(
+                                    AdminDashboardActivity.this,
+                                    getString(R.string.admin_rejected_researcher, researcher.email),
+                                    Toast.LENGTH_SHORT
+                            ).show();
+                            removeResolvedCard(card);
+                        });
+                    }
+
+                    @Override
+                    public void onFailure(@NonNull String errorMessage) {
+                        runOnUiThread(() -> {
+                            if (isFinishing() || isDestroyed()) {
+                                return;
+                            }
+                            approveButton.setEnabled(true);
+                            rejectButton.setEnabled(true);
+                            rejectButton.setText(R.string.admin_reject_researcher);
+                            Toast.makeText(AdminDashboardActivity.this, errorMessage, Toast.LENGTH_LONG).show();
+                        });
+                    }
+                }
+        );
+    }
+
+    private void removeResolvedCard(@NonNull View card) {
+        container.removeView(card);
+        if (container.getChildCount() == 0) {
+            message.setText(R.string.admin_pending_researchers_empty);
+            message.setVisibility(View.VISIBLE);
+        }
     }
 
     private void showError(@NonNull String error) {
