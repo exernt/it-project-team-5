@@ -25,6 +25,7 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 public class ResearcherSignUpActivity extends AppCompatActivity {
+    private static final int MIN_PASSWORD_LENGTH = 8;
 
     private AutoCompleteTextView emailField, passwordField, passwordConfirmField, institutionField;
 
@@ -46,6 +47,10 @@ public class ResearcherSignUpActivity extends AppCompatActivity {
             String institution = institutionField.getText().toString().trim();
 
             if (!email.isEmpty() && !password.isEmpty() && password.equals(passwordConfirm) && !institution.isEmpty()) {
+                if (password.length() < MIN_PASSWORD_LENGTH) {
+                    Toast.makeText(this, R.string.researcher_sign_up_password_too_short, Toast.LENGTH_SHORT).show();
+                    return;
+                }
                 performResearcherSignUp(email, password, institution);
             } else {
                 Toast.makeText(this, "Please fill all fields (passwords must match)", Toast.LENGTH_SHORT).show();
@@ -210,9 +215,12 @@ public class ResearcherSignUpActivity extends AppCompatActivity {
                     });
                 } else {
                     runOnUiThread(() -> {
-                        Toast.makeText(ResearcherSignUpActivity.this, "Registered. Note: Researcher verification pending approval.", Toast.LENGTH_LONG).show();
-                        Intent intent = new Intent(ResearcherSignUpActivity.this, ResearcherLoginActivity.class);
-                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                        // The profile now sits in the admin's pending list. The user
+                        // is already signed in, so take them Home (same as the
+                        // Become Researcher path) where their pending status shows.
+                        Toast.makeText(ResearcherSignUpActivity.this, R.string.become_researcher_success, Toast.LENGTH_LONG).show();
+                        Intent intent = new Intent(ResearcherSignUpActivity.this, MainActivity.class);
+                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NEW_TASK);
                         startActivity(intent);
                         finish();
                     });
