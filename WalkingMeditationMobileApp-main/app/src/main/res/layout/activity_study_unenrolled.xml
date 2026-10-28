@@ -25,12 +25,6 @@
             android:textSize="22sp"
             android:textStyle="bold" />
 
-        <Button
-            android:id="@+id/btnViewOpenStudies"
-            style="@style/App.PrimaryButton"
-            android:layout_marginTop="@dimen/space_32"
-            android:text="@string/view_open_studies" />
-
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

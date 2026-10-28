@@ -36,9 +36,6 @@ public class ResearcherStudyListActivity extends AppCompatActivity {
         findViewById(R.id.btnNewStudy).setOnClickListener(view -> startActivity(
                 new Intent(this, ResearcherCreateStudyActivity.class)
         ));
-        findViewById(R.id.btnGeneralFeedback).setOnClickListener(view -> startActivity(
-                ResearcherFeedbackActivity.createIntentForGeneralFeedback(this)
-        ));
 
         loadOwnedStudies();
     }
