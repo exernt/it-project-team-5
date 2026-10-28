@@ -1258,6 +1258,16 @@ class ListStudyFeedbackTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(4, response.feedback[0].rating)
         self.assertEqual("study", response.feedback[0].category)
 
+    async def test_orders_feedback_newest_first(self):
+        self.session.scalars.return_value = []
+
+        await list_study_feedback(self.study.id, self.researcher, self.session)
+
+        statement = self.session.scalars.call_args.args[0]
+        sql = str(statement.compile()).upper()
+        self.assertIn("ORDER BY", sql)
+        self.assertIn("CREATED_AT DESC", sql)
+
 class ListStudiesOwnerFilterTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.session = MagicMock()
