@@ -6,7 +6,14 @@ from uuid import uuid4
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from database.models import Feedback, FeedbackCategory, Role, Study, User
+from database.models import (
+    Feedback,
+    FeedbackCategory,
+    Role,
+    Study,
+    StudyRegistration,
+    User,
+)
 from route.feedback import list_general_feedback, submit_feedback
 from route.models import SubmitFeedbackRequest
 
@@ -37,7 +44,12 @@ class SubmitFeedbackTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_submits_study_feedback(self):
         study = Study(id=uuid4(), name="Morning walks", duration=14)
-        self.session.get.return_value = study
+        registration = StudyRegistration(
+            user_id=self.user.id,
+            study_id=study.id,
+            consented_at=datetime.now(timezone.utc),
+        )
+        self.session.get.side_effect = [study, registration]
         payload = SubmitFeedbackRequest(
             study_id=study.id,
             category="study",
@@ -49,6 +61,22 @@ class SubmitFeedbackTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(study.id, response.study_id)
         self.assertEqual("Really enjoyed this.", response.comment)
+
+    async def test_rejects_feedback_for_study_user_is_not_registered_for(self):
+        study = Study(id=uuid4(), name="Morning walks", duration=14)
+        self.session.get.side_effect = [study, None]
+        payload = SubmitFeedbackRequest(
+            study_id=study.id,
+            category="study",
+            rating=4,
+        )
+
+        with self.assertRaises(HTTPException) as raised:
+            await submit_feedback(payload, self.user, self.session)
+
+        self.assertEqual(403, raised.exception.status_code)
+        self.session.add.assert_not_called()
+        self.session.commit.assert_not_awaited()
 
     async def test_rejects_feedback_for_missing_study(self):
         self.session.get.return_value = None

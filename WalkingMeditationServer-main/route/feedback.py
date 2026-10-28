@@ -4,7 +4,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from datetime import datetime, timezone
-from database.models import Feedback, FeedbackCategory, Role, Study
+from database.models import Feedback, FeedbackCategory, Role, Study, StudyRegistration
 from database.core import DatabaseSessionDependency
 from route.dependencies import CurrentUserDependency, require_role
 from route.models import (
@@ -32,6 +32,15 @@ async def submit_feedback(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Study not found",
+            )
+
+        registration = await session.get(
+            StudyRegistration, (user.id, payload.study_id)
+        )
+        if registration is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not registered for this study",
             )
 
     feedback = Feedback(
