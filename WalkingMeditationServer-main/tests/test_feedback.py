@@ -113,6 +113,15 @@ class ListGeneralFeedbackTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(response.feedback[0].study_id)
         self.assertEqual(5, response.feedback[0].rating)
 
+    async def test_non_admin_is_rejected_by_route_dependency(self):
+        from fastapi import HTTPException
+        from route.dependencies import require_role
+
+        check = require_role(Role.ADMIN)
+        with self.assertRaises(HTTPException) as ctx:
+            await check(self.researcher)
+        self.assertEqual(403, ctx.exception.status_code)
+
     async def test_admin_can_also_list_general_feedback(self):
         admin = User(
             id=uuid4(),
