@@ -32,7 +32,6 @@ import okhttp3.Response;
 
 public class MainActivity extends AppCompatActivity {
 
-    private Button btnExplore, btnResearcherDashboard, btnStudy, btnLogOut, btnFeedback, btnAdminDashboard, btnBecomeResearcher;
     private TextView researcherPendingNotice;
     private Button btnExplore, btnResearcherDashboard, btnStudy, btnLogOut, btnFeedback, btnAdminDashboard, btnBecomeResearcher, btnProfile;
     private final OkHttpClient httpClient = new OkHttpClient();
