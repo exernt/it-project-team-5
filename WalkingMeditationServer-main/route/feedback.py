@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from uuid import uuid4
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from datetime import datetime, timezone
-from database.models import Feedback, FeedbackCategory, Study
+from database.models import Feedback, FeedbackCategory, Role, Study, StudyRegistration
 from database.core import DatabaseSessionDependency
-from route.dependencies import AdminOrVerifiedResearcherDependency, CurrentUserDependency
+from route.dependencies import CurrentUserDependency, require_role
 from route.models import (
     FeedbackListResponse,
     FeedbackResponse,
@@ -32,6 +32,15 @@ async def submit_feedback(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Study not found",
+            )
+
+        registration = await session.get(
+            StudyRegistration, (user.id, payload.study_id)
+        )
+        if registration is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not registered for this study",
             )
 
     feedback = Feedback(
@@ -60,14 +69,15 @@ async def submit_feedback(
 @router.get(
     "",
     response_model=FeedbackListResponse,
+    dependencies=[Depends(require_role(Role.ADMIN))],
 )
 async def list_general_feedback(
-        _viewer: AdminOrVerifiedResearcherDependency,
+        _viewer: CurrentUserDependency,
         session: DatabaseSessionDependency,
 ) -> FeedbackListResponse:
-    """List feedback that isn't tied to any study. Admin or verified
-    researcher only, since this can include feedback from participants of
-    any study."""
+    """List feedback that isn't tied to any study. Admin only: researchers
+    can only see feedback for studies they own, via
+    GET /studies/{study_id}/feedback."""
     result = await session.scalars(
         select(Feedback)
         .where(Feedback.study_id.is_(None))

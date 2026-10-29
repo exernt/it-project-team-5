@@ -135,8 +135,15 @@ public class ResearcherLoginActivity extends AppCompatActivity {
                         finish();
                     });
                 } else {
+                    boolean awaitingApproval = "researcher".equals(role);
                     runOnUiThread(() -> {
-                        Toast.makeText(ResearcherLoginActivity.this, "Access Denied: Account is not a verified researcher", Toast.LENGTH_LONG).show();
+                        Toast.makeText(
+                                ResearcherLoginActivity.this,
+                                awaitingApproval
+                                        ? R.string.researcher_login_pending_approval
+                                        : R.string.researcher_login_not_researcher,
+                                Toast.LENGTH_LONG
+                        ).show();
                         SessionManager.clearSession(ResearcherLoginActivity.this);
                     });
                 }

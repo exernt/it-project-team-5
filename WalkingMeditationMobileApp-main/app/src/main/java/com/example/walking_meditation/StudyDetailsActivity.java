@@ -1,3 +1,4 @@
+
 package com.example.walking_meditation;
 
 import android.content.Context;
@@ -8,13 +9,11 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.walking_meditation.models.Study;
-import com.example.walking_meditation.utils.SessionManager;
 import com.example.walking_meditation.utils.StudyApiClient;
 
 import okhttp3.OkHttpClient;
@@ -63,7 +62,8 @@ public class StudyDetailsActivity extends AppCompatActivity {
         messageView = findViewById(R.id.studyDetailsMessage);
         joinButton = findViewById(R.id.btnJoinStudy);
 
-        findViewById(R.id.btnStudyBack).setOnClickListener(view -> returnToStudyList());
+        findViewById(R.id.btnStudyBack)
+                .setOnClickListener(view -> returnToPreviousScreen());
         joinButton.setOnClickListener(view -> openConsent());
 
         Intent intent = getIntent();
@@ -83,6 +83,7 @@ public class StudyDetailsActivity extends AppCompatActivity {
         String studyName = intent.getStringExtra(EXTRA_STUDY_NAME);
         int studyDuration = intent.getIntExtra(EXTRA_STUDY_DURATION, -1);
         String studyDescription = intent.getStringExtra(EXTRA_STUDY_DESCRIPTION);
+
         if (studyName != null && studyDuration > 0 && studyDescription != null) {
             showStudy(studyName, studyDuration, studyDescription);
             return;
@@ -92,6 +93,7 @@ public class StudyDetailsActivity extends AppCompatActivity {
             showError(getString(R.string.study_details_error));
             return;
         }
+
         loadStudy();
     }
 
@@ -119,16 +121,15 @@ public class StudyDetailsActivity extends AppCompatActivity {
         if (studyId.isEmpty()) {
             return;
         }
+
         startActivity(StudyConsentActivity.createIntent(
                 this,
                 studyId,
                 nameView.getText().toString()
         ));
     }
-    private void returnToStudyList() {
-        Intent intent = new Intent(this, StudyViewListActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        startActivity(intent);
+
+    private void returnToPreviousScreen() {
         finish();
     }
 
@@ -140,16 +141,19 @@ public class StudyDetailsActivity extends AppCompatActivity {
         progress.setVisibility(View.GONE);
         messageView.setVisibility(View.GONE);
         nameView.setText(studyName);
+
         durationView.setText(getResources().getQuantityString(
                 R.plurals.study_duration_days,
                 studyDuration,
                 studyDuration
         ));
+
         if (studyDescription.isEmpty()) {
             descriptionView.setText(R.string.study_description_empty);
         } else {
             descriptionView.setText(studyDescription);
         }
+
         content.setVisibility(View.VISIBLE);
     }
 

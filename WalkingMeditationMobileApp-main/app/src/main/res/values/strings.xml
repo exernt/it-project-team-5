@@ -150,6 +150,10 @@
     <string name="become_researcher_submit">Request Researcher Access</string>
     <string name="become_researcher_submitting">Submitting…</string>
     <string name="become_researcher_success">Request submitted! An admin will review it soon.</string>
+    <string name="researcher_pending_notice">Your researcher access is awaiting admin approval.</string>
+    <string name="researcher_login_pending_approval">Your researcher account is awaiting admin approval. You can use the app as a participant until then.</string>
+    <string name="researcher_login_not_researcher">This account is not a researcher account.</string>
+    <string name="researcher_sign_up_password_too_short">Password must be at least 8 characters.</string>
     <string name="researcher_feedback_header">%1$s · %2$s</string>
     <string name="researcher_feedback_rating">%1$d / 5</string>
     <string name="researcher_feedback_no_rating">No rating</string>

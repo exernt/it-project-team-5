@@ -88,6 +88,15 @@
             android:text="@string/become_researcher"
             android:visibility="gone"/>
 
+        <TextView
+            android:id="@+id/researcherPendingNotice"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="center"
+            android:text="@string/researcher_pending_notice"
+            android:visibility="gone"/>
+
         <Button
             android:id="@+id/btnLogOut"
             style="@style/Widget.Material3.Button.TextButton"
