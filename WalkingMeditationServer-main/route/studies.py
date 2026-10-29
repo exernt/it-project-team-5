@@ -708,7 +708,9 @@ async def list_study_feedback(
         session: DatabaseSessionDependency,
 ) -> FeedbackListResponse:
     result = await session.scalars(
-        select(Feedback).where(Feedback.study_id == study_id)
+        select(Feedback)
+        .where(Feedback.study_id == study_id)
+        .order_by(Feedback.created_at.desc())
     )
 
     return FeedbackListResponse(
