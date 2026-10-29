@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">My Application</string>
+    <string name="app_name">MindWalk: Walking Meditation</string>
     <string name="manage_study">Manage Study</string>
     <string name="checking_study_status">Checking study…</string>
     <string name="study_unenrolled_message">You currently aren\'t enrolled in a study!</string>
