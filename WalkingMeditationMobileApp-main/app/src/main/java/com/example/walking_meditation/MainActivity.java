@@ -31,7 +31,7 @@ import okhttp3.Response;
 
 public class MainActivity extends AppCompatActivity {
 
-    private Button btnExplore, btnResearcherDashboard, btnStudy, btnLogOut, btnFeedback, btnAdminDashboard, btnBecomeResearcher;
+    private Button btnExplore, btnResearcherDashboard, btnStudy, btnLogOut, btnFeedback, btnAdminDashboard, btnBecomeResearcher, btnProfile;
     private final OkHttpClient httpClient = new OkHttpClient();
 
     @Override
@@ -48,6 +48,7 @@ public class MainActivity extends AppCompatActivity {
         btnFeedback = findViewById(R.id.btnFeedback);
         btnAdminDashboard = findViewById(R.id.btnAdminDashboard);
         btnBecomeResearcher = findViewById(R.id.btnBecomeResearcher);
+        btnProfile = findViewById(R.id.btnProfile);
 
         btnResearcherDashboard.setOnClickListener(view ->
                 startActivity(new Intent(MainActivity.this, ResearcherStudyListActivity.class)));
@@ -55,6 +56,8 @@ public class MainActivity extends AppCompatActivity {
                 startActivity(new Intent(MainActivity.this, AdminDashboardActivity.class)));
         btnBecomeResearcher.setOnClickListener(view ->
                 startActivity(new Intent(MainActivity.this, BecomeResearcherActivity.class)));
+        btnProfile.setOnClickListener(view ->
+                startActivity(new Intent(MainActivity.this, ProfileActivity.class)));
 
         applyRoleVisibility();
 
