@@ -6,6 +6,7 @@ import com.example.walking_meditation.BuildConfig;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -32,6 +33,7 @@ import okhttp3.Response;
 public class MainActivity extends AppCompatActivity {
 
     private Button btnExplore, btnResearcherDashboard, btnStudy, btnLogOut, btnFeedback, btnAdminDashboard, btnBecomeResearcher;
+    private TextView researcherPendingNotice;
     private final OkHttpClient httpClient = new OkHttpClient();
 
     @Override
@@ -48,6 +50,7 @@ public class MainActivity extends AppCompatActivity {
         btnFeedback = findViewById(R.id.btnFeedback);
         btnAdminDashboard = findViewById(R.id.btnAdminDashboard);
         btnBecomeResearcher = findViewById(R.id.btnBecomeResearcher);
+        researcherPendingNotice = findViewById(R.id.researcherPendingNotice);
 
         btnResearcherDashboard.setOnClickListener(view ->
                 startActivity(new Intent(MainActivity.this, ResearcherStudyListActivity.class)));
@@ -91,6 +94,9 @@ public class MainActivity extends AppCompatActivity {
         btnAdminDashboard.setVisibility(admin ? View.VISIBLE : View.GONE);
         btnBecomeResearcher.setVisibility(
                 !admin && !researcher ? View.VISIBLE : View.GONE);
+        researcherPendingNotice.setVisibility(
+                researcher && !SessionManager.isVerifiedResearcher(this)
+                        ? View.VISIBLE : View.GONE);
     }
 
     /** Re-checks role and approval status so changes made elsewhere show up without re-login. */
