@@ -13,11 +13,13 @@ import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.ArrayAdapter;
 import android.widget.AutoCompleteTextView;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -133,6 +135,7 @@ public class PathSelectionActivity extends AppCompatActivity
     private AutoCompleteTextView etDestination;
     private EditText etTotalMinutes;
     private EditText etContext;
+    private ScrollView pageScroll;
     private Button btnUseCurrentLocation;
     private Button btnFindPath;
     private Button btnSelectRoute;
@@ -173,6 +176,7 @@ public class PathSelectionActivity extends AppCompatActivity
     private boolean showingResults;
     private boolean launchedFromStudyManagement;
     private boolean mapsConfigured;
+    @Nullable private AutoCompleteTextView activeLocationInput;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -236,10 +240,24 @@ public class PathSelectionActivity extends AppCompatActivity
             setupAutocomplete(etDestination, false);
         }
 
-        btnUseCurrentLocation.setOnClickListener(v -> requestLocationAccess(true));
-        btnFindPath.setOnClickListener(v -> generateRoutes());
-        btnBackToSearch.setOnClickListener(v -> showInputState());
-        btnSelectRoute.setOnClickListener(v -> generateSelectedRouteScript());
+        configureLocationInputFocusPersistence();
+
+        btnUseCurrentLocation.setOnClickListener(v -> {
+            clearInputFocus();
+            requestLocationAccess(true);
+        });
+        btnFindPath.setOnClickListener(v -> {
+            clearInputFocus();
+            generateRoutes();
+        });
+        btnBackToSearch.setOnClickListener(v -> {
+            clearInputFocus();
+            showInputState();
+        });
+        btnSelectRoute.setOnClickListener(v -> {
+            clearInputFocus();
+            generateSelectedRouteScript();
+        });
 
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
@@ -264,6 +282,7 @@ public class PathSelectionActivity extends AppCompatActivity
         etDestination = findViewById(R.id.et_destination);
         etTotalMinutes = findViewById(R.id.et_total_minutes);
         etContext = findViewById(R.id.et_context);
+        pageScroll = findViewById(R.id.path_selection_scroll);
         btnUseCurrentLocation = findViewById(R.id.btn_use_current_location);
         btnFindPath = findViewById(R.id.btn_find_path);
         btnSelectRoute = findViewById(R.id.btn_select_route);
@@ -274,6 +293,54 @@ public class PathSelectionActivity extends AppCompatActivity
         resultsContainer = findViewById(R.id.results_container);
         routeOptionsView = findViewById(R.id.rv_route_options);
         mapView = findViewById(R.id.route_map);
+    }
+
+    private void configureLocationInputFocusPersistence() {
+        View.OnFocusChangeListener nonLocationFocusListener = (view, hasFocus) -> {
+            if (hasFocus) activeLocationInput = null;
+        };
+        etTotalMinutes.setOnFocusChangeListener(nonLocationFocusListener);
+        etContext.setOnFocusChangeListener(nonLocationFocusListener);
+
+        pageScroll.setOnScrollChangeListener((view, scrollX, scrollY, oldScrollX, oldScrollY) -> {
+            AutoCompleteTextView input = activeLocationInput;
+            if (input == null || showingResults || !input.isEnabled()) return;
+
+            input.post(() -> {
+                if (activeLocationInput != input || showingResults || !input.isEnabled()) return;
+
+                input.requestFocus();
+                InputMethodManager keyboard = getSystemService(InputMethodManager.class);
+                if (keyboard != null) {
+                    keyboard.showSoftInput(input, InputMethodManager.SHOW_IMPLICIT);
+                }
+
+                boolean source = input == etSource;
+                boolean unresolved = source
+                        ? selectedSourcePlaceId == null && selectedSourceLocation == null
+                        : selectedDestinationPlaceId == null && selectedDestinationLocation == null;
+                if (unresolved
+                        && input.getAdapter() != null
+                        && input.getAdapter().getCount() > 0
+                        && input.getText().toString().trim().length() >= 2) {
+                    input.showDropDown();
+                }
+            });
+        });
+    }
+
+    private void clearInputFocus() {
+        activeLocationInput = null;
+        etSource.dismissDropDown();
+        etDestination.dismissDropDown();
+
+        View focused = getCurrentFocus();
+        if (focused != null) focused.clearFocus();
+
+        InputMethodManager keyboard = getSystemService(InputMethodManager.class);
+        if (keyboard != null) {
+            keyboard.hideSoftInputFromWindow(pageScroll.getWindowToken(), 0);
+        }
     }
 
     private void onMapReady(@NonNull GoogleMap map) {
@@ -393,6 +460,10 @@ public class PathSelectionActivity extends AppCompatActivity
         );
         textView.setAdapter(adapter);
         textView.setThreshold(1);
+        textView.setOnFocusChangeListener((view, hasFocus) -> {
+            if (hasFocus) activeLocationInput = textView;
+        });
+        textView.setOnClickListener(view -> activeLocationInput = textView);
 
         textView.setOnItemClickListener((parent, view, position, id) -> {
             List<AutocompletePrediction> predictions =
@@ -428,6 +499,7 @@ public class PathSelectionActivity extends AppCompatActivity
                     if (pending[0] != null) mainHandler.removeCallbacks(pending[0]);
                     return;
                 }
+                activeLocationInput = textView;
 
                 if (source) {
                     selectedSourcePlaceId = null;
@@ -480,7 +552,13 @@ public class PathSelectionActivity extends AppCompatActivity
                     }
                     adapter.clear();
                     adapter.addAll(suggestions);
-                    adapter.notifyDataSetChanged();
+                    adapter.getFilter().filter(query, count -> {
+                        if (count > 0
+                                && textView.hasFocus()
+                                && query.equals(textView.getText().toString().trim())) {
+                            textView.showDropDown();
+                        }
+                    });
                 })
                 .addOnFailureListener(this, exception -> {
                     if (!query.equals(textView.getText().toString().trim())) return;

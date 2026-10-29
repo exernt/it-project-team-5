@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/path_selection_scroll"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/white"
-    android:fillViewport="true">
+    android:fillViewport="true"
+    android:focusable="false"
+    android:focusableInTouchMode="false">
 
     <LinearLayout
         style="@style/App.ScreenContainer"
@@ -45,11 +48,13 @@
             android:hint="Search for a destination"
             android:layout_marginBottom="@dimen/space_12" />
 
-        <com.google.android.gms.maps.MapView
+        <com.example.walking_meditation.ui.ScrollLockMapView
             android:id="@+id/route_map"
             android:layout_width="match_parent"
             android:layout_height="220dp"
-            android:contentDescription="Selected locations and route map" />
+            android:contentDescription="Selected locations and route map"
+            android:focusable="false"
+            android:focusableInTouchMode="false" />
 
         <LinearLayout
             android:id="@+id/input_controls"
