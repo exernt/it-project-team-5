@@ -15,11 +15,53 @@
         android:textSize="28sp"
         android:textStyle="bold" />
 
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/scriptParametersGroupTabs"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_12">
+
+        <com.google.android.material.tabs.TabItem
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/group_control" />
+
+        <com.google.android.material.tabs.TabItem
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/group_experimental" />
+
+    </com.google.android.material.tabs.TabLayout>
+
+    <RadioGroup
+        android:id="@+id/scriptParametersVoiceSelector"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_12"
+        android:orientation="horizontal">
+
+        <RadioButton
+            android:id="@+id/scriptParametersMaleVoice"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:checked="true"
+            android:text="@string/male_voice" />
+
+        <RadioButton
+            android:id="@+id/scriptParametersFemaleVoice"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/female_voice" />
+
+    </RadioGroup>
+
     <EditText
         android:id="@+id/scriptParametersText"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_marginTop="@dimen/space_24"
+        android:layout_marginTop="@dimen/space_12"
         android:layout_weight="1"
         android:gravity="top|start"
         android:hint="@string/script_parameters_hint"

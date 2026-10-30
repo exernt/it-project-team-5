@@ -214,7 +214,8 @@ public class StudyUserManageActivity extends AppCompatActivity {
             public void onLoaded(
                     boolean participating,
                     @NonNull String returnedStudyId,
-                    @NonNull String parameters
+                    @NonNull String parameters,
+                    @NonNull String ttsVoice
             ) {
                 runOnUiThread(() -> {
                     resetStartButton();
@@ -228,7 +229,8 @@ public class StudyUserManageActivity extends AppCompatActivity {
                     SessionManager.cacheStudyConfiguration(
                             StudyUserManageActivity.this,
                             returnedStudyId,
-                            parameters
+                            parameters,
+                            ttsVoice
                     );
                     openPathSelection();
                 });

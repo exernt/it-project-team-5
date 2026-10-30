@@ -23,6 +23,7 @@ import com.example.walking_meditation.models.RoutePlan;
 import com.example.walking_meditation.script.ScriptNarrationParser;
 import com.example.walking_meditation.script.NarrationScheduler;
 import com.example.walking_meditation.utils.RoutePlanFiles;
+import com.example.walking_meditation.utils.SessionManager;
 import com.example.walking_meditation.models.ScheduledNarration;
 import com.example.walking_meditation.utils.CacheFiles;
 
@@ -112,7 +113,10 @@ public class ScriptResultActivity extends AppCompatActivity {
         final WalkAudioPreparer current;
         try {
             current = new WalkAudioPreparer(new CurrentWalk(getFilesDir()),
-                    new TtsClient(getApplicationContext(), new ServerTtsPayload()));
+                    new TtsClient(
+                            getApplicationContext(),
+                            new ServerTtsPayload(SessionManager.getStudyTtsVoice(this))
+                    ));
             preparer = current;
         } catch (Exception error) {
             status.setText("Audio preparation failed: " + error.getMessage());

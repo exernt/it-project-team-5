@@ -428,13 +428,17 @@ public final class StudyApiClient {
 
     @NonNull
     private static Study parseStudy(@NonNull JSONObject item) throws Exception {
+        String legacyParameters = item.optString("script_generation_parameters", "");
         return new Study(
                 item.getString("id"),
                 item.getString("name"),
                 item.getInt("duration"),
                 item.optString("description", ""),
                 item.getString("status"),
-                item.optString("script_generation_parameters", "")
+                item.optString("control_script_generation_parameters", legacyParameters),
+                item.optString("experimental_script_generation_parameters", legacyParameters),
+                item.optString("control_tts_voice", "male"),
+                item.optString("experimental_tts_voice", "male")
         );
     }
 

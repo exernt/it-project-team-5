@@ -11,6 +11,7 @@ public final class SessionManager {
     private static final String STUDY_ACTIVE = "study_active";
     private static final String STUDY_ID = "study_id";
     private static final String STUDY_PARAMETERS = "study_script_parameters";
+    private static final String STUDY_TTS_VOICE = "study_tts_voice";
     private static final String USER_ROLE = "user_role";
     private static final String RESEARCHER_VERIFIED = "researcher_verified";
 
@@ -50,12 +51,14 @@ public final class SessionManager {
     public static void cacheStudyConfiguration(
             @NonNull Context context,
             @NonNull String studyId,
-            @NonNull String parameters
+            @NonNull String parameters,
+            @NonNull String ttsVoice
     ) {
         preferences(context).edit()
                 .putBoolean(STUDY_ACTIVE, true)
                 .putString(STUDY_ID, studyId)
                 .putString(STUDY_PARAMETERS, parameters)
+                .putString(STUDY_TTS_VOICE, "female".equals(ttsVoice) ? "female" : "male")
                 .apply();
     }
 
@@ -64,6 +67,7 @@ public final class SessionManager {
                 .remove(STUDY_ACTIVE)
                 .remove(STUDY_ID)
                 .remove(STUDY_PARAMETERS)
+                .remove(STUDY_TTS_VOICE)
                 .apply();
     }
 
@@ -79,6 +83,11 @@ public final class SessionManager {
     @NonNull
     public static String getStudyParameters(@NonNull Context context) {
         return preferences(context).getString(STUDY_PARAMETERS, "");
+    }
+
+    @NonNull
+    public static String getStudyTtsVoice(@NonNull Context context) {
+        return preferences(context).getString(STUDY_TTS_VOICE, "male");
     }
 
     public static void saveUserInfo(

@@ -10,8 +10,9 @@ public class TtsPayloadTest {
         String narration = "(pause)A & B <tag> \"quote\" 'apostrophe'(PAUSE) End.";
         JSONObject json = new ServerTtsPayload().toJson("  " + narration + "  ");
         assertEquals(narration, json.getString("text"));
-        assertEquals(1, json.length());
-        assertEquals("meditation-server-tts-v1", new ServerTtsPayload().providerId());
+        assertEquals("male", json.getString("voice"));
+        assertEquals(2, json.length());
+        assertEquals("meditation-server-tts-v2", new ServerTtsPayload().providerId());
     }
 
     @Test public void serverPayloadEnforcesThePublicApiBoundary() throws Exception {
@@ -20,5 +21,10 @@ public class TtsPayloadTest {
         assertThrows(IOException.class, () -> payload.toJson("(pause)(PAUSE)"));
         assertThrows(IOException.class, () -> payload.toJson("a".repeat(3001)));
         assertEquals(3000, payload.toJson("a".repeat(3000)).getString("text").length());
+    }
+
+    @Test public void serverPayloadCanRequestFemaleStudyVoice() throws Exception {
+        assertEquals("female", new ServerTtsPayload("female")
+                .toJson("A quiet walk.").getString("voice"));
     }
 }

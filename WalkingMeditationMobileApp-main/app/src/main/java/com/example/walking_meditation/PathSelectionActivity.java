@@ -171,7 +171,6 @@ public class PathSelectionActivity extends AppCompatActivity
     private boolean locationBusy;
     private boolean studyRefreshPending;
     private boolean showingResults;
-    private boolean launchedFromStudyManagement;
     private boolean mapsConfigured;
 
     @Override
@@ -207,10 +206,6 @@ public class PathSelectionActivity extends AppCompatActivity
         mapView.onCreate(savedInstanceState);
         mapView.getMapAsync(this::onMapReady);
 
-        launchedFromStudyManagement = getIntent().getBooleanExtra(
-                com.example.walking_meditation.nav.Extras.EXTRA_FROM_STUDY_MANAGE,
-                false
-        );
         applyStudyConfiguration(
                 SessionManager.hasActiveStudy(this),
                 SessionManager.getStudyParameters(this)
@@ -1090,13 +1085,13 @@ public class PathSelectionActivity extends AppCompatActivity
         StudyConfigClient.fetchCurrent(this, httpClient, new StudyConfigClient.Listener() {
             @Override
             public void onLoaded(boolean participating, @NonNull String studyId,
-                                 @NonNull String parameters) {
+                                 @NonNull String parameters, @NonNull String ttsVoice) {
                 runOnUiThread(() -> {
                     if (isFinishing() || isDestroyed()) return;
                     studyRefreshPending = false;
                     if (participating) {
                         SessionManager.cacheStudyConfiguration(
-                                PathSelectionActivity.this, studyId, parameters);
+                                PathSelectionActivity.this, studyId, parameters, ttsVoice);
                     } else {
                         SessionManager.clearStudyConfiguration(PathSelectionActivity.this);
                     }
@@ -1239,11 +1234,7 @@ public class PathSelectionActivity extends AppCompatActivity
     protected void onResume() {
         super.onResume();
         mapView.onResume();
-        if (launchedFromStudyManagement && SessionManager.hasActiveStudy(this)) {
-            applyStudyConfiguration(true, SessionManager.getStudyParameters(this));
-        } else {
-            refreshStudyConfiguration();
-        }
+        refreshStudyConfiguration();
     }
 
     @Override

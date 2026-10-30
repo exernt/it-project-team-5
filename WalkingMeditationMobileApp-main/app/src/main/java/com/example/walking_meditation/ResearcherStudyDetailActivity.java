@@ -38,7 +38,10 @@ public class ResearcherStudyDetailActivity extends AppCompatActivity {
             );
     private String studyId = "";
     private String currentStatus = "";
-    private String currentScriptParameters = "";
+    private String currentControlScriptParameters = "";
+    private String currentExperimentalScriptParameters = "";
+    private String currentControlTtsVoice = "male";
+    private String currentExperimentalTtsVoice = "male";
 
     private ProgressBar progress;
     private ScrollView content;
@@ -106,7 +109,10 @@ public class ResearcherStudyDetailActivity extends AppCompatActivity {
                 scriptParametersLauncher.launch(ResearcherScriptParametersActivity.createIntent(
                         this,
                         studyId,
-                        currentScriptParameters
+                        currentControlScriptParameters,
+                        currentExperimentalScriptParameters,
+                        currentControlTtsVoice,
+                        currentExperimentalTtsVoice
                 ))
         );
     }
@@ -196,7 +202,10 @@ public class ResearcherStudyDetailActivity extends AppCompatActivity {
         nameField.setText(study.getName());
         durationField.setText(String.valueOf(study.getDuration()));
         descriptionField.setText(study.getDescription());
-        currentScriptParameters = study.getScriptGenerationParameters();
+        currentControlScriptParameters = study.getControlScriptGenerationParameters();
+        currentExperimentalScriptParameters = study.getExperimentalScriptGenerationParameters();
+        currentControlTtsVoice = study.getControlTtsVoice();
+        currentExperimentalTtsVoice = study.getExperimentalTtsVoice();
 
         configureLifecycleButton();
         content.setVisibility(View.VISIBLE);

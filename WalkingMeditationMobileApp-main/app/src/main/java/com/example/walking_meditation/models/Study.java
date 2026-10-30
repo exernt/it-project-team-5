@@ -8,7 +8,10 @@ public final class Study {
     private final int duration;
     private final String description;
     private final String status;
-    private final String scriptGenerationParameters;
+    private final String controlScriptGenerationParameters;
+    private final String experimentalScriptGenerationParameters;
+    private final String controlTtsVoice;
+    private final String experimentalTtsVoice;
 
     public Study(
             @NonNull String id,
@@ -17,7 +20,7 @@ public final class Study {
             @NonNull String description,
             @NonNull String status
     ) {
-        this(id, name, duration, description, status, "");
+        this(id, name, duration, description, status, "", "", "male", "male");
     }
 
     public Study(
@@ -26,14 +29,42 @@ public final class Study {
             int duration,
             @NonNull String description,
             @NonNull String status,
-            @NonNull String scriptGenerationParameters
+            @NonNull String controlScriptGenerationParameters,
+            @NonNull String experimentalScriptGenerationParameters
+    ) {
+        this(
+                id,
+                name,
+                duration,
+                description,
+                status,
+                controlScriptGenerationParameters,
+                experimentalScriptGenerationParameters,
+                "male",
+                "male"
+        );
+    }
+
+    public Study(
+            @NonNull String id,
+            @NonNull String name,
+            int duration,
+            @NonNull String description,
+            @NonNull String status,
+            @NonNull String controlScriptGenerationParameters,
+            @NonNull String experimentalScriptGenerationParameters,
+            @NonNull String controlTtsVoice,
+            @NonNull String experimentalTtsVoice
     ) {
         this.id = id;
         this.name = name;
         this.duration = duration;
         this.description = description;
         this.status = status;
-        this.scriptGenerationParameters = scriptGenerationParameters;
+        this.controlScriptGenerationParameters = controlScriptGenerationParameters;
+        this.experimentalScriptGenerationParameters = experimentalScriptGenerationParameters;
+        this.controlTtsVoice = controlTtsVoice;
+        this.experimentalTtsVoice = experimentalTtsVoice;
     }
 
     @NonNull
@@ -61,8 +92,23 @@ public final class Study {
     }
 
     @NonNull
-    public String getScriptGenerationParameters() {
-        return scriptGenerationParameters;
+    public String getControlScriptGenerationParameters() {
+        return controlScriptGenerationParameters;
+    }
+
+    @NonNull
+    public String getExperimentalScriptGenerationParameters() {
+        return experimentalScriptGenerationParameters;
+    }
+
+    @NonNull
+    public String getControlTtsVoice() {
+        return controlTtsVoice;
+    }
+
+    @NonNull
+    public String getExperimentalTtsVoice() {
+        return experimentalTtsVoice;
     }
 
     public boolean isOpen() {

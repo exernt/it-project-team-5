@@ -51,6 +51,8 @@
     <string name="set_script_parameters">Set Script Parameters</string>
     <string name="script_parameters_title">Script Parameters</string>
     <string name="script_parameters_hint">Enter script generation parameters</string>
+    <string name="male_voice">Male Voice</string>
+    <string name="female_voice">Female Voice</string>
     <string name="confirm">Confirm</string>
     <string name="cancel">Cancel</string>
     <string name="researcher_detail_error">Unable to load this study.</string>
