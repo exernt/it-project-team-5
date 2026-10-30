@@ -16,4 +16,16 @@ public final class QuestionnairePublishing {
                 && !questionnairePublished
                 && !hasUnsavedChanges;
     }
+
+    public static boolean canIssue(
+            @NonNull String studyStatus,
+            @NonNull String studyId,
+            @NonNull String questionnaireId,
+            @NonNull String questionnaireStatus
+    ) {
+        return "active".equals(studyStatus)
+                && !studyId.isEmpty()
+                && !questionnaireId.isEmpty()
+                && "published".equals(questionnaireStatus);
+    }
 }

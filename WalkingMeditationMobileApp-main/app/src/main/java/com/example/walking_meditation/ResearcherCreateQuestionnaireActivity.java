@@ -1,5 +1,6 @@
 package com.example.walking_meditation;
 
+import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.os.Bundle;
 import android.text.Editable;
@@ -14,6 +15,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
@@ -32,6 +35,7 @@ import okhttp3.OkHttpClient;
 
 public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
     private static final String STATE_QUESTIONNAIRE_ID = "questionnaire_id";
+    private static final String STATE_QUESTIONNAIRE_STATUS = "questionnaire_status";
     private static final String STATE_QUESTIONS = "questions";
     private static final String STATE_PUBLISHED = "questionnaire_published";
     private static final String STATE_DIRTY = "questionnaire_dirty";
@@ -40,17 +44,31 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
     private static final String STATE_DEFINITION = "questionnaire_definition";
 
     private final OkHttpClient httpClient = new OkHttpClient();
+    private final ActivityResultLauncher<Intent> copyQuestionnaireLauncher =
+            registerForActivityResult(
+                    new ActivityResultContracts.StartActivityForResult(),
+                    result -> {
+                        Intent data = result.getData();
+                        if (result.getResultCode() != RESULT_OK || data == null) return;
+                        String definition = data.getStringExtra(
+                                ResearcherQuestionnaireCopyActivity.EXTRA_QUESTIONNAIRE_DEFINITION
+                        );
+                        if (definition != null) applyCopiedDefinition(definition);
+                    }
+            );
     private EditText titleField, promptField;
     private RadioGroup questionTypeGroup;
     private LinearLayout choiceOptionsSection, choiceOptionsContainer, questionsListContainer;
     private TextView pageTitle, questionsEmptyText, publishHint;
-    private Button saveButton, publishButton, addQuestionButton, addChoiceButton;
+    private Button saveButton, publishButton, issueButton, copyButton, addQuestionButton,
+            addChoiceButton;
 
     private JSONArray questionsArray = new JSONArray();
     private JSONObject currentDefinition = new JSONObject();
     private String studyId = "";
     private String studyStatus = "";
     private String questionnaireId = "";
+    private String questionnaireStatus = "draft";
     private boolean questionnairePublished;
     private boolean hasUnsavedChanges = true;
     private boolean requestInProgress;
@@ -75,11 +93,17 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
         publishHint = findViewById(R.id.createQuestionnairePublishHint);
         saveButton = findViewById(R.id.btnCreateQuestionnaireSubmit);
         publishButton = findViewById(R.id.btnCreateQuestionnairePublish);
+        issueButton = findViewById(R.id.btnIssueQuestionnaire);
+        copyButton = findViewById(R.id.btnCopyQuestionnaire);
         addQuestionButton = findViewById(R.id.btnAddQuestion);
         addChoiceButton = findViewById(R.id.btnAddChoice);
 
         if (savedInstanceState != null) {
             questionnaireId = savedInstanceState.getString(STATE_QUESTIONNAIRE_ID, "");
+            questionnaireStatus = savedInstanceState.getString(
+                    STATE_QUESTIONNAIRE_STATUS,
+                    "draft"
+            );
             questionnairePublished = savedInstanceState.getBoolean(STATE_PUBLISHED, false);
             hasUnsavedChanges = savedInstanceState.getBoolean(STATE_DIRTY, true);
             try {
@@ -110,7 +134,12 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
         } else {
             questionnaireId = getIntent().getStringExtra("questionnaire_id");
             if (questionnaireId == null) questionnaireId = "";
-            String questionnaireStatus = getIntent().getStringExtra("questionnaire_status");
+            questionnaireStatus = getIntent().getStringExtra("questionnaire_status");
+            if (questionnaireStatus == null || questionnaireStatus.isEmpty()) {
+                questionnaireStatus = "draft";
+            } else {
+                questionnaireStatus = questionnaireStatus.toLowerCase(java.util.Locale.ROOT);
+            }
             questionnairePublished = "published".equalsIgnoreCase(questionnaireStatus)
                     || "archived".equalsIgnoreCase(questionnaireStatus);
             hasUnsavedChanges = questionnaireId.isEmpty();
@@ -130,8 +159,10 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
 
         if (questionnaireId.isEmpty()) {
             pageTitle.setText("Create Questionnaire");
-        } else if (questionnairePublished) {
+        } else if ("published".equals(questionnaireStatus)) {
             pageTitle.setText("Review Published Questionnaire");
+        } else if (questionnairePublished) {
+            pageTitle.setText(R.string.review_questionnaire);
         } else {
             pageTitle.setText("Edit Questionnaire Draft");
         }
@@ -144,6 +175,10 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
         addChoiceButton.setOnClickListener(view -> addChoiceRow());
         saveButton.setOnClickListener(view -> saveQuestionnaire());
         publishButton.setOnClickListener(view -> publishQuestionnaire());
+        issueButton.setOnClickListener(view -> issueQuestionnaire());
+        copyButton.setOnClickListener(view -> copyQuestionnaireLauncher.launch(
+                new Intent(this, ResearcherQuestionnaireCopyActivity.class)
+        ));
         questionTypeGroup.setOnCheckedChangeListener((group, checkedId) ->
                 {
                     choiceOptionsSection.setVisibility(
@@ -191,6 +226,7 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
     protected void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
         outState.putString(STATE_QUESTIONNAIRE_ID, questionnaireId);
+        outState.putString(STATE_QUESTIONNAIRE_STATUS, questionnaireStatus);
         outState.putString(STATE_QUESTIONS, questionsArray.toString());
         outState.putString(STATE_DEFINITION, currentDefinition.toString());
         outState.putBoolean(STATE_PUBLISHED, questionnairePublished);
@@ -230,7 +266,10 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
     }
 
     private void configureEditorMode() {
-        if (!questionnairePublished) return;
+        if (!questionnairePublished) {
+            issueButton.setVisibility(View.GONE);
+            return;
+        }
 
         titleField.setEnabled(false);
         findViewById(R.id.labelPrompt).setVisibility(View.GONE);
@@ -241,7 +280,30 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
         addQuestionButton.setVisibility(View.GONE);
         saveButton.setVisibility(View.GONE);
         publishButton.setVisibility(View.GONE);
-        publishHint.setVisibility(View.GONE);
+        copyButton.setVisibility(View.GONE);
+        boolean canOfferIssuance = "published".equals(questionnaireStatus) && !studyId.isEmpty();
+        issueButton.setVisibility(canOfferIssuance ? View.VISIBLE : View.GONE);
+        publishHint.setVisibility(canOfferIssuance ? View.VISIBLE : View.GONE);
+    }
+
+    private void applyCopiedDefinition(@NonNull String definitionString) {
+        try {
+            currentDefinition = new JSONObject(definitionString);
+            questionsArray = currentDefinition.optJSONArray("questions");
+            if (questionsArray == null) questionsArray = new JSONArray();
+            currentDefinition.put("questions", questionsArray);
+
+            titleField.setText(currentDefinition.optString("title", ""));
+            promptField.setText("");
+            choiceOptionsContainer.removeAllViews();
+            questionTypeGroup.check(R.id.radioText);
+            choiceOptionsSection.setVisibility(View.GONE);
+            hasUnsavedChanges = true;
+            renderQuestionsList();
+            updateEditorUi();
+        } catch (Exception error) {
+            Toast.makeText(this, R.string.copy_questionnaire_error, Toast.LENGTH_LONG).show();
+        }
     }
 
     private void renderQuestionsList() {
@@ -703,6 +765,7 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
                     public void onSuccess(@NonNull String id) {
                         runOnUiThread(() -> {
                             questionnairePublished = true;
+                            questionnaireStatus = "published";
                             requestInProgress = false;
                             updateEditorUi();
                             Toast.makeText(
@@ -730,10 +793,58 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
         );
     }
 
+    private void issueQuestionnaire() {
+        if (!QuestionnairePublishing.canIssue(
+                studyStatus,
+                studyId,
+                questionnaireId,
+                questionnaireStatus
+        )) {
+            return;
+        }
+
+        requestInProgress = true;
+        updateEditorUi();
+        QuestionnaireApiClient.issueQuestionnaireToStudy(
+                this,
+                httpClient,
+                studyId,
+                questionnaireId,
+                new QuestionnaireApiClient.Listener() {
+                    @Override
+                    public void onSuccess(@NonNull String id) {
+                        runOnUiThread(() -> {
+                            requestInProgress = false;
+                            Toast.makeText(
+                                    ResearcherCreateQuestionnaireActivity.this,
+                                    R.string.questionnaire_issued,
+                                    Toast.LENGTH_SHORT
+                            ).show();
+                            finish();
+                        });
+                    }
+
+                    @Override
+                    public void onFailure(@NonNull String error) {
+                        runOnUiThread(() -> {
+                            requestInProgress = false;
+                            updateEditorUi();
+                            Toast.makeText(
+                                    ResearcherCreateQuestionnaireActivity.this,
+                                    error,
+                                    Toast.LENGTH_LONG
+                            ).show();
+                        });
+                    }
+                }
+        );
+    }
+
     private void updateEditorUi() {
         saveButton.setEnabled(!requestInProgress && !questionnairePublished);
         addQuestionButton.setEnabled(!requestInProgress && !questionnairePublished);
         addChoiceButton.setEnabled(!requestInProgress && !questionnairePublished);
+        copyButton.setEnabled(!requestInProgress && !questionnairePublished);
         titleField.setEnabled(!requestInProgress && !questionnairePublished);
         promptField.setEnabled(!requestInProgress && !questionnairePublished);
         questionTypeGroup.setEnabled(!requestInProgress && !questionnairePublished);
@@ -764,6 +875,11 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
     }
 
     private void updatePublishUi() {
+        if (questionnairePublished) {
+            updateIssueUi();
+            return;
+        }
+
         boolean canPublish = !requestInProgress && QuestionnairePublishing.canPublish(
                 studyStatus,
                 questionnaireId,
@@ -776,9 +892,7 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
                 canPublish ? R.color.sky_blue_dark : R.color.disabled_grey
         )));
 
-        if (questionnairePublished) {
-            publishHint.setText("This questionnaire has already been published.");
-        } else if (!"active".equals(studyStatus)) {
+        if (!"active".equals(studyStatus)) {
             publishHint.setText("Publishing is available once the study is active.");
         } else if (questionnaireId.isEmpty()) {
             publishHint.setText("Create the questionnaire before publishing it.");
@@ -787,5 +901,29 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
         } else {
             publishHint.setText("Publishing will issue this questionnaire to the active study.");
         }
+    }
+
+    private void updateIssueUi() {
+        boolean visible = "published".equals(questionnaireStatus) && !studyId.isEmpty();
+        issueButton.setVisibility(visible ? View.VISIBLE : View.GONE);
+        publishHint.setVisibility(visible ? View.VISIBLE : View.GONE);
+        if (!visible) return;
+
+        boolean canIssue = !requestInProgress && QuestionnairePublishing.canIssue(
+                studyStatus,
+                studyId,
+                questionnaireId,
+                questionnaireStatus
+        );
+        issueButton.setEnabled(canIssue);
+        issueButton.setBackgroundTintList(ColorStateList.valueOf(ContextCompat.getColor(
+                this,
+                canIssue ? R.color.sky_blue_dark : R.color.disabled_grey
+        )));
+        publishHint.setText(
+                "active".equals(studyStatus)
+                        ? R.string.questionnaire_issue_ready_hint
+                        : R.string.questionnaire_issue_active_hint
+        );
     }
 }

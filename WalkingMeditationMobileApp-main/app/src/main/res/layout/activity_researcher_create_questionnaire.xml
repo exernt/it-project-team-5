@@ -186,14 +186,25 @@
         </LinearLayout>
 
         <Button
-            android:id="@+id/btnCreateQuestionnaireSubmit"
+            android:id="@+id/btnCopyQuestionnaire"
+            style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="32dp"
-            android:text="Create Questionnaire"
+            android:text="@string/copy_questionnaire"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/questionsSection" />
+
+        <Button
+            android:id="@+id/btnCreateQuestionnaireSubmit"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Create Questionnaire"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/btnCopyQuestionnaire" />
 
         <Button
             android:id="@+id/btnCreateQuestionnairePublish"
@@ -209,6 +220,21 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/btnCreateQuestionnaireSubmit" />
 
+        <Button
+            android:id="@+id/btnIssueQuestionnaire"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:backgroundTint="@color/disabled_grey"
+            android:enabled="false"
+            android:text="@string/issue_questionnaire"
+            android:textColor="@color/white"
+            android:visibility="gone"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/btnCreateQuestionnairePublish" />
+
         <TextView
             android:id="@+id/createQuestionnairePublishHint"
             android:layout_width="0dp"
@@ -219,7 +245,7 @@
             android:textSize="14sp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/btnCreateQuestionnairePublish" />
+            app:layout_constraintTop_toBottomOf="@+id/btnIssueQuestionnaire" />
 
         <Button
             android:id="@+id/btnCreateQuestionnaireCancel"

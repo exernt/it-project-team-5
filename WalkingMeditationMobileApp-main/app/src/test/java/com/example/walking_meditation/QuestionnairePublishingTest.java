@@ -24,4 +24,46 @@ public class QuestionnairePublishingTest {
         assertFalse(QuestionnairePublishing.canPublish("active", "questionnaire-id", false, true));
         assertFalse(QuestionnairePublishing.canPublish("active", "questionnaire-id", true, false));
     }
+
+    @Test
+    public void activeStudyCanIssuePublishedQuestionnaire() {
+        assertTrue(QuestionnairePublishing.canIssue(
+                "active",
+                "study-id",
+                "questionnaire-id",
+                "published"
+        ));
+    }
+
+    @Test
+    public void questionnaireCannotBeIssuedWithoutActiveStudyContext() {
+        assertFalse(QuestionnairePublishing.canIssue(
+                "recruiting",
+                "study-id",
+                "questionnaire-id",
+                "published"
+        ));
+        assertFalse(QuestionnairePublishing.canIssue(
+                "active",
+                "",
+                "questionnaire-id",
+                "published"
+        ));
+    }
+
+    @Test
+    public void draftOrArchivedQuestionnaireCannotBeIssued() {
+        assertFalse(QuestionnairePublishing.canIssue(
+                "active",
+                "study-id",
+                "questionnaire-id",
+                "draft"
+        ));
+        assertFalse(QuestionnairePublishing.canIssue(
+                "active",
+                "study-id",
+                "questionnaire-id",
+                "archived"
+        ));
+    }
 }
