@@ -92,7 +92,7 @@
                 android:id="@+id/radioRating"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Scalar (1-5)" />
+                android:text="Scale" />
 
             <RadioButton
                 android:id="@+id/radioSingleChoice"
@@ -108,7 +108,7 @@
         </RadioGroup>
 
         <LinearLayout
-            android:id="@+id/choiceOptionsSection"
+            android:id="@+id/scaleOptionsSection"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
@@ -117,6 +117,71 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/questionTypeGroup">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Scale points"
+                android:textStyle="bold" />
+
+            <RadioGroup
+                android:id="@+id/scalePointCountGroup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <RadioButton
+                    android:id="@+id/radioScale4Points"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="4 points" />
+
+                <RadioButton
+                    android:id="@+id/radioScale5Points"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:text="5 points" />
+            </RadioGroup>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/scaleStartValue"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:layout_weight="1"
+                    android:hint="Start value"
+                    android:inputType="numberSigned"
+                    android:text="1" />
+
+                <EditText
+                    android:id="@+id/scaleEndValue"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:hint="End value"
+                    android:inputType="numberSigned"
+                    android:text="5" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/choiceOptionsSection"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="vertical"
+            android:visibility="gone"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/scaleOptionsSection">
 
             <TextView
                 android:layout_width="wrap_content"

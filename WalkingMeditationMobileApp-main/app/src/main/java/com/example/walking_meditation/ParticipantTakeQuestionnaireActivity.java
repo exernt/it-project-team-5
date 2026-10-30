@@ -90,6 +90,8 @@ public class ParticipantTakeQuestionnaireActivity extends AppCompatActivity {
 
         try {
             JSONArray questions = definition.getJSONArray("questions");
+            JSONObject scales = definition.optJSONObject("scales");
+            if (scales == null) scales = new JSONObject();
             for (int i = 0; i < questions.length(); i++) {
                 JSONObject q = questions.getJSONObject(i);
                 String id = q.getString("id");
@@ -112,12 +114,22 @@ public class ParticipantTakeQuestionnaireActivity extends AppCompatActivity {
                 if ("rating".equalsIgnoreCase(type)) {
                     RadioGroup rg = new RadioGroup(this);
                     rg.setOrientation(RadioGroup.HORIZONTAL);
-                    for (int val = 1; val <= 5; val++) {
+                    JSONObject scale = scales.getJSONObject(q.getString("scale_ref"));
+                    int min = scale.getInt("min");
+                    int max = scale.getInt("max");
+                    long pointCount = (long) max - min + 1;
+                    if (pointCount != 4 && pointCount != 5) {
+                        throw new IllegalArgumentException(
+                                "The app only supports 4- or 5-point numeric scales"
+                        );
+                    }
+                    for (int val = min; val <= max; val++) {
                         RadioButton rb = new RadioButton(this);
                         rb.setText(String.valueOf(val));
                         rb.setId(View.generateViewId());
                         rb.setTag(val);
                         rg.addView(rb);
+                        if (val == max) break;
                     }
                     RadioButton firstRb = (RadioButton) rg.getChildAt(0);
                     if (firstRb != null) {
@@ -212,11 +224,15 @@ public class ParticipantTakeQuestionnaireActivity extends AppCompatActivity {
                     RadioGroup rg = (RadioGroup) qi.inputView;
                     int checkedId = rg.getCheckedRadioButtonId();
                     RadioButton checkedRb = rg.findViewById(checkedId);
-                    int ratingVal = 1;
-                    if (checkedRb != null && checkedRb.getTag() instanceof Integer) {
-                        ratingVal = (Integer) checkedRb.getTag();
+                    if (checkedRb == null || !(checkedRb.getTag() instanceof Integer)) {
+                        if (qi.required) {
+                            throw new IllegalArgumentException(
+                                    "Please select a value for “" + qi.prompt + "”"
+                            );
+                        }
+                        continue;
                     }
-                    answers.put(qi.id, ratingVal);
+                    answers.put(qi.id, (Integer) checkedRb.getTag());
                 } else if ("single_choice".equalsIgnoreCase(qi.type)) {
                     RadioGroup choices = (RadioGroup) qi.inputView;
                     RadioButton selected = choices.findViewById(

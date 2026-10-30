@@ -4,12 +4,14 @@ import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.os.Bundle;
 import android.text.Editable;
+import android.text.InputType;
 import android.text.TextWatcher;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -23,12 +25,15 @@ import androidx.core.content.ContextCompat;
 import com.example.walking_meditation.models.Study;
 import com.example.walking_meditation.utils.QuestionnaireApiClient;
 import com.example.walking_meditation.utils.QuestionnairePublishing;
+import com.example.walking_meditation.utils.RatingScaleUtils;
 import com.example.walking_meditation.utils.StudyApiClient;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import okhttp3.OkHttpClient;
@@ -42,6 +47,9 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
     private static final String STATE_PENDING_CHOICES = "pending_choices";
     private static final String STATE_SELECTED_TYPE = "selected_question_type";
     private static final String STATE_DEFINITION = "questionnaire_definition";
+    private static final String STATE_SELECTED_SCALE_POINTS = "selected_scale_points";
+    private static final String STATE_SCALE_START = "scale_start";
+    private static final String STATE_SCALE_END = "scale_end";
 
     private final OkHttpClient httpClient = new OkHttpClient();
     private final ActivityResultLauncher<Intent> copyQuestionnaireLauncher =
@@ -56,9 +64,10 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
                         if (definition != null) applyCopiedDefinition(definition);
                     }
             );
-    private EditText titleField, promptField;
-    private RadioGroup questionTypeGroup;
-    private LinearLayout choiceOptionsSection, choiceOptionsContainer, questionsListContainer;
+    private EditText titleField, promptField, scaleStartField, scaleEndField;
+    private RadioGroup questionTypeGroup, scalePointCountGroup;
+    private LinearLayout choiceOptionsSection, choiceOptionsContainer, questionsListContainer,
+            scaleOptionsSection;
     private TextView pageTitle, questionsEmptyText, publishHint;
     private Button saveButton, publishButton, issueButton, copyButton, addQuestionButton,
             addChoiceButton;
@@ -73,6 +82,29 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
     private boolean hasUnsavedChanges = true;
     private boolean requestInProgress;
     private boolean initializing = true;
+    private final List<RatingScaleEditor> ratingScaleEditors = new ArrayList<>();
+
+    private static class RatingScaleEditor {
+        final JSONObject question;
+        final RadioGroup pointCountGroup;
+        final EditText startField;
+        final EditText endField;
+        final TextView typeView;
+
+        RatingScaleEditor(
+                @NonNull JSONObject question,
+                @NonNull RadioGroup pointCountGroup,
+                @NonNull EditText startField,
+                @NonNull EditText endField,
+                @NonNull TextView typeView
+        ) {
+            this.question = question;
+            this.pointCountGroup = pointCountGroup;
+            this.startField = startField;
+            this.endField = endField;
+            this.typeView = typeView;
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -86,6 +118,10 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
         pageTitle = findViewById(R.id.textViewTitle);
         promptField = findViewById(R.id.createQuestionnairePrompt);
         questionTypeGroup = findViewById(R.id.questionTypeGroup);
+        scaleOptionsSection = findViewById(R.id.scaleOptionsSection);
+        scalePointCountGroup = findViewById(R.id.scalePointCountGroup);
+        scaleStartField = findViewById(R.id.scaleStartValue);
+        scaleEndField = findViewById(R.id.scaleEndValue);
         choiceOptionsSection = findViewById(R.id.choiceOptionsSection);
         choiceOptionsContainer = findViewById(R.id.choiceOptionsContainer);
         questionsListContainer = findViewById(R.id.questionsListContainer);
@@ -121,6 +157,12 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
                     STATE_SELECTED_TYPE,
                     R.id.radioText
             ));
+            scalePointCountGroup.check(savedInstanceState.getInt(
+                    STATE_SELECTED_SCALE_POINTS,
+                    R.id.radioScale5Points
+            ));
+            scaleStartField.setText(savedInstanceState.getString(STATE_SCALE_START, "1"));
+            scaleEndField.setText(savedInstanceState.getString(STATE_SCALE_END, "5"));
             try {
                 JSONArray pendingChoices = new JSONArray(
                         savedInstanceState.getString(STATE_PENDING_CHOICES, "[]")
@@ -168,6 +210,7 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
         }
         renderQuestionsList();
         choiceOptionsSection.setVisibility(isChoiceTypeSelected() ? View.VISIBLE : View.GONE);
+        scaleOptionsSection.setVisibility(isRatingTypeSelected() ? View.VISIBLE : View.GONE);
         saveButton.setText(questionnaireId.isEmpty() ? "Create Questionnaire" : "Save Questionnaire");
 
         findViewById(R.id.btnCreateQuestionnaireCancel).setOnClickListener(view -> finish());
@@ -184,12 +227,21 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
                     choiceOptionsSection.setVisibility(
                             isChoiceTypeSelected() ? View.VISIBLE : View.GONE
                     );
+                    scaleOptionsSection.setVisibility(
+                            isRatingTypeSelected() ? View.VISIBLE : View.GONE
+                    );
                     if (!initializing) {
                         hasUnsavedChanges = true;
                         updatePublishUi();
                     }
                 }
         );
+        scalePointCountGroup.setOnCheckedChangeListener((group, checkedId) -> {
+            if (!initializing) {
+                hasUnsavedChanges = true;
+                updatePublishUi();
+            }
+        });
 
         titleField.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
@@ -211,6 +263,8 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
             }
             @Override public void afterTextChanged(Editable s) {}
         });
+        addPendingScaleWatcher(scaleStartField);
+        addPendingScaleWatcher(scaleEndField);
         initializing = false;
         configureEditorMode();
         updatePublishUi();
@@ -233,6 +287,12 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
         outState.putBoolean(STATE_DIRTY, hasUnsavedChanges);
         outState.putInt(STATE_SELECTED_TYPE, questionTypeGroup.getCheckedRadioButtonId());
         outState.putString(STATE_PENDING_CHOICES, pendingChoiceOptions().toString());
+        outState.putInt(
+                STATE_SELECTED_SCALE_POINTS,
+                scalePointCountGroup.getCheckedRadioButtonId()
+        );
+        outState.putString(STATE_SCALE_START, scaleStartField.getText().toString());
+        outState.putString(STATE_SCALE_END, scaleEndField.getText().toString());
     }
 
     private void refreshStudyStatus() {
@@ -276,6 +336,7 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
         promptField.setVisibility(View.GONE);
         findViewById(R.id.labelType).setVisibility(View.GONE);
         questionTypeGroup.setVisibility(View.GONE);
+        scaleOptionsSection.setVisibility(View.GONE);
         choiceOptionsSection.setVisibility(View.GONE);
         addQuestionButton.setVisibility(View.GONE);
         saveButton.setVisibility(View.GONE);
@@ -297,6 +358,7 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
             promptField.setText("");
             choiceOptionsContainer.removeAllViews();
             questionTypeGroup.check(R.id.radioText);
+            scaleOptionsSection.setVisibility(View.GONE);
             choiceOptionsSection.setVisibility(View.GONE);
             hasUnsavedChanges = true;
             renderQuestionsList();
@@ -307,6 +369,7 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
     }
 
     private void renderQuestionsList() {
+        ratingScaleEditors.clear();
         questionsListContainer.removeAllViews();
         questionsEmptyText.setVisibility(
                 questionsArray.length() == 0 ? View.VISIBLE : View.GONE
@@ -344,7 +407,7 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
         details.setVisibility(View.GONE);
 
         TextView type = new TextView(this);
-        type.setText(questionTypeDescription(question.optString("type", "text")));
+        type.setText(questionTypeDescription(question));
         type.setTypeface(type.getTypeface(), android.graphics.Typeface.BOLD);
         details.addView(type);
 
@@ -412,6 +475,8 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
             }
             details.addView(existingChoices);
             addExistingChoiceEditors(existingChoices, question);
+        } else if ("rating".equals(questionType)) {
+            addRatingScaleEditor(details, question, type);
         }
 
         header.setOnClickListener(view -> details.setVisibility(
@@ -478,16 +543,192 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
     }
 
     @NonNull
-    private String questionTypeDescription(@NonNull String type) {
+    private String questionTypeDescription(@NonNull JSONObject question) {
+        String type = question.optString("type", "text");
         switch (type) {
             case "rating":
-                return "Type: Scalar (1-5)";
+                JSONObject scale = referencedScale(question);
+                if (scale == null) return "Type: Scale";
+                if (scale.has("options")) return "Type: Scale (labelled options)";
+                if (RatingScaleUtils.isNumericScale(scale)) {
+                    int min = scale.optInt("min");
+                    int max = scale.optInt("max");
+                    return "Type: Scale (" + min + " to " + max + ")";
+                }
+                return "Type: Scale";
             case "single_choice":
                 return "Type: Single Choice";
             case "multiple_choice":
                 return "Type: Multiple Choice";
             default:
                 return "Type: Text Response";
+        }
+    }
+
+    private JSONObject referencedScale(@NonNull JSONObject question) {
+        JSONObject scales = currentDefinition.optJSONObject("scales");
+        String reference = question.optString("scale_ref", "");
+        return scales == null || reference.isEmpty()
+                ? null
+                : scales.optJSONObject(reference);
+    }
+
+    private void addRatingScaleEditor(
+            @NonNull LinearLayout container,
+            @NonNull JSONObject question,
+            @NonNull TextView typeView
+    ) {
+        if (questionnairePublished) return;
+
+        JSONObject scale = referencedScale(question);
+        if (scale == null) {
+            addScaleEditingNote(container, "This question does not reference a valid scale.");
+            return;
+        }
+        if (scale.has("options")) {
+            addScaleEditingNote(
+                    container,
+                    "Labelled scale options are preserved but cannot yet be edited in the app."
+            );
+            return;
+        }
+        if (!RatingScaleUtils.isNumericScale(scale)) {
+            addScaleEditingNote(container, "This scale cannot be edited in the app.");
+            return;
+        }
+
+        int min = scale.optInt("min");
+        int max = scale.optInt("max");
+        long pointCount = (long) max - min + 1;
+        if (pointCount != 4 && pointCount != 5) {
+            addScaleEditingNote(
+                    container,
+                    "Only 4- and 5-point numeric scales can be edited in the app."
+            );
+            return;
+        }
+
+        TextView scaleLabel = new TextView(this);
+        scaleLabel.setText("Scale points");
+        scaleLabel.setTypeface(scaleLabel.getTypeface(), android.graphics.Typeface.BOLD);
+        scaleLabel.setPadding(
+                0,
+                getResources().getDimensionPixelSize(R.dimen.space_12),
+                0,
+                0
+        );
+        container.addView(scaleLabel);
+
+        RadioGroup pointCountGroup = new RadioGroup(this);
+        pointCountGroup.setOrientation(RadioGroup.HORIZONTAL);
+        RadioButton fourPoints = ratingPointCountButton(4);
+        RadioButton fivePoints = ratingPointCountButton(5);
+        pointCountGroup.addView(fourPoints);
+        pointCountGroup.addView(fivePoints);
+        pointCountGroup.check(pointCount == 4 ? fourPoints.getId() : fivePoints.getId());
+        container.addView(pointCountGroup);
+
+        LinearLayout bounds = new LinearLayout(this);
+        bounds.setOrientation(LinearLayout.HORIZONTAL);
+        EditText start = ratingBoundField("Start value", min);
+        EditText end = ratingBoundField("End value", max);
+        LinearLayout.LayoutParams startParams = new LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1
+        );
+        startParams.setMarginEnd(getResources().getDimensionPixelSize(R.dimen.space_8));
+        LinearLayout.LayoutParams endParams = new LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1
+        );
+        endParams.setMarginStart(getResources().getDimensionPixelSize(R.dimen.space_8));
+        bounds.addView(start, startParams);
+        bounds.addView(end, endParams);
+        container.addView(bounds);
+
+        RatingScaleEditor editor = new RatingScaleEditor(
+                question,
+                pointCountGroup,
+                start,
+                end,
+                typeView
+        );
+        ratingScaleEditors.add(editor);
+        pointCountGroup.setOnCheckedChangeListener((group, checkedId) -> {
+            markDefinitionChanged();
+            applyRatingScaleEditor(editor, false);
+        });
+        addRatingScaleEditorWatcher(editor, start);
+        addRatingScaleEditorWatcher(editor, end);
+    }
+
+    private void addScaleEditingNote(@NonNull LinearLayout container, @NonNull String message) {
+        TextView note = new TextView(this);
+        note.setText(message);
+        note.setPadding(
+                0,
+                getResources().getDimensionPixelSize(R.dimen.space_8),
+                0,
+                0
+        );
+        container.addView(note);
+    }
+
+    @NonNull
+    private RadioButton ratingPointCountButton(int pointCount) {
+        RadioButton button = new RadioButton(this);
+        button.setId(View.generateViewId());
+        button.setText(pointCount + " points");
+        button.setTag(pointCount);
+        return button;
+    }
+
+    @NonNull
+    private EditText ratingBoundField(@NonNull String hint, int value) {
+        EditText field = new EditText(this);
+        field.setHint(hint);
+        field.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_SIGNED);
+        field.setText(String.valueOf(value));
+        return field;
+    }
+
+    private void addRatingScaleEditorWatcher(
+            @NonNull RatingScaleEditor editor,
+            @NonNull EditText field
+    ) {
+        field.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                markDefinitionChanged();
+                applyRatingScaleEditor(editor, false);
+            }
+            @Override public void afterTextChanged(Editable s) {}
+        });
+    }
+
+    private void applyRatingScaleEditor(@NonNull RatingScaleEditor editor, boolean strict) {
+        try {
+            int pointCount = selectedPointCount(editor.pointCountGroup);
+            int min = parseScaleValue(editor.startField, "start");
+            int max = parseScaleValue(editor.endField, "end");
+            RatingScaleUtils.validateRange(pointCount, min, max);
+            String reference = RatingScaleUtils.findOrCreateNumericScale(
+                    currentDefinition,
+                    min,
+                    max
+            );
+            editor.question.put("scale_ref", reference);
+            editor.typeView.setText(questionTypeDescription(editor.question));
+        } catch (Exception error) {
+            if (strict) {
+                String message = error.getMessage();
+                throw new IllegalArgumentException(
+                        message == null ? "Invalid scale range" : message,
+                        error
+                );
+            }
         }
     }
 
@@ -520,8 +761,15 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
             question.put("required", true);
             int selectedType = questionTypeGroup.getCheckedRadioButtonId();
             if (selectedType == R.id.radioRating) {
+                int pointCount = selectedPointCount(scalePointCountGroup);
+                int min = parseScaleValue(scaleStartField, "start");
+                int max = parseScaleValue(scaleEndField, "end");
+                RatingScaleUtils.validateRange(pointCount, min, max);
                 question.put("type", "rating");
-                question.put("scale_ref", "scale_1_5");
+                question.put(
+                        "scale_ref",
+                        RatingScaleUtils.findOrCreateNumericScale(currentDefinition, min, max)
+                );
             } else if (selectedType == R.id.radioSingleChoice
                     || selectedType == R.id.radioMultipleChoice) {
                 JSONArray options = collectChoiceOptions();
@@ -562,6 +810,49 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
         int selectedType = questionTypeGroup.getCheckedRadioButtonId();
         return selectedType == R.id.radioSingleChoice
                 || selectedType == R.id.radioMultipleChoice;
+    }
+
+    private boolean isRatingTypeSelected() {
+        return questionTypeGroup.getCheckedRadioButtonId() == R.id.radioRating;
+    }
+
+    private int selectedPointCount(@NonNull RadioGroup group) {
+        int checkedId = group.getCheckedRadioButtonId();
+        if (checkedId == R.id.radioScale4Points) return 4;
+        if (checkedId == R.id.radioScale5Points) return 5;
+        RadioButton selected = group.findViewById(checkedId);
+        if (selected != null && selected.getTag() instanceof Number) {
+            return ((Number) selected.getTag()).intValue();
+        }
+        throw new IllegalArgumentException("Please choose a 4- or 5-point scale");
+    }
+
+    private int parseScaleValue(@NonNull EditText field, @NonNull String name) {
+        String value = field.getText().toString().trim();
+        if (value.isEmpty()) {
+            throw new IllegalArgumentException("Please enter the scale " + name + " value");
+        }
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException error) {
+            throw new IllegalArgumentException(
+                    "Scale " + name + " value must be a whole number",
+                    error
+            );
+        }
+    }
+
+    private void addPendingScaleWatcher(@NonNull EditText field) {
+        field.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                if (!initializing) {
+                    hasUnsavedChanges = true;
+                    updatePublishUi();
+                }
+            }
+            @Override public void afterTextChanged(Editable s) {}
+        });
     }
 
     private void addChoiceRow() {
@@ -642,18 +933,14 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
         validateQuestionEdits();
 
         currentDefinition.put("title", title);
-        JSONObject scales = currentDefinition.optJSONObject("scales");
-        if (scales == null) scales = new JSONObject();
-        JSONObject scale15 = new JSONObject();
-        scale15.put("min", 1);
-        scale15.put("max", 5);
-        scales.put("scale_1_5", scale15);
-        currentDefinition.put("scales", scales);
         currentDefinition.put("questions", questionsArray);
         return currentDefinition;
     }
 
     private void validateQuestionEdits() {
+        for (RatingScaleEditor editor : ratingScaleEditors) {
+            applyRatingScaleEditor(editor, true);
+        }
         for (int index = 0; index < questionsArray.length(); index++) {
             JSONObject question = questionsArray.optJSONObject(index);
             if (question == null || question.optString("prompt", "").trim().isEmpty()) {
@@ -848,6 +1135,14 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
         titleField.setEnabled(!requestInProgress && !questionnairePublished);
         promptField.setEnabled(!requestInProgress && !questionnairePublished);
         questionTypeGroup.setEnabled(!requestInProgress && !questionnairePublished);
+        scalePointCountGroup.setEnabled(!requestInProgress && !questionnairePublished);
+        scaleStartField.setEnabled(!requestInProgress && !questionnairePublished);
+        scaleEndField.setEnabled(!requestInProgress && !questionnairePublished);
+        for (int index = 0; index < scalePointCountGroup.getChildCount(); index++) {
+            scalePointCountGroup.getChildAt(index).setEnabled(
+                    !requestInProgress && !questionnairePublished
+            );
+        }
         for (int index = 0; index < choiceOptionsContainer.getChildCount(); index++) {
             choiceOptionsContainer.getChildAt(index).setEnabled(
                     !requestInProgress && !questionnairePublished
@@ -864,6 +1159,8 @@ public class ResearcherCreateQuestionnaireActivity extends AppCompatActivity {
         for (int index = 0; index < parent.getChildCount(); index++) {
             View child = parent.getChildAt(index);
             if (child instanceof EditText) {
+                child.setEnabled(enabled);
+            } else if (child instanceof RadioButton) {
                 child.setEnabled(enabled);
             } else if (child instanceof Button
                     && "question_editor_control".equals(child.getTag())) {
