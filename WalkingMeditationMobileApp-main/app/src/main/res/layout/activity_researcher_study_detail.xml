@@ -141,6 +141,13 @@
                 android:text="@string/view_feedback" />
 
             <Button
+                android:id="@+id/btnResearcherDetailExportResponses"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/field_height"
+                android:layout_marginTop="@dimen/space_12"
+                android:text="@string/export_study_responses" />
+
+            <Button
                 android:id="@+id/btnResearcherDetailBack"
                 android:layout_width="match_parent"
                 android:layout_height="@dimen/field_height"

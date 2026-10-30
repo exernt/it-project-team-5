@@ -72,6 +72,12 @@
     <string name="create_study_title">New Study</string>
     <string name="create_study_button">Create study</string>
     <string name="new_study">+ New Study</string>
+    <string name="export_all_responses">Export</string>
+    <string name="export_study_responses">Export Responses</string>
+    <string name="requesting_export">Requesting…</string>
+    <string name="export_requested">Export requested. We’ll email you when the CSV is ready.</string>
+    <string name="export_ready_email_sent">Your export is ready. We’ve emailed you a download link.</string>
+    <string name="export_request_error">Unable to request the export.</string>
     <string name="create_study_name_error">Please enter a study name.</string>
     <string name="create_study_duration_error">Please enter a valid duration.</string>
     <string name="roster_title">Participants</string>

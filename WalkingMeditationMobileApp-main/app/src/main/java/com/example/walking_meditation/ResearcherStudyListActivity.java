@@ -7,11 +7,13 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.walking_meditation.models.Study;
+import com.example.walking_meditation.utils.ResponseExportApiClient;
 import com.example.walking_meditation.utils.StudyApiClient;
 
 import java.util.List;
@@ -23,6 +25,7 @@ public class ResearcherStudyListActivity extends AppCompatActivity {
     private ProgressBar progress;
     private TextView message;
     private LinearLayout studyContainer;
+    private Button exportButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -32,12 +35,55 @@ public class ResearcherStudyListActivity extends AppCompatActivity {
         progress = findViewById(R.id.researcherStudyListProgress);
         message = findViewById(R.id.researcherStudyListMessage);
         studyContainer = findViewById(R.id.researcherStudyListContainer);
+        exportButton = findViewById(R.id.btnExportAllResponses);
 
         findViewById(R.id.btnNewStudy).setOnClickListener(view -> startActivity(
                 new Intent(this, ResearcherCreateStudyActivity.class)
         ));
+        exportButton.setOnClickListener(view -> requestAllStudiesExport());
 
         loadOwnedStudies();
+    }
+
+    private void requestAllStudiesExport() {
+        setExportInProgress(true);
+        ResponseExportApiClient.requestAllStudies(
+                this,
+                httpClient,
+                new ResponseExportApiClient.ExportListener() {
+                    @Override
+                    public void onRequested(boolean cached) {
+                        runOnUiThread(() -> {
+                            setExportInProgress(false);
+                            Toast.makeText(
+                                    ResearcherStudyListActivity.this,
+                                    cached ? R.string.export_ready_email_sent
+                                            : R.string.export_requested,
+                                    Toast.LENGTH_LONG
+                            ).show();
+                        });
+                    }
+
+                    @Override
+                    public void onFailure(@NonNull String error) {
+                        runOnUiThread(() -> {
+                            setExportInProgress(false);
+                            Toast.makeText(
+                                    ResearcherStudyListActivity.this,
+                                    error.isEmpty()
+                                            ? getString(R.string.export_request_error)
+                                            : error,
+                                    Toast.LENGTH_LONG
+                            ).show();
+                        });
+                    }
+                }
+        );
+    }
+
+    private void setExportInProgress(boolean inProgress) {
+        exportButton.setEnabled(!inProgress);
+        exportButton.setText(inProgress ? R.string.requesting_export : R.string.export_all_responses);
     }
 
     @Override
