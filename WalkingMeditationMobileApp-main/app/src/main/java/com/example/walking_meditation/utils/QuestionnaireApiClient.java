@@ -355,23 +355,7 @@ public final class QuestionnaireApiClient {
             @NonNull String questionnaireId,
             @NonNull Listener listener
     ) {
-        publishQuestionnaire(context, client, questionnaireId, new Listener() {
-            @Override
-            public void onSuccess(@NonNull String publishedQuestionnaireId) {
-                issueQuestionnaireToStudy(
-                        context,
-                        client,
-                        studyId,
-                        publishedQuestionnaireId,
-                        listener
-                );
-            }
-
-            @Override
-            public void onFailure(@NonNull String error) {
-                listener.onFailure("Failed to publish questionnaire: " + error);
-            }
-        });
+        issueQuestionnaireToStudy(context, client, studyId, questionnaireId, listener);
     }
 
     public static void issueQuestionnaireToStudy(
@@ -519,42 +503,4 @@ public final class QuestionnaireApiClient {
         }
     }
 
-    public static void publishQuestionnaire(
-            @NonNull Context context,
-            @NonNull OkHttpClient client,
-            @NonNull String questionnaireId,
-            @NonNull Listener listener
-    ) {
-        String accessToken = SessionManager.getAccessToken(context);
-        if (accessToken == null || accessToken.isEmpty()) {
-            listener.onFailure("Not authenticated");
-            return;
-        }
-
-        Request request = new Request.Builder()
-                .url(QUESTIONNAIRES_URL + "/" + questionnaireId + "/publish")
-                .header("Authorization", "Bearer " + accessToken)
-                .post(RequestBody.create(new byte[0], null))
-                .build();
-
-        client.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                listener.onFailure(e.getMessage() == null ? "Network error" : e.getMessage());
-            }
-
-            @Override
-            public void onResponse(@NonNull Call call, @NonNull Response response) {
-                try (Response closed = response) {
-                    if (!closed.isSuccessful()) {
-                        listener.onFailure(parseError(closed));
-                        return;
-                    }
-                    listener.onSuccess(questionnaireId);
-                } catch (Exception e) {
-                    listener.onFailure(e.getMessage() == null ? "Invalid response" : e.getMessage());
-                }
-            }
-        });
-    }
 }

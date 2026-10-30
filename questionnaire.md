@@ -182,21 +182,21 @@ questionnaires are immutable; editing either returns HTTP 409.
 1. A verified researcher creates a draft with `POST /questionnaires`.
 2. While it remains a draft, the owner may replace its definition with
    `PUT /questionnaires/{questionnaire_id}`.
-3. The owner publishes the validated definition with
-   `POST /questionnaires/{questionnaire_id}/publish`.
-4. The owner of an active study creates a new round with
+3. The owner of an active study atomically publishes the draft and creates its
+   first round with
    `POST /studies/{study_id}/questionnaires` and body
    `{"questionnaire_id": "<uuid>"}`.
-5. `GET /studies/mine` includes each study's unrevoked rounds in
+   The same endpoint creates later rounds for an already-published definition.
+4. `GET /studies/mine` includes each study's unrevoked rounds in
    `open_questionnaires`. Each summary contains the issuance `id`, definition
    `questionnaire_id`, `round_number`, `title`, timestamps, and the current
    participant's `has_responded` flag.
-6. An active participant can refresh the same information with
+5. An active participant can refresh the same information with
    `GET /studies/{study_id}/questionnaires` and fetch displayable content with
    `GET /studies/{study_id}/questionnaires/{issuance_id}`.
-7. The participant submits once with
+6. The participant submits once with
    `POST /studies/{study_id}/questionnaires/{issuance_id}/responses`.
-8. The study owner may close that round with
+7. The study owner may close that round with
    `POST /studies/{study_id}/questionnaires/{issuance_id}/revoke` and retrieve
    its answers with
    `GET /studies/{study_id}/questionnaires/{issuance_id}/responses`.

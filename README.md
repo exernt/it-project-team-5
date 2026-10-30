@@ -343,9 +343,8 @@ The owner can move any registered user to another configured group with
 ```
 
 Questionnaires are reusable researcher-owned definitions. A verified researcher
-creates a draft with `POST /questionnaires`, then publishes it with
-`POST /questionnaires/{questionnaire_id}/publish`. Researchers can list their
-own definitions with `GET /questionnaires` and retrieve one with
+creates a draft with `POST /questionnaires`. Researchers can list their own
+definitions with `GET /questionnaires` and retrieve one with
 `GET /questionnaires/{questionnaire_id}`. Before publication, the owner can
 replace the complete draft definition with
 `PUT /questionnaires/{questionnaire_id}`. Published definitions are immutable.
@@ -359,10 +358,12 @@ A study owner opens a new questionnaire round for participants with
 }
 ```
 
-The questionnaire must be published, owned by the same researcher as the
-study, and the study must be active. Every call creates a new
-round number for that `(study, questionnaire)` pair, allowing the same
-questionnaire to be sent repeatedly without mixing response sets.
+The questionnaire must be owned by the same researcher and the study must be
+active. When the definition is still a draft, this request publishes it and
+creates its first issuance in one database transaction. Any failure rolls both
+changes back. Calls for an already-published questionnaire create a new round
+number for that `(study, questionnaire)` pair, allowing the same questionnaire
+to be sent repeatedly without mixing response sets.
 
 `GET /studies/mine` includes an `open_questionnaires` array for each current
 study. Participants may also list open rounds with
