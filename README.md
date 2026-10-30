@@ -172,6 +172,9 @@ The server exposes account and session endpoints under `/auth`:
 | `POST /auth/password-reset/confirm` | Complete a password reset with the token and a new password |
 | `POST /auth/register-researcher` | Upgrade the logged-in account to a researcher account pending admin verification |
 | `POST /auth/admin/researchers/{user_id}/verify` | Verify a researcher account (admin only) |
+| `GET /auth/me` | Read the logged-in user's account and profile fields |
+| `PUT /auth/me` | Update the logged-in user's age and gender profile |
+| `DELETE /auth/me` | Revoke sessions and permanently delete the logged-in account |
 
 All authenticated account operations and all study, questionnaire, feedback,
 route-generation, script-generation, and narration endpoints require the
@@ -197,8 +200,11 @@ The domain-free password-reset procedure is in
 [`Password_Reset_Emulator_Testing.md`](WalkingMeditationServer-main/READList/Password_Reset_Emulator_Testing.md).
 
 Account registration also accepts optional `gender` and `age` fields. Gender is
-a self-described string of up to 100 characters, and age must be between 0 and
-150. Existing clients may continue sending only email and password.
+a self-described string of up to 100 characters, and age must be between 18 and
+120. Existing clients may continue sending only email and password. The Android
+home screen links to a profile page for viewing and updating these demographic
+fields. Account deletion removes the account and sessions while preserving
+questionnaire answers with an anonymised respondent reference.
 
 ## Studies
 

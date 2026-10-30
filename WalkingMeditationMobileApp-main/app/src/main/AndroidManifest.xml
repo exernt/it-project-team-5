@@ -39,6 +39,10 @@
         </activity>
 
         <activity
+            android:name=".ProfileActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".StudyUnenrolledActivity"
             android:exported="false" />
         <activity
