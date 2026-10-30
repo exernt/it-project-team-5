@@ -188,13 +188,15 @@ public class ResearcherQuestionnaireListActivity extends AppCompatActivity {
     }
 
     private void addIssuedQuestionnaireButton(@NonNull QuestionnaireItem questionnaire) {
+        boolean revoked = "revoked".equals(questionnaire.getStatus());
         Button button = createQuestionnaireButton(
-                questionnaire.getTitle() + " — [ISSUED]"
+                questionnaire.getTitle() + (revoked ? " — [REVOKED]" : " — [ISSUED]")
         );
         button.setOnClickListener(view -> {
             Intent intent = new Intent(this, ResearcherQuestionnaireResponsesActivity.class);
             intent.putExtra("study_id", studyId);
             intent.putExtra("study_questionnaire_id", questionnaire.getId());
+            intent.putExtra("questionnaire_revoked", revoked);
             startActivity(intent);
         });
         addQuestionnaireButton(button);

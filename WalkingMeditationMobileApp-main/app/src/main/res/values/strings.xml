@@ -104,6 +104,12 @@
     <string name="questionnaire_issue_active_hint">Issuing is available once the study is active.</string>
     <string name="questionnaire_issue_ready_hint">Issuing will open a new round for this study.</string>
     <string name="review_questionnaire">Review Questionnaire</string>
+    <string name="revoke_questionnaire">Revoke Questionnaire</string>
+    <string name="revoke">Revoke</string>
+    <string name="revoking_questionnaire">Revoking Questionnaire…</string>
+    <string name="revoke_questionnaire_confirmation">Participants will no longer be able to access or respond to this issued round. Existing responses will be retained, and the reusable questionnaire definition will not be changed.</string>
+    <string name="questionnaire_revoked">Questionnaire revoked.</string>
+    <string name="questionnaire_revoke_error">Unable to revoke the questionnaire.</string>
     <plurals name="study_duration_days">
         <item quantity="one">Duration: %d day</item>
         <item quantity="other">Duration: %d days</item>

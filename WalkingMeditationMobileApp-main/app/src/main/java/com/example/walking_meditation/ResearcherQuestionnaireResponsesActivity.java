@@ -2,12 +2,15 @@ package com.example.walking_meditation;
 
 import android.os.Bundle;
 import android.view.View;
+import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AlertDialog;
 
 import com.example.walking_meditation.utils.QuestionnaireApiClient;
 
@@ -21,8 +24,11 @@ public class ResearcherQuestionnaireResponsesActivity extends AppCompatActivity 
     private ProgressBar progress;
     private TextView message;
     private LinearLayout container;
+    private Button revokeButton;
     private String studyId = "";
     private String studyQuestionnaireId = "";
+    private boolean questionnaireRevoked;
+    private boolean revokeInProgress;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -33,14 +39,78 @@ public class ResearcherQuestionnaireResponsesActivity extends AppCompatActivity 
         studyQuestionnaireId = getIntent().getStringExtra("study_questionnaire_id");
         if (studyId == null) studyId = "";
         if (studyQuestionnaireId == null) studyQuestionnaireId = "";
+        questionnaireRevoked = getIntent().getBooleanExtra("questionnaire_revoked", false);
 
         progress = findViewById(R.id.respProgress);
         message = findViewById(R.id.respMessage);
         container = findViewById(R.id.respContainer);
+        revokeButton = findViewById(R.id.btnRevokeQuestionnaire);
 
         findViewById(R.id.btnRespBack).setOnClickListener(view -> finish());
+        revokeButton.setOnClickListener(view -> confirmRevocation());
+        updateRevokeButton();
 
         loadResponses();
+    }
+
+    private void confirmRevocation() {
+        if (questionnaireRevoked || revokeInProgress) return;
+
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.revoke_questionnaire)
+                .setMessage(R.string.revoke_questionnaire_confirmation)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(R.string.revoke, (dialog, which) -> revokeQuestionnaire())
+                .show();
+    }
+
+    private void revokeQuestionnaire() {
+        revokeInProgress = true;
+        updateRevokeButton();
+        QuestionnaireApiClient.revokeStudyQuestionnaire(
+                this,
+                httpClient,
+                studyId,
+                studyQuestionnaireId,
+                new QuestionnaireApiClient.Listener() {
+                    @Override
+                    public void onSuccess(@NonNull String questionnaireId) {
+                        runOnUiThread(() -> {
+                            revokeInProgress = false;
+                            questionnaireRevoked = true;
+                            updateRevokeButton();
+                            setResult(RESULT_OK);
+                            Toast.makeText(
+                                    ResearcherQuestionnaireResponsesActivity.this,
+                                    R.string.questionnaire_revoked,
+                                    Toast.LENGTH_SHORT
+                            ).show();
+                        });
+                    }
+
+                    @Override
+                    public void onFailure(@NonNull String error) {
+                        runOnUiThread(() -> {
+                            revokeInProgress = false;
+                            updateRevokeButton();
+                            Toast.makeText(
+                                    ResearcherQuestionnaireResponsesActivity.this,
+                                    error.isEmpty()
+                                            ? getString(R.string.questionnaire_revoke_error)
+                                            : error,
+                                    Toast.LENGTH_LONG
+                            ).show();
+                        });
+                    }
+                }
+        );
+    }
+
+    private void updateRevokeButton() {
+        revokeButton.setEnabled(!questionnaireRevoked && !revokeInProgress);
+        revokeButton.setText(revokeInProgress
+                ? R.string.revoking_questionnaire
+                : R.string.revoke_questionnaire);
     }
 
     @Override

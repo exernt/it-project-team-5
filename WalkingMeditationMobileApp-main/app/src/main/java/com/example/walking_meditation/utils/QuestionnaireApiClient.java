@@ -294,6 +294,49 @@ public final class QuestionnaireApiClient {
         });
     }
 
+    public static void revokeStudyQuestionnaire(
+            @NonNull Context context,
+            @NonNull OkHttpClient client,
+            @NonNull String studyId,
+            @NonNull String studyQuestionnaireId,
+            @NonNull Listener listener
+    ) {
+        String accessToken = SessionManager.getAccessToken(context);
+        if (accessToken == null || accessToken.isEmpty()) {
+            listener.onFailure("Not authenticated");
+            return;
+        }
+
+        Request request = new Request.Builder()
+                .url(BuildConfig.SERVER_BASE_URL
+                        + "/studies/" + studyId
+                        + "/questionnaires/" + studyQuestionnaireId
+                        + "/revoke")
+                .header("Authorization", "Bearer " + accessToken)
+                .post(RequestBody.create("{}", JSON))
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                listener.onFailure(e.getMessage() == null ? "Network error" : e.getMessage());
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
+                try (Response closed = response) {
+                    if (!closed.isSuccessful()) {
+                        listener.onFailure(parseError(closed));
+                        return;
+                    }
+                    listener.onSuccess(studyQuestionnaireId);
+                } catch (Exception e) {
+                    listener.onFailure(e.getMessage() == null ? "Invalid response" : e.getMessage());
+                }
+            }
+        });
+    }
+
     public static void listStudyQuestionnaires(
             @NonNull Context context,
             @NonNull OkHttpClient client,
@@ -333,10 +376,11 @@ public final class QuestionnaireApiClient {
                         JSONObject obj = array.getJSONObject(i);
                         String id = obj.getString("id");
                         String title = obj.optString("title", "Questionnaire");
+                        boolean revoked = obj.has("revoked_at") && !obj.isNull("revoked_at");
                         list.add(new QuestionnaireItem(
                                 id,
                                 title,
-                                "published",
+                                revoked ? "revoked" : "issued",
                                 new JSONObject()
                         ));
                     }
