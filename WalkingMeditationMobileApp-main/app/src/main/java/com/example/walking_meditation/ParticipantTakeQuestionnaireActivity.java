@@ -3,9 +3,11 @@ package com.example.walking_meditation;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -37,6 +39,8 @@ public class ParticipantTakeQuestionnaireActivity extends AppCompatActivity {
     private static class QuestionInput {
         String id;
         String type;
+        String prompt;
+        boolean required;
         View inputView;
     }
 
@@ -102,23 +106,37 @@ public class ParticipantTakeQuestionnaireActivity extends AppCompatActivity {
                 QuestionInput qi = new QuestionInput();
                 qi.id = id;
                 qi.type = type;
+                qi.prompt = prompt;
+                qi.required = q.optBoolean("required", false);
 
                 if ("rating".equalsIgnoreCase(type)) {
                     RadioGroup rg = new RadioGroup(this);
                     rg.setOrientation(RadioGroup.HORIZONTAL);
                     for (int val = 1; val <= 5; val++) {
-                        android.widget.RadioButton rb = new android.widget.RadioButton(this);
+                        RadioButton rb = new RadioButton(this);
                         rb.setText(String.valueOf(val));
                         rb.setId(View.generateViewId());
                         rb.setTag(val);
                         rg.addView(rb);
                     }
-                    android.widget.RadioButton firstRb = (android.widget.RadioButton) rg.getChildAt(0);
+                    RadioButton firstRb = (RadioButton) rg.getChildAt(0);
                     if (firstRb != null) {
                         rg.check(firstRb.getId());
                     }
                     questionsContainer.addView(rg);
                     qi.inputView = rg;
+                } else if ("single_choice".equalsIgnoreCase(type)) {
+                    RadioGroup choices = new RadioGroup(this);
+                    choices.setOrientation(RadioGroup.VERTICAL);
+                    addSingleChoiceOptions(choices, q.getJSONArray("options"));
+                    questionsContainer.addView(choices);
+                    qi.inputView = choices;
+                } else if ("multiple_choice".equalsIgnoreCase(type)) {
+                    LinearLayout choices = new LinearLayout(this);
+                    choices.setOrientation(LinearLayout.VERTICAL);
+                    addMultipleChoiceOptions(choices, q.getJSONArray("options"));
+                    questionsContainer.addView(choices);
+                    qi.inputView = choices;
                 } else {
                     EditText et = new EditText(this);
                     et.setHint("Enter your response");
@@ -134,6 +152,57 @@ public class ParticipantTakeQuestionnaireActivity extends AppCompatActivity {
         }
     }
 
+    private void addSingleChoiceOptions(
+            @NonNull RadioGroup group,
+            @NonNull JSONArray options
+    ) throws Exception {
+        for (int index = 0; index < options.length(); index++) {
+            Object option = options.get(index);
+            RadioButton button = new RadioButton(this);
+            button.setId(View.generateViewId());
+            button.setText(optionLabel(option));
+            button.setTag(optionValue(option));
+            group.addView(button);
+        }
+    }
+
+    private void addMultipleChoiceOptions(
+            @NonNull LinearLayout container,
+            @NonNull JSONArray options
+    ) throws Exception {
+        for (int index = 0; index < options.length(); index++) {
+            Object option = options.get(index);
+            CheckBox checkBox = new CheckBox(this);
+            checkBox.setText(optionLabel(option));
+            checkBox.setTag(optionValue(option));
+            container.addView(checkBox);
+        }
+    }
+
+    @NonNull
+    private String optionLabel(@NonNull Object option) throws Exception {
+        return option instanceof JSONObject
+                ? ((JSONObject) option).getString("label")
+                : String.valueOf(option);
+    }
+
+    @NonNull
+    private Object optionValue(@NonNull Object option) throws Exception {
+        if (!(option instanceof JSONObject)) return option;
+        JSONObject structuredOption = (JSONObject) option;
+        return structuredOption.has("value")
+                ? structuredOption.get("value")
+                : structuredOption.getString("label");
+    }
+
+    @NonNull
+    private JSONObject choiceAnswer(@NonNull Object value) throws Exception {
+        JSONObject answer = new JSONObject();
+        answer.put("value", value);
+        answer.put("detail", JSONObject.NULL);
+        return answer;
+    }
+
     private void submitAnswers() {
         submitButton.setEnabled(false);
         try {
@@ -142,12 +211,41 @@ public class ParticipantTakeQuestionnaireActivity extends AppCompatActivity {
                 if ("rating".equalsIgnoreCase(qi.type)) {
                     RadioGroup rg = (RadioGroup) qi.inputView;
                     int checkedId = rg.getCheckedRadioButtonId();
-                    android.widget.RadioButton checkedRb = rg.findViewById(checkedId);
+                    RadioButton checkedRb = rg.findViewById(checkedId);
                     int ratingVal = 1;
                     if (checkedRb != null && checkedRb.getTag() instanceof Integer) {
                         ratingVal = (Integer) checkedRb.getTag();
                     }
                     answers.put(qi.id, ratingVal);
+                } else if ("single_choice".equalsIgnoreCase(qi.type)) {
+                    RadioGroup choices = (RadioGroup) qi.inputView;
+                    RadioButton selected = choices.findViewById(
+                            choices.getCheckedRadioButtonId()
+                    );
+                    if (selected == null) {
+                        if (qi.required) {
+                            throw new IllegalArgumentException(
+                                    "Please select an option for “" + qi.prompt + "”"
+                            );
+                        }
+                        continue;
+                    }
+                    answers.put(qi.id, choiceAnswer(selected.getTag()));
+                } else if ("multiple_choice".equalsIgnoreCase(qi.type)) {
+                    LinearLayout choices = (LinearLayout) qi.inputView;
+                    JSONArray selectedAnswers = new JSONArray();
+                    for (int index = 0; index < choices.getChildCount(); index++) {
+                        CheckBox option = (CheckBox) choices.getChildAt(index);
+                        if (option.isChecked()) {
+                            selectedAnswers.put(choiceAnswer(option.getTag()));
+                        }
+                    }
+                    if (qi.required && selectedAnswers.length() == 0) {
+                        throw new IllegalArgumentException(
+                                "Please select at least one option for “" + qi.prompt + "”"
+                        );
+                    }
+                    answers.put(qi.id, selectedAnswers);
                 } else {
                     EditText et = (EditText) qi.inputView;
                     String val = et.getText().toString().trim();
@@ -172,6 +270,9 @@ public class ParticipantTakeQuestionnaireActivity extends AppCompatActivity {
                     });
                 }
             });
+        } catch (IllegalArgumentException error) {
+            submitButton.setEnabled(true);
+            Toast.makeText(this, error.getMessage(), Toast.LENGTH_LONG).show();
         } catch (Exception e) {
             submitButton.setEnabled(true);
             Toast.makeText(this, "Failed to compile answers", Toast.LENGTH_SHORT).show();

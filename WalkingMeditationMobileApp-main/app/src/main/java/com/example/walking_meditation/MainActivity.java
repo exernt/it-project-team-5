@@ -10,12 +10,14 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.example.walking_meditation.utils.StudyConfigClient;
+import com.example.walking_meditation.models.StudyEnrollment;
 import com.example.walking_meditation.utils.SessionManager;
 import com.example.walking_meditation.utils.CacheFiles;
 import com.example.walking_meditation.utils.RoutePlanFiles;
+import com.example.walking_meditation.utils.StudyApiClient;
 import com.example.walking_meditation.utils.UserApiClient;
 
 import org.json.JSONObject;
@@ -196,13 +198,16 @@ public class MainActivity extends AppCompatActivity {
         btnStudy.setEnabled(false);
         btnStudy.setText(R.string.checking_study_status);
 
-        StudyConfigClient.fetchCurrent(this, httpClient, new StudyConfigClient.Listener() {
+        StudyApiClient.fetchCurrentEnrollment(this, httpClient, new StudyApiClient.CurrentStudyListener() {
             @Override
-            public void onLoaded(boolean participating, @NonNull String studyId, @NonNull String parameters) {
+            public void onLoaded(@Nullable StudyEnrollment enrollment) {
                 runOnUiThread(() -> {
                     resetStudyButton();
                     Intent intent;
-                    if (participating && !studyId.isEmpty()) {
+                    if (enrollment != null) {
+                        if (!"active".equals(enrollment.getStudy().getStatus())) {
+                            SessionManager.clearStudyConfiguration(MainActivity.this);
+                        }
                         intent = new Intent(MainActivity.this, StudyUserManageActivity.class);
                     } else {
                         SessionManager.clearStudyConfiguration(MainActivity.this);

@@ -262,6 +262,11 @@ Each of these rejects the request with a conflict if the study isn't in the
 expected starting status. Only the study's owner can call these — any other
 user, including other verified researchers, is rejected.
 
+Activating records the study-wide start time. The participant duration countdown
+and researcher-defined script parameters begin at that transition; participants
+who join while the study is recruiting can still run ordinary meditations with
+their own parameters.
+
 ### Consent
 
 Every study has a consent form, created automatically alongside it. Any
@@ -301,11 +306,12 @@ study afterward reactivates the existing registration rather than creating a
 new one — the participant's original group assignment is preserved.
 
 The Android app checks `GET /studies/current-script-parameters` before route
-selection. The endpoint returns the most recently joined, non-withdrawn study
-whose status is `recruiting` or `active`. Its parameters are cached locally and
-included in subsequent meditation-generation prompts. A closed study or a
-withdrawal causes the endpoint to return `participating: false`, restoring the
-normal meditation-purpose input.
+selection. The endpoint returns configuration only for a non-withdrawn `active`
+study. Its parameters are cached locally and included in subsequent
+meditation-generation prompts. A recruiting or closed study, or a withdrawal,
+causes this endpoint to return `participating: false`, restoring the normal
+meditation-purpose input. Enrolment is checked separately, so a recruiting
+participant can still open study management and leave the study.
 
 ### Groups and questionnaires
 
@@ -354,7 +360,7 @@ A study owner opens a new questionnaire round for participants with
 ```
 
 The questionnaire must be published, owned by the same researcher as the
-study, and the study must be recruiting or active. Every call creates a new
+study, and the study must be active. Every call creates a new
 round number for that `(study, questionnaire)` pair, allowing the same
 questionnaire to be sent repeatedly without mixing response sets.
 

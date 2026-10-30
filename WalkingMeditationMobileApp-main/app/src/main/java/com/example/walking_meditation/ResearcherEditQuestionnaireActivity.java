@@ -1,6 +1,9 @@
 package com.example.walking_meditation;
 
+import android.content.res.ColorStateList;
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -8,8 +11,12 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 
+import com.example.walking_meditation.models.Study;
 import com.example.walking_meditation.utils.QuestionnaireApiClient;
+import com.example.walking_meditation.utils.QuestionnairePublishing;
+import com.example.walking_meditation.utils.StudyApiClient;
 
 import org.json.JSONObject;
 
@@ -21,6 +28,11 @@ public class ResearcherEditQuestionnaireActivity extends AppCompatActivity {
     private TextView statusView;
     private Button saveButton, publishButton;
     private String questionnaireId = "";
+    private String studyId = "";
+    private String studyStatus = "";
+    private boolean questionnairePublished;
+    private boolean hasUnsavedChanges;
+    private boolean initializing = true;
     private JSONObject currentDefinition;
 
     @Override
@@ -36,6 +48,9 @@ public class ResearcherEditQuestionnaireActivity extends AppCompatActivity {
         findViewById(R.id.btnEditQuestionnaireBack).setOnClickListener(view -> finish());
 
         questionnaireId = getIntent().getStringExtra("questionnaire_id");
+        if (questionnaireId == null) questionnaireId = "";
+        studyId = getIntent().getStringExtra("study_id");
+        if (studyId == null) studyId = "";
         String title = getIntent().getStringExtra("questionnaire_title");
         String status = getIntent().getStringExtra("questionnaire_status");
         String definitionStr = getIntent().getStringExtra("questionnaire_definition");
@@ -50,6 +65,7 @@ public class ResearcherEditQuestionnaireActivity extends AppCompatActivity {
         }
 
         boolean isDraft = "draft".equalsIgnoreCase(status);
+        questionnairePublished = !isDraft;
         if (!isDraft) {
             titleField.setEnabled(false);
             saveButton.setEnabled(false);
@@ -58,6 +74,49 @@ public class ResearcherEditQuestionnaireActivity extends AppCompatActivity {
 
         saveButton.setOnClickListener(view -> saveChanges());
         publishButton.setOnClickListener(view -> publishQuestionnaire());
+        titleField.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                if (!initializing) {
+                    hasUnsavedChanges = true;
+                    updatePublishButton();
+                }
+            }
+            @Override public void afterTextChanged(Editable s) {}
+        });
+        initializing = false;
+        updatePublishButton();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        refreshStudyStatus();
+    }
+
+    private void refreshStudyStatus() {
+        if (studyId.isEmpty()) {
+            updatePublishButton();
+            return;
+        }
+        StudyApiClient.fetchStudy(this, httpClient, studyId, new StudyApiClient.StudyListener() {
+            @Override
+            public void onLoaded(@NonNull Study study) {
+                runOnUiThread(() -> {
+                    studyStatus = study.getStatus();
+                    updatePublishButton();
+                });
+            }
+
+            @Override
+            public void onFailure(@NonNull String error) {
+                runOnUiThread(() -> {
+                    studyStatus = "";
+                    updatePublishButton();
+                    Toast.makeText(ResearcherEditQuestionnaireActivity.this, error, Toast.LENGTH_LONG).show();
+                });
+            }
+        });
     }
 
     private void saveChanges() {
@@ -97,11 +156,11 @@ public class ResearcherEditQuestionnaireActivity extends AppCompatActivity {
 
     private void publishQuestionnaire() {
         publishButton.setEnabled(false);
-        QuestionnaireApiClient.publishQuestionnaire(this, httpClient, questionnaireId, new QuestionnaireApiClient.Listener() {
+        QuestionnaireApiClient.publishAndIssueStudyQuestionnaire(this, httpClient, studyId, questionnaireId, new QuestionnaireApiClient.Listener() {
             @Override
             public void onSuccess(@NonNull String id) {
                 runOnUiThread(() -> {
-                    Toast.makeText(ResearcherEditQuestionnaireActivity.this, "Questionnaire published successfully!", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(ResearcherEditQuestionnaireActivity.this, "Questionnaire published and issued to the study!", Toast.LENGTH_SHORT).show();
                     finish();
                 });
             }
@@ -109,10 +168,24 @@ public class ResearcherEditQuestionnaireActivity extends AppCompatActivity {
             @Override
             public void onFailure(@NonNull String error) {
                 runOnUiThread(() -> {
-                    publishButton.setEnabled(true);
+                    updatePublishButton();
                     Toast.makeText(ResearcherEditQuestionnaireActivity.this, error, Toast.LENGTH_LONG).show();
                 });
             }
         });
+    }
+
+    private void updatePublishButton() {
+        boolean enabled = QuestionnairePublishing.canPublish(
+                studyStatus,
+                questionnaireId,
+                questionnairePublished,
+                hasUnsavedChanges
+        );
+        publishButton.setEnabled(enabled);
+        publishButton.setBackgroundTintList(ColorStateList.valueOf(ContextCompat.getColor(
+                this,
+                enabled ? R.color.sky_blue_dark : R.color.disabled_grey
+        )));
     }
 }

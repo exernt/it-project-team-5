@@ -87,11 +87,6 @@ public class ResearcherStudyDetailActivity extends AppCompatActivity {
         findViewById(R.id.btnResearcherDetailRoster).setOnClickListener(view ->
                 startActivity(ResearcherRosterActivity.createIntent(this, studyId))
         );
-        findViewById(R.id.btnResearcherDetailQuestionnaire).setOnClickListener(view -> {
-            Intent intent = new Intent(this, ResearcherCreateQuestionnaireActivity.class);
-            intent.putExtra("study_id", studyId);
-            startActivity(intent);
-        });
         findViewById(R.id.btnResearcherDetailQuestionnairesList).setOnClickListener(view -> {
             Intent intent = new Intent(this, ResearcherQuestionnaireListActivity.class);
             intent.putExtra("study_id", studyId);

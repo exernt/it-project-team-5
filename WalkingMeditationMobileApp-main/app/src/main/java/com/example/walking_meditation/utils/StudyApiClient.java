@@ -188,6 +188,12 @@ public final class StudyApiClient {
                             Instant registeredAt = OffsetDateTime.parse(
                                     item.getString("registered_at")
                             ).toInstant();
+                            Instant activatedAt = null;
+                            if (!item.isNull("activated_at")) {
+                                activatedAt = OffsetDateTime.parse(
+                                        item.getString("activated_at")
+                                ).toInstant();
+                            }
                             Study study = new Study(
                                     item.getString("study_id"),
                                     item.getString("name"),
@@ -197,7 +203,7 @@ public final class StudyApiClient {
                             );
                             if (current == null
                                     || registeredAt.isAfter(current.getRegisteredAt())) {
-                                current = new StudyEnrollment(study, registeredAt);
+                                current = new StudyEnrollment(study, registeredAt, activatedAt);
                             }
                         }
                         listener.onLoaded(current);

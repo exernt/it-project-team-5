@@ -348,32 +348,28 @@ public final class QuestionnaireApiClient {
         });
     }
 
-    public static void createAndIssueStudyQuestionnaire(
+    public static void publishAndIssueStudyQuestionnaire(
             @NonNull Context context,
             @NonNull OkHttpClient client,
             @NonNull String studyId,
-            @NonNull JSONObject definition,
+            @NonNull String questionnaireId,
             @NonNull Listener listener
     ) {
-        createQuestionnaire(context, client, definition, new Listener() {
+        publishQuestionnaire(context, client, questionnaireId, new Listener() {
             @Override
-            public void onSuccess(@NonNull String questionnaireId) {
-                publishQuestionnaire(context, client, questionnaireId, new Listener() {
-                    @Override
-                    public void onSuccess(@NonNull String pubId) {
-                        issueQuestionnaireToStudy(context, client, studyId, pubId, listener);
-                    }
-
-                    @Override
-                    public void onFailure(@NonNull String error) {
-                        listener.onFailure("Failed to publish questionnaire: " + error);
-                    }
-                });
+            public void onSuccess(@NonNull String publishedQuestionnaireId) {
+                issueQuestionnaireToStudy(
+                        context,
+                        client,
+                        studyId,
+                        publishedQuestionnaireId,
+                        listener
+                );
             }
 
             @Override
             public void onFailure(@NonNull String error) {
-                listener.onFailure(error);
+                listener.onFailure("Failed to publish questionnaire: " + error);
             }
         });
     }

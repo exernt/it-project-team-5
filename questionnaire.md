@@ -184,7 +184,7 @@ questionnaires are immutable; editing either returns HTTP 409.
    `PUT /questionnaires/{questionnaire_id}`.
 3. The owner publishes the validated definition with
    `POST /questionnaires/{questionnaire_id}/publish`.
-4. The owner of a recruiting or active study creates a new round with
+4. The owner of an active study creates a new round with
    `POST /studies/{study_id}/questionnaires` and body
    `{"questionnaire_id": "<uuid>"}`.
 5. `GET /studies/mine` includes each study's unrevoked rounds in
