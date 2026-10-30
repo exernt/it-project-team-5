@@ -9,9 +9,6 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.example.walking_meditation.utils.SessionManager;
-import com.example.walking_meditation.utils.UserApiClient;
-
 import org.json.JSONObject;
 
 import java.io.IOException;
@@ -66,6 +63,7 @@ public class ResearcherSignUpActivity extends AppCompatActivity {
         try {
             payload.put("email", email);
             payload.put("password", password);
+            payload.put("researcher_institution", institution);
         } catch (Exception e) {
             Toast.makeText(this, "Unable to prepare registration", Toast.LENGTH_SHORT).show();
             return;
@@ -99,155 +97,20 @@ public class ResearcherSignUpActivity extends AppCompatActivity {
                         ).show());
                         return;
                     }
-                    loginAndRegisterResearcher(client, email, password, institution);
-                }
-            }
-        });
-    }
-
-    private void loginAndRegisterResearcher(OkHttpClient client, String email, String password, String institution) {
-        try {
-            JSONObject payload = new JSONObject();
-            payload.put("email", email);
-            payload.put("password", password);
-            Request request = new Request.Builder()
-                    .url(BuildConfig.SERVER_BASE_URL + "/auth/login")
-                    .post(RequestBody.create(
-                            payload.toString(),
-                            MediaType.get("application/json; charset=utf-8")
-                    ))
-                    .build();
-
-            client.newCall(request).enqueue(new Callback() {
-                @Override
-                public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                    showLoginAfterRegistrationError();
-                }
-
-                @Override
-                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                    try (Response closedResponse = response) {
-                        if (!closedResponse.isSuccessful() || closedResponse.body() == null) {
-                            showLoginAfterRegistrationError();
-                            return;
-                        }
-                        try {
-                            JSONObject tokens = new JSONObject(closedResponse.body().string());
-                            String accessToken = tokens.getString("access_token");
-                            String refreshToken = tokens.getString("refresh_token");
-                            SessionManager.saveTokens(
-                                    ResearcherSignUpActivity.this,
-                                    accessToken,
-                                    refreshToken
-                            );
-                            callRegisterResearcherEndpoint(client, accessToken, institution);
-                        } catch (Exception e) {
-                            showLoginAfterRegistrationError();
-                        }
-                    }
-                }
-            });
-        } catch (Exception e) {
-            showLoginAfterRegistrationError();
-        }
-    }
-
-    private void callRegisterResearcherEndpoint(OkHttpClient client, String accessToken, String institution) {
-        try {
-            JSONObject payload = new JSONObject();
-            payload.put("institution", institution);
-
-            Request request = new Request.Builder()
-                    .url(BuildConfig.SERVER_BASE_URL + "/auth/register-researcher")
-                    .header("Authorization", "Bearer " + accessToken)
-                    .post(RequestBody.create(
-                            payload.toString(),
-                            MediaType.get("application/json; charset=utf-8")
-                    ))
-                    .build();
-
-            client.newCall(request).enqueue(new Callback() {
-                @Override
-                public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                    runOnUiThread(() -> Toast.makeText(
-                            ResearcherSignUpActivity.this,
-                            "Failed to register researcher profile",
-                            Toast.LENGTH_LONG
-                    ).show());
-                }
-
-                @Override
-                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                    try (Response closedResponse = response) {
-                        if (!closedResponse.isSuccessful()) {
-                            runOnUiThread(() -> Toast.makeText(
-                                    ResearcherSignUpActivity.this,
-                                    "Researcher profile setup failed (" + closedResponse.code() + ")",
-                                    Toast.LENGTH_LONG
-                            ).show());
-                            return;
-                        }
-                        fetchUserInfoAndVerifyResearcher(client);
-                    }
-                }
-            });
-        } catch (Exception e) {
-            runOnUiThread(() -> Toast.makeText(
-                    ResearcherSignUpActivity.this,
-                    "Unable to submit researcher profile",
-                    Toast.LENGTH_LONG
-            ).show());
-        }
-    }
-
-    private void fetchUserInfoAndVerifyResearcher(OkHttpClient client) {
-        UserApiClient.fetchCurrentUser(this, client, new UserApiClient.CurrentUserListener() {
-            @Override
-            public void onLoaded(@NonNull String role, boolean researcherVerified) {
-                SessionManager.saveUserInfo(ResearcherSignUpActivity.this, role, researcherVerified);
-                if (SessionManager.isVerifiedResearcher(ResearcherSignUpActivity.this)) {
                     runOnUiThread(() -> {
-                        Toast.makeText(ResearcherSignUpActivity.this, "Researcher account registered successfully!", Toast.LENGTH_SHORT).show();
-                        Intent intent = new Intent(ResearcherSignUpActivity.this, MainActivity.class);
-                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NEW_TASK);
-                        startActivity(intent);
-                        finish();
-                    });
-                } else {
-                    runOnUiThread(() -> {
-                        // The profile now sits in the admin's pending list. The user
-                        // is already signed in, so take them Home (same as the
-                        // Become Researcher path) where their pending status shows.
-                        Toast.makeText(ResearcherSignUpActivity.this, R.string.become_researcher_success, Toast.LENGTH_LONG).show();
-                        Intent intent = new Intent(ResearcherSignUpActivity.this, MainActivity.class);
-                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NEW_TASK);
-                        startActivity(intent);
+                        Toast.makeText(
+                                ResearcherSignUpActivity.this,
+                                R.string.researcher_sign_up_success,
+                                Toast.LENGTH_LONG
+                        ).show();
+                        startActivity(new Intent(
+                                ResearcherSignUpActivity.this,
+                                ResearcherLoginActivity.class
+                        ));
                         finish();
                     });
                 }
             }
-
-            @Override
-            public void onFailure(@NonNull String message) {
-                runOnUiThread(() -> {
-                    Toast.makeText(ResearcherSignUpActivity.this, "Registered. Please log in.", Toast.LENGTH_LONG).show();
-                    Intent intent = new Intent(ResearcherSignUpActivity.this, ResearcherLoginActivity.class);
-                    startActivity(intent);
-                    finish();
-                });
-            }
-        });
-    }
-
-    private void showLoginAfterRegistrationError() {
-        runOnUiThread(() -> {
-            Toast.makeText(
-                    ResearcherSignUpActivity.this,
-                    "Researcher account created. Please sign in.",
-                    Toast.LENGTH_LONG
-            ).show();
-            startActivity(new Intent(ResearcherSignUpActivity.this, ResearcherLoginActivity.class));
-            finish();
         });
     }
 }
