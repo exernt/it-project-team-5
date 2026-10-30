@@ -22,16 +22,28 @@ public class StudyTest {
     }
 
     @Test
-    public void exposesScriptGenerationParameters() {
+    public void exposesGroupScriptGenerationParameters() {
         Study study = new Study(
                 "5",
                 "Parameterized",
                 14,
                 "Description",
                 "draft",
-                "Use short narration segments."
+                "Use short narration segments.",
+                "Use a gratitude practice.",
+                "male",
+                "female"
         );
 
-        assertEquals("Use short narration segments.", study.getScriptGenerationParameters());
+        assertEquals(
+                "Use short narration segments.",
+                study.getControlScriptGenerationParameters()
+        );
+        assertEquals(
+                "Use a gratitude practice.",
+                study.getExperimentalScriptGenerationParameters()
+        );
+        assertEquals("male", study.getControlTtsVoice());
+        assertEquals("female", study.getExperimentalTtsVoice());
     }
 }

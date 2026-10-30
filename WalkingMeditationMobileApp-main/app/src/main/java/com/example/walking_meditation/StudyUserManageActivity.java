@@ -150,30 +150,36 @@ public class StudyUserManageActivity extends AppCompatActivity {
 
     private void showCurrentStudy(@NonNull StudyEnrollment enrollment) {
         Study study = enrollment.getStudy();
-        long totalDays = StudyTime.remainingDays(
-                enrollment.getRegisteredAt(),
-                study.getDuration(),
-                Instant.now()
-        );
-        int weeks = (int) (totalDays / 7);
-        int days = (int) (totalDays % 7);
-        String weekText = getResources().getQuantityString(
-                R.plurals.study_remaining_weeks,
-                weeks,
-                weeks
-        );
-        String dayText = getResources().getQuantityString(
-                R.plurals.study_remaining_days,
-                days,
-                days
-        );
-
         nameView.setText(study.getName());
-        remainingView.setText(getString(
-                R.string.study_remaining_duration,
-                weekText,
-                dayText
-        ));
+        if (!"active".equals(study.getStatus())) {
+            remainingView.setText(R.string.study_not_started);
+        } else {
+            Instant activatedAt = enrollment.getActivatedAt() != null
+                    ? enrollment.getActivatedAt()
+                    : enrollment.getRegisteredAt();
+            long totalDays = StudyTime.remainingDays(
+                    activatedAt,
+                    study.getDuration(),
+                    Instant.now()
+            );
+            int weeks = (int) (totalDays / 7);
+            int days = (int) (totalDays % 7);
+            String weekText = getResources().getQuantityString(
+                    R.plurals.study_remaining_weeks,
+                    weeks,
+                    weeks
+            );
+            String dayText = getResources().getQuantityString(
+                    R.plurals.study_remaining_days,
+                    days,
+                    days
+            );
+            remainingView.setText(getString(
+                    R.string.study_remaining_duration,
+                    weekText,
+                    dayText
+            ));
+        }
         if (study.getDescription().isEmpty()) {
             descriptionView.setText(R.string.study_description_empty);
         } else {
@@ -187,6 +193,11 @@ public class StudyUserManageActivity extends AppCompatActivity {
     private void startStudyMeditation() {
         StudyEnrollment enrollment = currentEnrollment;
         if (enrollment == null) {
+            return;
+        }
+        if (!"active".equals(enrollment.getStudy().getStatus())) {
+            SessionManager.clearStudyConfiguration(this);
+            openPathSelection();
             return;
         }
         String studyId = enrollment.getStudy().getId();
@@ -203,7 +214,8 @@ public class StudyUserManageActivity extends AppCompatActivity {
             public void onLoaded(
                     boolean participating,
                     @NonNull String returnedStudyId,
-                    @NonNull String parameters
+                    @NonNull String parameters,
+                    @NonNull String ttsVoice
             ) {
                 runOnUiThread(() -> {
                     resetStartButton();
@@ -211,13 +223,14 @@ public class StudyUserManageActivity extends AppCompatActivity {
                         SessionManager.clearStudyConfiguration(
                                 StudyUserManageActivity.this
                         );
-                        returnToMain();
+                        openPathSelection();
                         return;
                     }
                     SessionManager.cacheStudyConfiguration(
                             StudyUserManageActivity.this,
                             returnedStudyId,
-                            parameters
+                            parameters,
+                            ttsVoice
                     );
                     openPathSelection();
                 });

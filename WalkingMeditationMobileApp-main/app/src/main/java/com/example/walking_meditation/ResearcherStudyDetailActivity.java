@@ -17,6 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.walking_meditation.models.Study;
+import com.example.walking_meditation.utils.ResponseExportApiClient;
 import com.example.walking_meditation.utils.StudyApiClient;
 import com.example.walking_meditation.utils.StudyLifecycle;
 
@@ -37,7 +38,10 @@ public class ResearcherStudyDetailActivity extends AppCompatActivity {
             );
     private String studyId = "";
     private String currentStatus = "";
-    private String currentScriptParameters = "";
+    private String currentControlScriptParameters = "";
+    private String currentExperimentalScriptParameters = "";
+    private String currentControlTtsVoice = "male";
+    private String currentExperimentalTtsVoice = "male";
 
     private ProgressBar progress;
     private ScrollView content;
@@ -48,6 +52,7 @@ public class ResearcherStudyDetailActivity extends AppCompatActivity {
     private EditText descriptionField;
     private Button saveButton;
     private Button lifecycleButton;
+    private Button exportButton;
 
     @NonNull
     public static Intent createIntent(@NonNull Context context, @NonNull String studyId) {
@@ -70,6 +75,7 @@ public class ResearcherStudyDetailActivity extends AppCompatActivity {
         descriptionField = findViewById(R.id.researcherDetailDescription);
         saveButton = findViewById(R.id.btnResearcherDetailSave);
         lifecycleButton = findViewById(R.id.btnResearcherDetailLifecycle);
+        exportButton = findViewById(R.id.btnResearcherDetailExportResponses);
 
         findViewById(R.id.btnResearcherDetailBack).setOnClickListener(view -> finish());
         saveButton.setOnClickListener(view -> saveChanges());
@@ -87,11 +93,6 @@ public class ResearcherStudyDetailActivity extends AppCompatActivity {
         findViewById(R.id.btnResearcherDetailRoster).setOnClickListener(view ->
                 startActivity(ResearcherRosterActivity.createIntent(this, studyId))
         );
-        findViewById(R.id.btnResearcherDetailQuestionnaire).setOnClickListener(view -> {
-            Intent intent = new Intent(this, ResearcherCreateQuestionnaireActivity.class);
-            intent.putExtra("study_id", studyId);
-            startActivity(intent);
-        });
         findViewById(R.id.btnResearcherDetailQuestionnairesList).setOnClickListener(view -> {
             Intent intent = new Intent(this, ResearcherQuestionnaireListActivity.class);
             intent.putExtra("study_id", studyId);
@@ -102,14 +103,62 @@ public class ResearcherStudyDetailActivity extends AppCompatActivity {
                         this, studyId, nameField.getText().toString()
                 ))
         );
+        exportButton.setOnClickListener(view -> requestStudyExport());
         findViewById(R.id.btnResearcherDetailShare).setOnClickListener(view -> shareInviteLink());
         findViewById(R.id.btnResearcherDetailScriptParameters).setOnClickListener(view ->
                 scriptParametersLauncher.launch(ResearcherScriptParametersActivity.createIntent(
                         this,
                         studyId,
-                        currentScriptParameters
+                        currentControlScriptParameters,
+                        currentExperimentalScriptParameters,
+                        currentControlTtsVoice,
+                        currentExperimentalTtsVoice
                 ))
         );
+    }
+
+    private void requestStudyExport() {
+        setExportInProgress(true);
+        ResponseExportApiClient.requestStudy(
+                this,
+                httpClient,
+                studyId,
+                new ResponseExportApiClient.ExportListener() {
+                    @Override
+                    public void onRequested(boolean cached) {
+                        runOnUiThread(() -> {
+                            setExportInProgress(false);
+                            Toast.makeText(
+                                    ResearcherStudyDetailActivity.this,
+                                    cached ? R.string.export_ready_email_sent
+                                            : R.string.export_requested,
+                                    Toast.LENGTH_LONG
+                            ).show();
+                        });
+                    }
+
+                    @Override
+                    public void onFailure(@NonNull String error) {
+                        runOnUiThread(() -> {
+                            setExportInProgress(false);
+                            Toast.makeText(
+                                    ResearcherStudyDetailActivity.this,
+                                    error.isEmpty()
+                                            ? getString(R.string.export_request_error)
+                                            : error,
+                                    Toast.LENGTH_LONG
+                            ).show();
+                        });
+                    }
+                }
+        );
+    }
+
+    private void setExportInProgress(boolean inProgress) {
+        exportButton.setEnabled(!inProgress);
+        exportButton.setText(inProgress
+                ? R.string.requesting_export
+                : R.string.export_study_responses);
     }
 
     private void shareInviteLink() {
@@ -153,7 +202,10 @@ public class ResearcherStudyDetailActivity extends AppCompatActivity {
         nameField.setText(study.getName());
         durationField.setText(String.valueOf(study.getDuration()));
         descriptionField.setText(study.getDescription());
-        currentScriptParameters = study.getScriptGenerationParameters();
+        currentControlScriptParameters = study.getControlScriptGenerationParameters();
+        currentExperimentalScriptParameters = study.getExperimentalScriptGenerationParameters();
+        currentControlTtsVoice = study.getControlTtsVoice();
+        currentExperimentalTtsVoice = study.getExperimentalTtsVoice();
 
         configureLifecycleButton();
         content.setVisibility(View.VISIBLE);

@@ -25,7 +25,8 @@ public class TtsClientTest {
             try {
                 JSONObject payload = new JSONObject(buffer.readUtf8());
                 assertEquals("Welcome.(pause) Walk.", payload.getString("text"));
-                assertEquals(1, payload.length());
+                assertEquals("male", payload.getString("voice"));
+                assertEquals(2, payload.length());
             } catch (org.json.JSONException error) { throw new IOException(error); }
             return new Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1)
                     .code(200).message("OK").header("Content-Type", "audio/mpeg")
@@ -63,6 +64,8 @@ public class TtsClientTest {
         assertNotEquals(client.cacheKey("One."), client.cacheKey("Two."));
         assertNotEquals(client.cacheKey("One."), new TtsClient(temp.getRoot(), http,
                 "http://localhost/other", new ServerTtsPayload()).cacheKey("One."));
+        assertNotEquals(client.cacheKey("One."), new TtsClient(temp.getRoot(), http,
+                "http://localhost/tts", new ServerTtsPayload("female")).cacheKey("One."));
         assertNotEquals(client.cacheKey("a".repeat(2800)), client.cacheKey("a".repeat(2801)));
     }
 

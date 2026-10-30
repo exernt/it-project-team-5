@@ -25,7 +25,12 @@ public final class StudyConfigClient {
     private static final String REFRESH_URL = BuildConfig.SERVER_BASE_URL + "/auth/refresh";
 
     public interface Listener {
-        void onLoaded(boolean participating, @NonNull String studyId, @NonNull String parameters);
+        void onLoaded(
+                boolean participating,
+                @NonNull String studyId,
+                @NonNull String parameters,
+                @NonNull String ttsVoice
+        );
         void onFailure(@NonNull String message);
     }
 
@@ -38,7 +43,7 @@ public final class StudyConfigClient {
     ) {
         String accessToken = SessionManager.getAccessToken(context);
         if (accessToken == null || accessToken.isEmpty()) {
-            listener.onLoaded(false, "", "");
+            listener.onLoaded(false, "", "", "male");
             return;
         }
         executeCurrent(context.getApplicationContext(), client, listener, accessToken, true);
@@ -80,7 +85,10 @@ public final class StudyConfigClient {
                     listener.onLoaded(
                             participating,
                             body.optString("study_id", ""),
-                            body.optString("script_generation_parameters", "")
+                            body.optString("script_generation_parameters", ""),
+                            "female".equals(body.optString("tts_voice", "male"))
+                                    ? "female"
+                                    : "male"
                     );
                 } catch (Exception e) {
                     listener.onFailure(e.getMessage() == null ? "Invalid study status response" : e.getMessage());

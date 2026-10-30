@@ -182,21 +182,21 @@ questionnaires are immutable; editing either returns HTTP 409.
 1. A verified researcher creates a draft with `POST /questionnaires`.
 2. While it remains a draft, the owner may replace its definition with
    `PUT /questionnaires/{questionnaire_id}`.
-3. The owner publishes the validated definition with
-   `POST /questionnaires/{questionnaire_id}/publish`.
-4. The owner of a recruiting or active study creates a new round with
+3. The owner of an active study atomically publishes the draft and creates its
+   first round with
    `POST /studies/{study_id}/questionnaires` and body
    `{"questionnaire_id": "<uuid>"}`.
-5. `GET /studies/mine` includes each study's unrevoked rounds in
+   The same endpoint creates later rounds for an already-published definition.
+4. `GET /studies/mine` includes each study's unrevoked rounds in
    `open_questionnaires`. Each summary contains the issuance `id`, definition
    `questionnaire_id`, `round_number`, `title`, timestamps, and the current
    participant's `has_responded` flag.
-6. An active participant can refresh the same information with
+5. An active participant can refresh the same information with
    `GET /studies/{study_id}/questionnaires` and fetch displayable content with
    `GET /studies/{study_id}/questionnaires/{issuance_id}`.
-7. The participant submits once with
+6. The participant submits once with
    `POST /studies/{study_id}/questionnaires/{issuance_id}/responses`.
-8. The study owner may close that round with
+7. The study owner may close that round with
    `POST /studies/{study_id}/questionnaires/{issuance_id}/revoke` and retrieve
    its answers with
    `GET /studies/{study_id}/questionnaires/{issuance_id}/responses`.
@@ -205,6 +205,20 @@ Each issue call creates a new `round_number` for the same study/questionnaire
 pair. The database natural key is `(study_id, questionnaire_id, round_number)`;
 the issuance UUID is used in API paths. A participant may submit at most once
 per issuance round, enforced both by the API and a database unique constraint.
+
+### Researcher app flow
+
+The questionnaire list for a study shows all definitions owned by the
+researcher separately from the rounds already issued to that study. Selecting a
+published definition opens its read-only review. For an active study, **Issue
+Questionnaire** calls the same issuance endpoint, so issuing a definition again
+creates the next numbered round.
+
+The create and draft-edit screens also provide **Copy Questionnaire**. The copy
+picker lists all definitions owned by the researcher. After confirmation, the
+selected definition fully replaces the editor's current in-memory definition;
+it does not append questions or change the selected source questionnaire. The
+researcher must save the destination draft to persist the replacement.
 
 ## Submission format
 

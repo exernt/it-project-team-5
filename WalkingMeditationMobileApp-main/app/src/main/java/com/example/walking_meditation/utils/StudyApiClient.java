@@ -188,6 +188,12 @@ public final class StudyApiClient {
                             Instant registeredAt = OffsetDateTime.parse(
                                     item.getString("registered_at")
                             ).toInstant();
+                            Instant activatedAt = null;
+                            if (!item.isNull("activated_at")) {
+                                activatedAt = OffsetDateTime.parse(
+                                        item.getString("activated_at")
+                                ).toInstant();
+                            }
                             Study study = new Study(
                                     item.getString("study_id"),
                                     item.getString("name"),
@@ -197,7 +203,7 @@ public final class StudyApiClient {
                             );
                             if (current == null
                                     || registeredAt.isAfter(current.getRegisteredAt())) {
-                                current = new StudyEnrollment(study, registeredAt);
+                                current = new StudyEnrollment(study, registeredAt, activatedAt);
                             }
                         }
                         listener.onLoaded(current);
@@ -422,13 +428,17 @@ public final class StudyApiClient {
 
     @NonNull
     private static Study parseStudy(@NonNull JSONObject item) throws Exception {
+        String legacyParameters = item.optString("script_generation_parameters", "");
         return new Study(
                 item.getString("id"),
                 item.getString("name"),
                 item.getInt("duration"),
                 item.optString("description", ""),
                 item.getString("status"),
-                item.optString("script_generation_parameters", "")
+                item.optString("control_script_generation_parameters", legacyParameters),
+                item.optString("experimental_script_generation_parameters", legacyParameters),
+                item.optString("control_tts_voice", "male"),
+                item.optString("experimental_tts_voice", "male")
         );
     }
 

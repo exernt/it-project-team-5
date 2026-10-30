@@ -76,7 +76,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:orientation="horizontal"
+            android:orientation="vertical"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/labelType">
@@ -92,9 +92,118 @@
                 android:id="@+id/radioRating"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="24dp"
-                android:text="Scalar (1-5)" />
+                android:text="Scale" />
+
+            <RadioButton
+                android:id="@+id/radioSingleChoice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Single choice" />
+
+            <RadioButton
+                android:id="@+id/radioMultipleChoice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Multiple choice" />
         </RadioGroup>
+
+        <LinearLayout
+            android:id="@+id/scaleOptionsSection"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="vertical"
+            android:visibility="gone"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/questionTypeGroup">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Scale points"
+                android:textStyle="bold" />
+
+            <RadioGroup
+                android:id="@+id/scalePointCountGroup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <RadioButton
+                    android:id="@+id/radioScale4Points"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="4 points" />
+
+                <RadioButton
+                    android:id="@+id/radioScale5Points"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:text="5 points" />
+            </RadioGroup>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/scaleStartValue"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:layout_weight="1"
+                    android:hint="Start value"
+                    android:inputType="numberSigned"
+                    android:text="1" />
+
+                <EditText
+                    android:id="@+id/scaleEndValue"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:hint="End value"
+                    android:inputType="numberSigned"
+                    android:text="5" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/choiceOptionsSection"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="vertical"
+            android:visibility="gone"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/scaleOptionsSection">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Choices"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnAddChoice"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:contentDescription="Add choice"
+                android:text="+" />
+
+            <LinearLayout
+                android:id="@+id/choiceOptionsContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+        </LinearLayout>
 
         <Button
             android:id="@+id/btnAddQuestion"
@@ -105,27 +214,103 @@
             android:text="+ Add Question to List"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/questionTypeGroup" />
+            app:layout_constraintTop_toBottomOf="@+id/choiceOptionsSection" />
 
-        <TextView
-            android:id="@+id/questionCountText"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:id="@+id/questionsSection"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="Questions added: 0"
-            android:textStyle="italic"
+            android:layout_marginTop="20dp"
+            android:orientation="vertical"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/btnAddQuestion" />
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/btnAddQuestion">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Questions"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/questionsEmptyText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="No questions added yet."
+                android:textColor="@color/hint_grey"
+                android:textStyle="italic" />
+
+            <LinearLayout
+                android:id="@+id/questionsListContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="vertical" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/btnCopyQuestionnaire"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="32dp"
+            android:text="@string/copy_questionnaire"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/questionsSection" />
 
         <Button
             android:id="@+id/btnCreateQuestionnaireSubmit"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="32dp"
-            android:text="Save &amp; Publish Questionnaire"
+            android:layout_marginTop="16dp"
+            android:text="Create Questionnaire"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/questionCountText" />
+            app:layout_constraintTop_toBottomOf="@+id/btnCopyQuestionnaire" />
+
+        <Button
+            android:id="@+id/btnCreateQuestionnairePublish"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:backgroundTint="@color/disabled_grey"
+            android:enabled="false"
+            android:text="Publish Questionnaire"
+            android:textColor="@color/white"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/btnCreateQuestionnaireSubmit" />
+
+        <Button
+            android:id="@+id/btnIssueQuestionnaire"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:backgroundTint="@color/disabled_grey"
+            android:enabled="false"
+            android:text="@string/issue_questionnaire"
+            android:textColor="@color/white"
+            android:visibility="gone"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/btnCreateQuestionnairePublish" />
+
+        <TextView
+            android:id="@+id/createQuestionnairePublishHint"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Create the questionnaire before publishing it."
+            android:textColor="@color/hint_grey"
+            android:textSize="14sp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/btnIssueQuestionnaire" />
 
         <Button
             android:id="@+id/btnCreateQuestionnaireCancel"
@@ -135,7 +320,7 @@
             android:layout_marginTop="8dp"
             android:text="Cancel"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/btnCreateQuestionnaireSubmit" />
+            app:layout_constraintTop_toBottomOf="@+id/createQuestionnairePublishHint" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 </ScrollView>
