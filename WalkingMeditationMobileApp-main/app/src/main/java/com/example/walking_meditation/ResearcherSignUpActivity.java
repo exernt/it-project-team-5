@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.widget.AutoCompleteTextView;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -25,6 +26,7 @@ public class ResearcherSignUpActivity extends AppCompatActivity {
     private static final int MIN_PASSWORD_LENGTH = 8;
 
     private AutoCompleteTextView emailField, passwordField, passwordConfirmField, institutionField;
+    private CheckBox privacyCheckbox;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -36,6 +38,9 @@ public class ResearcherSignUpActivity extends AppCompatActivity {
         passwordField = findViewById(R.id.researcherSignUpPassword);
         passwordConfirmField = findViewById(R.id.researcherSignUpConfirmPassword);
         institutionField = findViewById(R.id.researcherInstitutionField);
+        privacyCheckbox = findViewById(R.id.researcherSignUpPrivacyCheckbox);
+        findViewById(R.id.researcherSignUpPrivacyLink).setOnClickListener(view ->
+                startActivity(new Intent(this, PrivacyPolicyActivity.class)));
 
         btnSignUpConfirm.setOnClickListener(view -> {
             String email = emailField.getText().toString().trim();
@@ -44,6 +49,10 @@ public class ResearcherSignUpActivity extends AppCompatActivity {
             String institution = institutionField.getText().toString().trim();
 
             if (!email.isEmpty() && !password.isEmpty() && password.equals(passwordConfirm) && !institution.isEmpty()) {
+                if (!privacyCheckbox.isChecked()) {
+                    Toast.makeText(this, R.string.privacy_policy_agree_required, Toast.LENGTH_SHORT).show();
+                    return;
+                }
                 if (password.length() < MIN_PASSWORD_LENGTH) {
                     Toast.makeText(this, R.string.researcher_sign_up_password_too_short, Toast.LENGTH_SHORT).show();
                     return;

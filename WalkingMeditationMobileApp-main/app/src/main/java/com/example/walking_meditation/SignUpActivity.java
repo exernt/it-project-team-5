@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.AutoCompleteTextView;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -20,6 +21,7 @@ import java.io.IOException;
 public class SignUpActivity extends AppCompatActivity {
 
     private Button btnSignUp;
+    private CheckBox privacyCheckbox;
     private AutoCompleteTextView emailField, passwordField,passwordConfirmField;
 
     @Override
@@ -31,6 +33,9 @@ public class SignUpActivity extends AppCompatActivity {
         emailField = findViewById(R.id.signUpEmail);
         passwordField = findViewById(R.id.signUpPassword);
         passwordConfirmField = findViewById(R.id.signUpConfirmPassword);
+        privacyCheckbox = findViewById(R.id.signUpPrivacyCheckbox);
+        findViewById(R.id.signUpPrivacyLink).setOnClickListener(view ->
+                startActivity(new Intent(this, PrivacyPolicyActivity.class)));
 
         btnSignUp.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -39,6 +44,12 @@ public class SignUpActivity extends AppCompatActivity {
                 String password = passwordField.getText().toString();
                 String passwordConfirm = passwordConfirmField.getText().toString();
                 if (!email.isEmpty() && !password.isEmpty() && password.equals(passwordConfirm)) {
+                    if (!privacyCheckbox.isChecked()) {
+                        Toast.makeText(SignUpActivity.this,
+                                R.string.privacy_policy_agree_required,
+                                Toast.LENGTH_SHORT).show();
+                        return;
+                    }
                     performSignUp(email, password);
                 }
             }
