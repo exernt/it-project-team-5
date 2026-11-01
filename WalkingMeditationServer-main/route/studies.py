@@ -50,6 +50,10 @@ router = APIRouter(prefix="/studies", tags=["studies"])
 # version, and the version bump makes older consents distinguishable.
 CONSENT_EDITABLE_STATUSES = (StudyStatus.DRAFT,)
 
+# Text every new study's consent form starts with. A study cannot be published
+# until its owner replaces it, so participants never see it.
+PLACEHOLDER_CONSENT_TEXT = "Placeholder consent text — to be finalized."
+
 
 @router.post(
     "",
@@ -78,7 +82,7 @@ async def create_study(
     )
     consent_form = ConsentForm(
         study_id=study.id,
-        body_text="Placeholder consent text — to be finalized.",
+        body_text=PLACEHOLDER_CONSENT_TEXT,
         version=1,
     )
     session.add_all([ownership, consent_form])
@@ -609,6 +613,13 @@ async def publish_study(
 
     if study.status != StudyStatus.DRAFT:
         raise _invalid_transition(study.status, StudyStatus.RECRUITING)
+
+    consent_form = await session.get(ConsentForm, study_id)
+    if consent_form is None or consent_form.body_text.strip() == PLACEHOLDER_CONSENT_TEXT:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Write the consent form before publishing this study",
+        )
 
     study.status = StudyStatus.RECRUITING
     await session.commit()

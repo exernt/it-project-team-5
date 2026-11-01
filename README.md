@@ -260,7 +260,9 @@ retrieved with `GET /studies/{study_id}`.
 A study starts in `draft` and is not joinable until its owner publishes it.
 The study owner moves it through its lifecycle with:
 
-- `POST /studies/{study_id}/publish` — `draft` → `recruiting`
+- `POST /studies/{study_id}/publish` — `draft` → `recruiting`. Rejected with
+  `409` while the consent form is still the placeholder text, so the owner has
+  to write it first.
 - `POST /studies/{study_id}/activate` — `recruiting` → `active`
 - `POST /studies/{study_id}/close` — `recruiting` or `active` → `closed`
 

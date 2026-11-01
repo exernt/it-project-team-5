@@ -29,6 +29,7 @@ from database.models import (
     User,
 )
 from route.studies import (
+    PLACEHOLDER_CONSENT_TEXT,
     activate_study,
     close_study,
     create_study,
@@ -1205,13 +1206,53 @@ class StudyLifecycleTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_publish_moves_draft_to_recruiting(self):
         study = Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.DRAFT)
-        self.session.get.return_value = study
+        consent_form = ConsentForm(
+            study_id=study.id, body_text="You agree to walk daily.", version=2
+        )
+        self.session.get.side_effect = [study, consent_form]
 
         response = await publish_study(study.id, self.researcher, self.session)
 
         self.assertEqual(StudyStatus.RECRUITING, study.status)
         self.assertEqual("recruiting", response.status)
         self.session.commit.assert_awaited_once()
+
+    async def test_publish_rejects_placeholder_consent_form(self):
+        study = Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.DRAFT)
+        consent_form = ConsentForm(
+            study_id=study.id, body_text=PLACEHOLDER_CONSENT_TEXT, version=1
+        )
+        self.session.get.side_effect = [study, consent_form]
+
+        with self.assertRaises(HTTPException) as raised:
+            await publish_study(study.id, self.researcher, self.session)
+
+        self.assertEqual(409, raised.exception.status_code)
+        self.assertEqual(StudyStatus.DRAFT, study.status)
+        self.session.commit.assert_not_awaited()
+
+    async def test_publish_rejects_missing_consent_form(self):
+        study = Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.DRAFT)
+        self.session.get.side_effect = [study, None]
+
+        with self.assertRaises(HTTPException) as raised:
+            await publish_study(study.id, self.researcher, self.session)
+
+        self.assertEqual(409, raised.exception.status_code)
+        self.assertEqual(StudyStatus.DRAFT, study.status)
+        self.session.commit.assert_not_awaited()
+
+    async def test_new_studies_start_with_the_placeholder_the_publish_guard_checks(self):
+        session = MagicMock()
+        session.flush = AsyncMock()
+        session.commit = AsyncMock()
+
+        await create_study(
+            CreateStudyRequest(name="Morning walks", duration=14), self.researcher, session
+        )
+
+        consent_form = session.add_all.call_args.args[0][1]
+        self.assertEqual(PLACEHOLDER_CONSENT_TEXT, consent_form.body_text)
 
     async def test_publish_rejects_non_draft(self):
         study = Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.RECRUITING)
