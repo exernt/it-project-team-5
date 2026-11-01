@@ -55,6 +55,27 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/signUpPassword" />
 
+        <CheckBox
+            android:id="@+id/signUpPrivacyCheckbox"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/privacy_policy_checkbox_label"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/signUpConfirmPassword" />
+
+        <TextView
+            android:id="@+id/signUpPrivacyLink"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:gravity="center_vertical"
+            android:text="@string/privacy_policy_link"
+            android:textColor="?attr/colorPrimary"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/signUpPrivacyCheckbox" />
+
         <Button
             android:id="@+id/btnSignUpConfirm"
             android:layout_width="0dp"
@@ -63,7 +84,7 @@
             android:text="Sign Up"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/signUpConfirmPassword" />
+            app:layout_constraintTop_toBottomOf="@+id/signUpPrivacyLink" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 </ScrollView>
