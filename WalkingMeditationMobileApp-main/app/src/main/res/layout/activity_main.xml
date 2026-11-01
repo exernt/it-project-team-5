@@ -7,7 +7,7 @@
 
     <Button
         android:id="@+id/btnProfile"
-        style="@style/Widget.Material3.Button.TextButton"
+        style="@style/App.TextButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="48dp"
@@ -99,7 +99,7 @@
 
         <Button
             android:id="@+id/btnLogOut"
-            style="@style/Widget.Material3.Button.TextButton"
+            style="@style/App.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/logout" />

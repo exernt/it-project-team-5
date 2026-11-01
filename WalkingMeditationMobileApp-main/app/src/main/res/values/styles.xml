@@ -2,6 +2,10 @@
 <resources>
     <style name="App" parent="Theme.Material3.DayNight.NoActionBar"/>
 
+    <style name="App.TextButton" parent="Widget.Material3.Button.TextButton">
+        <item name="android:textSize">14sp</item>
+    </style>
+
     <!-- Label style: "Source" / "Destination" -->
     <style name="App.Label">
         <item name="android:textColor">@color/sky_blue_dark</item>
