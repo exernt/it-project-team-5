@@ -288,15 +288,35 @@ logged-in user can view it before deciding whether to join:
 }
 ```
 
-The consent text is currently a placeholder pending the actual wording; the
-`agrees_to_consent` requirement on joining (below) is enforced regardless.
+A new study starts with placeholder text. The researcher who owns the study
+replaces it with their own wording while the study is still a `draft`:
+
+`POST /studies/{study_id}/consent-form/edit`
+
+```json
+{ "body_text": "You agree to walk for 10 minutes a day for 14 days." }
+```
+
+The text is trimmed and must be between 1 and 20,000 characters. The response
+has the same shape as the `GET` above. Every change to the text increases
+`version` by one; saving identical text leaves it alone. Once the study has
+been published (`recruiting`, `active` or `closed`) the form is locked and
+this endpoint returns `409`, so nobody can have agreed to wording that later
+changes. Only the study's owner can edit; other researchers get `403`.
+
+The `agrees_to_consent` requirement on joining (below) is enforced regardless
+of the wording.
 
 ### Joining, leaving, and rejoining
 
 Any logged-in user can join an existing study with
 `POST /studies/{study_id}/join`. The server derives the user ID from the bearer
 access token. The request confirms consent with
-`{"agrees_to_consent": true}`. Joining only succeeds while the study is
+`{"agrees_to_consent": true, "consent_version": 2}`, where `consent_version` is
+the version of the consent form the user was shown. It is optional; when sent
+and no longer current, the join is rejected with `409` so the user must review
+the new text first. The server stores the version agreed to on the registration
+(`study_registrations.consent_version`). Joining only succeeds while the study is
 `recruiting` or `active`; a study that hasn't been published yet, or has been
 closed, rejects the join with a conflict. A user can participate in only one
 recruiting or active study at a time. They must withdraw from that study, or

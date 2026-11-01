@@ -10,6 +10,7 @@ from route.models import (
     ConsentFormResponse,
     CreateStudyRequest,
     CurrentStudyScriptParametersResponse,
+    EditConsentFormRequest,
     EditStudyRequest,
     FeedbackListResponse,
     FeedbackResponse,
@@ -43,6 +44,11 @@ from database.models import (
 )
 
 router = APIRouter(prefix="/studies", tags=["studies"])
+
+# Consent wording can only change before anyone can have agreed to it. To allow
+# edits after publishing, widen this tuple: every join already records the
+# version, and the version bump makes older consents distinguishable.
+CONSENT_EDITABLE_STATUSES = (StudyStatus.DRAFT,)
 
 
 @router.post(
@@ -117,6 +123,31 @@ async def join_study(
             detail="You must agree to the consent form to join this study",
         )
 
+    if payload.consent_version is not None:
+        consent_form = await session.get(ConsentForm, study_id)
+        if consent_form is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Consent form not found",
+            )
+        if consent_form.version != payload.consent_version:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "The consent form for this study has changed. "
+                    "Please review it again before joining."
+                ),
+            )
+        consent_version = payload.consent_version
+    else:
+        # Older clients do not say which version they showed, so record the
+        # current one as part of the same INSERT/UPDATE.
+        consent_version = (
+            select(ConsentForm.version)
+            .where(ConsentForm.study_id == study_id)
+            .scalar_subquery()
+        )
+
     # Serialize joins for this user. Without this row lock, two simultaneous
     # requests for different studies could both pass the check below.
     await session.execute(
@@ -160,6 +191,7 @@ async def join_study(
         # rather than inserting a second one (user_id, study_id) is the PK.
         existing_registration.registered_at = now
         existing_registration.consented_at = now
+        existing_registration.consent_version = consent_version
         existing_registration.withdrawn_at = None
         registration = existing_registration
     else:
@@ -196,6 +228,7 @@ async def join_study(
             study_id=study_id,
             registered_at=now,
             consented_at=now,
+            consent_version=consent_version,
             study_group=study_group,
         )
         session.add(registration)
@@ -658,6 +691,42 @@ async def get_consent_form(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Consent form not found",
         )
+
+    return ConsentFormResponse(
+        study_id=consent_form.study_id,
+        body_text=consent_form.body_text,
+        version=consent_form.version,
+    )
+
+@router.post(
+    "/{study_id}/consent-form/edit",
+    response_model=ConsentFormResponse,
+)
+async def edit_consent_form(
+        study_id: UUID,
+        payload: EditConsentFormRequest,
+        _owner: StudyOwnerDependency,
+        session: DatabaseSessionDependency,
+) -> ConsentFormResponse:
+    study = await session.get(Study, study_id)
+    if study.status not in CONSENT_EDITABLE_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The consent form can only be edited while the study is a draft",
+        )
+
+    consent_form = await session.get(ConsentForm, study_id)
+    if consent_form is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Consent form not found",
+        )
+
+    # Saving identical text is a no-op so the version only moves on real changes.
+    if payload.body_text != consent_form.body_text:
+        consent_form.body_text = payload.body_text
+        consent_form.version += 1
+        await session.commit()
 
     return ConsentFormResponse(
         study_id=consent_form.study_id,

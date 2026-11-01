@@ -232,6 +232,9 @@ class StudyRegistration(Base):
         DateTime(timezone=True),
         nullable=False,
     )
+    # The ConsentForm.version the participant agreed to, so consent stays
+    # attributable to the exact wording even after the form is edited.
+    consent_version: Mapped[int] = mapped_column(nullable=False)
     withdrawn_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
@@ -270,11 +273,11 @@ class StudyCreatedBy(Base):
     )
 
 class ConsentForm(Base):
-    """Placeholder consent text shown to a participant before joining a study.
+    """Consent text shown to a participant before joining a study.
 
-    Content is a placeholder until the client specifies what consent should
-    actually cover — the mechanism (record that consent was given, when)
-    is real; the wording is not final.
+    A new study starts with placeholder text; the owning researcher replaces
+    it while the study is still a draft. ``version`` increases every time the
+    text changes and is recorded on each registration.
     """
 
     __tablename__ = "consent_form"
