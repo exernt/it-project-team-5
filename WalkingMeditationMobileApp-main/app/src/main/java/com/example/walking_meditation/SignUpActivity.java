@@ -64,6 +64,8 @@ public class SignUpActivity extends AppCompatActivity {
             JSONObject payload = new JSONObject();
             payload.put("email", email);
             payload.put("password", password);
+            payload.put("agrees_to_privacy_policy", privacyCheckbox.isChecked());
+            payload.put("privacy_policy_version", PrivacyPolicyActivity.POLICY_VERSION);
             jsonString = payload.toString();
         } catch (Exception e) {
             Toast.makeText(this, "Unable to prepare registration", Toast.LENGTH_SHORT).show();
