@@ -238,6 +238,7 @@
     <string name="invalid_password">Password must be >5 characters</string>
     <string name="login_failed">"Login failed"</string>
     <string name="privacy_policy_title">Privacy Policy</string>
+    <string name="privacy_policy_version">Version %1$d</string>
     <string name="privacy_policy_placeholder">Privacy policy text goes here. The final policy will be provided by the team.</string>
     <string name="privacy_policy_link">View the Privacy Policy</string>
     <string name="privacy_policy_checkbox_label">I have read and agree to the Privacy Policy.</string>

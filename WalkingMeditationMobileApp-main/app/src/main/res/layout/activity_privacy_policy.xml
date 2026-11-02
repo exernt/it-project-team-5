@@ -21,15 +21,25 @@
             app:layout_constraintTop_toTopOf="parent" />
 
         <TextView
+            android:id="@+id/privacyPolicyVersion"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="@color/hint_grey"
+            android:textSize="12sp"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/privacyPolicyHeading" />
+
+        <TextView
             android:id="@+id/privacyPolicyText"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="32dp"
+            android:layout_marginTop="24dp"
             android:text="@string/privacy_policy_placeholder"
             android:textSize="16sp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/privacyPolicyHeading" />
+            app:layout_constraintTop_toBottomOf="@+id/privacyPolicyVersion" />
 
         <Button
             android:id="@+id/btnPrivacyPolicyBack"

@@ -73,6 +73,8 @@ public class ResearcherSignUpActivity extends AppCompatActivity {
             payload.put("email", email);
             payload.put("password", password);
             payload.put("researcher_institution", institution);
+            payload.put("agrees_to_privacy_policy", privacyCheckbox.isChecked());
+            payload.put("privacy_policy_version", PrivacyPolicyActivity.POLICY_VERSION);
         } catch (Exception e) {
             Toast.makeText(this, "Unable to prepare registration", Toast.LENGTH_SHORT).show();
             return;
