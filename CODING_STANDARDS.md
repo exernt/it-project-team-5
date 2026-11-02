@@ -64,7 +64,3 @@ When you change behaviour, update the matching page in the same PR: the API refe
 | Naming, layering, auth dependencies, error handling, docs updated, tests added | PR template checklist and reviewer | By review |
 
 **Branch protection settings** (repository Settings → Branches → Add rule for `main`): require a pull request before merging, require 1 approval, require the status checks "Server Unit Tests" (includes ruff) and "Android Tests" to pass, and block direct pushes.
-
-## Known gaps against these standards
-
-- Android Lint is not yet run in CI (`./gradlew lintDebug`).
