@@ -76,6 +76,9 @@
             android:name=".StudyConsentActivity"
             android:exported="false" />
         <activity
+            android:name=".ResearcherConsentFormActivity"
+            android:exported="false" />
+        <activity
             android:name=".ResearcherStudyListActivity"
             android:exported="false" />
         <activity

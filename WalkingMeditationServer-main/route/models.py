@@ -425,8 +425,24 @@ class ConsentFormResponse(BaseModel):
     body_text: str
     version: int
 
+class EditConsentFormRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    body_text: str = Field(..., min_length=1, max_length=20_000)
+
+    @field_validator("body_text", mode="before")
+    @classmethod
+    def normalize_body_text(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+
 class JoinStudyRequest(BaseModel):
     agrees_to_consent: bool
+    # Version of the consent form the participant was shown. Optional so older
+    # app builds keep working; when sent, a stale version is rejected.
+    consent_version: int | None = Field(default=None, ge=1)
 
 
 class CreateQuestionnaireRequest(BaseModel):

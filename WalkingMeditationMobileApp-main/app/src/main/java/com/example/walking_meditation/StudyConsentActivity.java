@@ -25,6 +25,7 @@ public class StudyConsentActivity extends AppCompatActivity {
 
     private final OkHttpClient httpClient = new OkHttpClient();
     private String studyId = "";
+    private int shownConsentVersion = 0;
     private ProgressBar progress;
     private LinearLayout content;
     private TextView nameView;
@@ -104,9 +105,12 @@ public class StudyConsentActivity extends AppCompatActivity {
             Toast.makeText(this, R.string.consent_agree_required, Toast.LENGTH_SHORT).show();
             return;
         }
+        if (shownConsentVersion <= 0) {
+            return;
+        }
         joinButton.setEnabled(false);
         joinButton.setText(R.string.joining_study);
-        StudyApiClient.joinStudy(this, httpClient, studyId, true, new StudyApiClient.JoinListener() {
+        StudyApiClient.joinStudy(this, httpClient, studyId, true, shownConsentVersion, new StudyApiClient.JoinListener() {
             @Override
             public void onJoined() {
                 runOnUiThread(() -> {
@@ -124,6 +128,10 @@ public class StudyConsentActivity extends AppCompatActivity {
                     joinButton.setEnabled(true);
                     joinButton.setText(R.string.join_study);
                     Toast.makeText(StudyConsentActivity.this, error, Toast.LENGTH_LONG).show();
+                    // The researcher may have changed the wording; show the current
+                    // text and make the participant agree to it again.
+                    agreeCheckbox.setChecked(false);
+                    loadConsentForm();
                 });
             }
         });
@@ -132,6 +140,7 @@ public class StudyConsentActivity extends AppCompatActivity {
     private void showConsent(@NonNull String bodyText, int version) {
         progress.setVisibility(View.GONE);
         messageView.setVisibility(View.GONE);
+        shownConsentVersion = version;
         consentBodyView.setText(bodyText);
         versionView.setText(getString(R.string.consent_version, version));
         content.setVisibility(View.VISIBLE);

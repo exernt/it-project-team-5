@@ -105,6 +105,13 @@ public class ResearcherStudyDetailActivity extends AppCompatActivity {
         );
         exportButton.setOnClickListener(view -> requestStudyExport());
         findViewById(R.id.btnResearcherDetailShare).setOnClickListener(view -> shareInviteLink());
+        findViewById(R.id.btnResearcherDetailConsentForm).setOnClickListener(view ->
+                startActivity(ResearcherConsentFormActivity.createIntent(
+                        this,
+                        studyId,
+                        "draft".equals(currentStatus)
+                ))
+        );
         findViewById(R.id.btnResearcherDetailScriptParameters).setOnClickListener(view ->
                 scriptParametersLauncher.launch(ResearcherScriptParametersActivity.createIntent(
                         this,

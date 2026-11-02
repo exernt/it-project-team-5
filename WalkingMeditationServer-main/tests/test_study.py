@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from route.dependencies import get_verified_researcher, require_study_owner
 from route.models import (
     CreateStudyRequest,
+    EditConsentFormRequest,
     EditStudyRequest,
     JoinStudyRequest,
     SwapStudyGroupRequest,
@@ -28,9 +29,11 @@ from database.models import (
     User,
 )
 from route.studies import (
+    PLACEHOLDER_CONSENT_TEXT,
     activate_study,
     close_study,
     create_study,
+    edit_consent_form,
     edit_study,
     get_current_study_script_parameters,
     get_consent_form,
@@ -361,6 +364,236 @@ class GetConsentFormTests(unittest.IsolatedAsyncioTestCase):
             await get_consent_form(uuid4(), self.user, self.session)
 
         self.assertEqual(404, raised.exception.status_code)
+
+
+class JoinStudyConsentVersionTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.session = MagicMock()
+        self.session.get = AsyncMock()
+        self.session.execute = AsyncMock()
+        self.session.scalar = AsyncMock(side_effect=[None, 0, 0])
+        self.session.commit = AsyncMock()
+        self.session.rollback = AsyncMock()
+        self.user = User(
+            id=uuid4(),
+            email="participant@example.com",
+            password_hash="hash",
+            role=Role.PARTICIPANT,
+        )
+        self.study = Study(
+            id=uuid4(),
+            name="Morning walks",
+            duration=14,
+            status=StudyStatus.RECRUITING,
+        )
+
+    async def test_records_the_version_the_participant_saw(self):
+        consent_form = ConsentForm(study_id=self.study.id, body_text="Terms", version=3)
+        self.session.get.side_effect = [self.study, consent_form, None]
+
+        await join_study(
+            self.study.id,
+            JoinStudyRequest(agrees_to_consent=True, consent_version=3),
+            self.user,
+            self.session,
+        )
+
+        registration = self.session.add.call_args.args[0]
+        self.assertEqual(3, registration.consent_version)
+
+    async def test_rejects_a_stale_consent_version(self):
+        consent_form = ConsentForm(study_id=self.study.id, body_text="Terms", version=4)
+        self.session.get.side_effect = [self.study, consent_form]
+
+        with self.assertRaises(HTTPException) as raised:
+            await join_study(
+                self.study.id,
+                JoinStudyRequest(agrees_to_consent=True, consent_version=3),
+                self.user,
+                self.session,
+            )
+
+        self.assertEqual(409, raised.exception.status_code)
+        self.session.add.assert_not_called()
+        self.session.commit.assert_not_awaited()
+
+    async def test_missing_consent_form_returns_404_when_version_sent(self):
+        self.session.get.side_effect = [self.study, None]
+
+        with self.assertRaises(HTTPException) as raised:
+            await join_study(
+                self.study.id,
+                JoinStudyRequest(agrees_to_consent=True, consent_version=1),
+                self.user,
+                self.session,
+            )
+
+        self.assertEqual(404, raised.exception.status_code)
+
+    async def test_older_clients_get_the_current_version_recorded_by_the_database(self):
+        self.session.get.side_effect = [self.study, None]
+
+        await join_study(
+            self.study.id,
+            JoinStudyRequest(agrees_to_consent=True),
+            self.user,
+            self.session,
+        )
+
+        registration = self.session.add.call_args.args[0]
+        self.assertIn("consent_form", str(registration.consent_version))
+
+    async def test_rejoining_records_the_new_version(self):
+        consent_form = ConsentForm(study_id=self.study.id, body_text="Terms", version=2)
+        withdrawn_registration = StudyRegistration(
+            user_id=self.user.id,
+            study_id=self.study.id,
+            registered_at=datetime.now(timezone.utc) - timedelta(days=5),
+            consented_at=datetime.now(timezone.utc) - timedelta(days=5),
+            consent_version=1,
+            withdrawn_at=datetime.now(timezone.utc) - timedelta(days=1),
+            study_group=StudyGroup.CONTROL,
+        )
+        self.session.get.side_effect = [self.study, consent_form, withdrawn_registration]
+
+        await join_study(
+            self.study.id,
+            JoinStudyRequest(agrees_to_consent=True, consent_version=2),
+            self.user,
+            self.session,
+        )
+
+        self.assertEqual(2, withdrawn_registration.consent_version)
+
+    def test_request_rejects_a_non_positive_version(self):
+        with self.assertRaises(ValidationError):
+            JoinStudyRequest(agrees_to_consent=True, consent_version=0)
+
+
+class EditConsentFormRequestTests(unittest.TestCase):
+    def test_trims_surrounding_whitespace(self):
+        request = EditConsentFormRequest(body_text="  I agree to take part.\n")
+
+        self.assertEqual("I agree to take part.", request.body_text)
+
+    def test_rejects_blank_text(self):
+        with self.assertRaises(ValidationError):
+            EditConsentFormRequest(body_text="   ")
+
+    def test_rejects_text_over_the_limit(self):
+        with self.assertRaises(ValidationError):
+            EditConsentFormRequest(body_text="x" * 20_001)
+
+    def test_accepts_text_at_the_limit(self):
+        request = EditConsentFormRequest(body_text="x" * 20_000)
+
+        self.assertEqual(20_000, len(request.body_text))
+
+    def test_rejects_unknown_fields(self):
+        with self.assertRaises(ValidationError):
+            EditConsentFormRequest(body_text="Terms", version=9)
+
+
+class EditConsentFormTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.session = MagicMock()
+        self.session.get = AsyncMock()
+        self.session.commit = AsyncMock()
+        self.researcher = User(
+            id=uuid4(),
+            email="researcher@example.com",
+            password_hash="hash",
+            role=Role.RESEARCHER,
+        )
+        self.study = Study(
+            id=uuid4(),
+            name="Morning walks",
+            duration=14,
+            status=StudyStatus.DRAFT,
+        )
+        self.consent_form = ConsentForm(
+            study_id=self.study.id,
+            body_text="Placeholder consent text — to be finalized.",
+            version=1,
+        )
+
+    async def test_updates_text_and_bumps_version(self):
+        self.session.get.side_effect = [self.study, self.consent_form]
+
+        response = await edit_consent_form(
+            self.study.id,
+            EditConsentFormRequest(body_text="You agree to walk daily."),
+            self.researcher,
+            self.session,
+        )
+
+        self.assertEqual("You agree to walk daily.", self.consent_form.body_text)
+        self.assertEqual(2, self.consent_form.version)
+        self.assertEqual(self.study.id, response.study_id)
+        self.assertEqual("You agree to walk daily.", response.body_text)
+        self.assertEqual(2, response.version)
+        self.session.commit.assert_awaited_once()
+
+    async def test_unchanged_text_keeps_the_version(self):
+        self.session.get.side_effect = [self.study, self.consent_form]
+
+        response = await edit_consent_form(
+            self.study.id,
+            EditConsentFormRequest(body_text=self.consent_form.body_text),
+            self.researcher,
+            self.session,
+        )
+
+        self.assertEqual(1, response.version)
+        self.session.commit.assert_not_awaited()
+
+    async def test_rejects_edits_once_the_study_is_published(self):
+        for study_status in (StudyStatus.RECRUITING, StudyStatus.ACTIVE, StudyStatus.CLOSED):
+            with self.subTest(status=study_status):
+                self.study.status = study_status
+                self.session.get.reset_mock()
+                self.session.get.side_effect = [self.study, self.consent_form]
+
+                with self.assertRaises(HTTPException) as raised:
+                    await edit_consent_form(
+                        self.study.id,
+                        EditConsentFormRequest(body_text="New wording"),
+                        self.researcher,
+                        self.session,
+                    )
+
+                self.assertEqual(409, raised.exception.status_code)
+                self.assertEqual(1, self.consent_form.version)
+        self.session.commit.assert_not_awaited()
+
+    async def test_missing_consent_form_returns_404(self):
+        self.session.get.side_effect = [self.study, None]
+
+        with self.assertRaises(HTTPException) as raised:
+            await edit_consent_form(
+                self.study.id,
+                EditConsentFormRequest(body_text="New wording"),
+                self.researcher,
+                self.session,
+            )
+
+        self.assertEqual(404, raised.exception.status_code)
+        self.session.commit.assert_not_awaited()
+
+    async def test_only_the_study_owner_may_edit(self):
+        other_researcher = User(
+            id=uuid4(),
+            email="other@example.com",
+            password_hash="hash",
+            role=Role.RESEARCHER,
+        )
+        ownership = StudyCreatedBy(researcher_id=self.researcher.id, study_id=self.study.id)
+        self.session.get.side_effect = [self.study, ownership]
+
+        with self.assertRaises(HTTPException) as raised:
+            await require_study_owner(self.study.id, other_researcher, self.session)
+
+        self.assertEqual(403, raised.exception.status_code)
 
 
 class ListStudiesFilterTests(unittest.IsolatedAsyncioTestCase):
@@ -973,13 +1206,53 @@ class StudyLifecycleTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_publish_moves_draft_to_recruiting(self):
         study = Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.DRAFT)
-        self.session.get.return_value = study
+        consent_form = ConsentForm(
+            study_id=study.id, body_text="You agree to walk daily.", version=2
+        )
+        self.session.get.side_effect = [study, consent_form]
 
         response = await publish_study(study.id, self.researcher, self.session)
 
         self.assertEqual(StudyStatus.RECRUITING, study.status)
         self.assertEqual("recruiting", response.status)
         self.session.commit.assert_awaited_once()
+
+    async def test_publish_rejects_placeholder_consent_form(self):
+        study = Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.DRAFT)
+        consent_form = ConsentForm(
+            study_id=study.id, body_text=PLACEHOLDER_CONSENT_TEXT, version=1
+        )
+        self.session.get.side_effect = [study, consent_form]
+
+        with self.assertRaises(HTTPException) as raised:
+            await publish_study(study.id, self.researcher, self.session)
+
+        self.assertEqual(409, raised.exception.status_code)
+        self.assertEqual(StudyStatus.DRAFT, study.status)
+        self.session.commit.assert_not_awaited()
+
+    async def test_publish_rejects_missing_consent_form(self):
+        study = Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.DRAFT)
+        self.session.get.side_effect = [study, None]
+
+        with self.assertRaises(HTTPException) as raised:
+            await publish_study(study.id, self.researcher, self.session)
+
+        self.assertEqual(409, raised.exception.status_code)
+        self.assertEqual(StudyStatus.DRAFT, study.status)
+        self.session.commit.assert_not_awaited()
+
+    async def test_new_studies_start_with_the_placeholder_the_publish_guard_checks(self):
+        session = MagicMock()
+        session.flush = AsyncMock()
+        session.commit = AsyncMock()
+
+        await create_study(
+            CreateStudyRequest(name="Morning walks", duration=14), self.researcher, session
+        )
+
+        consent_form = session.add_all.call_args.args[0][1]
+        self.assertEqual(PLACEHOLDER_CONSENT_TEXT, consent_form.body_text)
 
     async def test_publish_rejects_non_draft(self):
         study = Study(id=uuid4(), name="Morning walks", duration=14, status=StudyStatus.RECRUITING)

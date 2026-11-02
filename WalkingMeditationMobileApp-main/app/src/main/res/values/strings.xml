@@ -40,6 +40,13 @@
     <string name="consent_checkbox_label">I have read the consent form and agree to participate.</string>
     <string name="consent_agree_required">Please agree to the consent form to continue.</string>
     <string name="consent_details_error">Unable to load the consent form.</string>
+    <string name="edit_consent_form">Consent form</string>
+    <string name="consent_editor_title">Edit consent form</string>
+    <string name="consent_editor_hint">Write what participants agree to when they join this study</string>
+    <string name="consent_editor_locked_notice">This study has been published, so its consent form can no longer be edited.</string>
+    <string name="consent_editor_saved">Consent form saved.</string>
+    <string name="consent_editor_empty">The consent form cannot be empty.</string>
+    <string name="consent_editor_save">Save consent form</string>
     <string name="researcher_dashboard">Study Dashboard</string>
     <string name="researcher_study_list_title">My Studies</string>
     <string name="no_owned_studies">You haven\'t created any studies yet.</string>

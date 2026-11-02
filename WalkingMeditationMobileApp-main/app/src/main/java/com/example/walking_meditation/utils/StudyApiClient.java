@@ -132,11 +132,13 @@ public final class StudyApiClient {
             @NonNull OkHttpClient client,
             @NonNull String studyId,
             boolean agreesToConsent,
+            int consentVersion,
             @NonNull JoinListener listener
     ) {
         try {
             JSONObject payload = new JSONObject();
             payload.put("agrees_to_consent", agreesToConsent);
+            payload.put("consent_version", consentVersion);
             executeAuthenticatedRequest(
                     context.getApplicationContext(),
                     client,
@@ -269,6 +271,41 @@ public final class StudyApiClient {
                 }
         );
     }
+
+    public static void updateConsentForm(
+            @NonNull Context context,
+            @NonNull OkHttpClient client,
+            @NonNull String studyId,
+            @NonNull String bodyText,
+            @NonNull ConsentFormListener listener
+    ) {
+        try {
+            JSONObject payload = new JSONObject();
+            payload.put("body_text", bodyText);
+            executeAuthenticatedRequest(
+                    context.getApplicationContext(),
+                    client,
+                    STUDIES_URL + "/" + studyId + "/consent-form/edit",
+                    payload.toString(),
+                    true,
+                    new ResponseHandler() {
+                        @Override
+                        public void handle(@NonNull String responseBody) throws Exception {
+                            JSONObject item = new JSONObject(responseBody);
+                            listener.onLoaded(item.getString("body_text"), item.getInt("version"));
+                        }
+
+                        @Override
+                        public void fail(@NonNull String message) {
+                            listener.onFailure(message);
+                        }
+                    }
+            );
+        } catch (Exception e) {
+            listener.onFailure("Unable to prepare the consent form");
+        }
+    }
+
     public static void fetchOwnedStudies(
             @NonNull Context context,
             @NonNull OkHttpClient client,
