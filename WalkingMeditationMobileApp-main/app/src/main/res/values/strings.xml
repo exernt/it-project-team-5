@@ -187,6 +187,7 @@
     <string name="researcher_login_pending_approval">Your researcher account is awaiting admin approval. You can use the app as a participant until then.</string>
     <string name="researcher_login_not_researcher">This account is not a researcher account.</string>
     <string name="researcher_sign_up_password_too_short">Password must be at least 8 characters.</string>
+    <string name="sign_up_success">Account created. Check your email to verify it before signing in.</string>
     <string name="researcher_sign_up_success">Researcher account created. Check your email to verify it before signing in. An admin must also approve your researcher access.</string>
     <string name="researcher_feedback_header">%1$s · %2$s</string>
     <string name="researcher_feedback_rating">%1$d / 5</string>
